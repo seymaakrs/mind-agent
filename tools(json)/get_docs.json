@@ -1,0 +1,83 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "path": "/docs/get",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -736,
+        320
+      ],
+      "id": "f1bf4971-2bfe-4e7e-87ce-b734837300a5",
+      "name": "Webhook6",
+      "webhookId": "f39db8ff-5923-48f3-b992-84bcae95783d"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "documentURL": "={{ $json.query.fileId }}"
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        -528,
+        320
+      ],
+      "id": "c3d2ff75-9fc8-414d-ad49-b5d7720d1c6d",
+      "name": "Get a document",
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "ppgULfP2Q72aO7DS",
+          "name": "Google Docs account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        -320,
+        320
+      ],
+      "id": "2a0f1932-f936-4eb5-8435-159de9bc76d5",
+      "name": "Respond to Webhook5"
+    }
+  ],
+  "connections": {
+    "Webhook6": {
+      "main": [
+        [
+          {
+            "node": "Get a document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a document": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "3a9b987bf92cbf1ff2d5364f1a70e4cf494ac368d5f139af422309aae1f0ccd5"
+  }
+}

@@ -1,0 +1,19 @@
+# OpenAI & Agents
+openai-agents==0.6.2
+openai
+
+# Tipler / modeller
+pydantic>=2.7
+
+# Konfig / ortam degiskenleri
+python-dotenv
+
+# Firebase
+firebase-admin>=6.5
+
+# Google AI (Gemini API) - REST client
+httpx>=0.27
+
+# REST API
+fastapi>=0.110
+uvicorn>=0.30

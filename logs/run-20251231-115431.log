@@ -1,0 +1,347 @@
+================================================================================
+[TASK] 2025-12-31T11:54:31.527914
+================================================================================
+isletmenin instagram metriklerini incele ve bana bir rapor ver
+================================================================================
+
+[AGENT:START] orchestrator [model: gpt-4.1-mini]
+----------------------------------------
+[LLM:START] orchestrator
+[LLM:INPUT] 1 items
+  [0] {
+  "content": "[Business ID: dImxI3K5p6zfelpS9rSE]\nisletmenin instagram metriklerini incele ve bana bir rapor ver",
+  "role": "user"
+}
+[LLM:END] orchestrator
+[TOOL:START] orchestrator -> fetch_business
+[TOOL:END] orchestrator <- fetch_business
+[TOOL:OUTPUT] fetch_business
+{
+  "success": true,
+  "business_id": "dImxI3K5p6zfelpS9rSE",
+  "name": "futuremind",
+  "colors": [
+    "#3b82f6",
+    "#8ea6cc",
+    "#152c51"
+  ],
+  "logo": "https://firebasestorage.googleapis.com/v0/b/mindid-75079.firebasestorage.app/o/businesses%2F1766684164756%2Flogo.png?alt=media&token=06a5ef57-2532-4a8a-b4f4-7c579cc18312",
+  "profile": {
+    "konular": "teknolojik haberler"
+  },
+  "instagram_account_id": "17841477372978591",
+  "instagram_access_token": "EAFluIpUKosMBPvADLJq1P10wgiZAeR5gS8oLhE8c1pFIO26R2Ek2UiyexN3SVxWOJdMKEmnKO7ZC7UziCjZCj0CB5IqtAbysRoTcTxF2nxWztoZAIGjQxYJQ3TbZBm7Ugi8XMG59rUJaUtZBk6jXzudhkDaZCbgTAZADVfuCmhlTES2POZBQZChnDbQHDZBc5hj97hI"
+}
+[LLM:START] orchestrator
+[LLM:INPUT] 3 items
+  [0] {
+  "content": "[Business ID: dImxI3K5p6zfelpS9rSE]\nisletmenin instagram metriklerini incele ve bana bir rapor ver",
+  "role": "user"
+}
+  [1] {
+  "arguments": "{\"business_id\":\"dImxI3K5p6zfelpS9rSE\"}",
+  "call_id": "call_P98UBuTBD6SsKGbMLJc2shQv",
+  "name": "fetch_business",
+  "type": "function_call",
+  "id": "fc_0596760323ff0de20069550efe2078819697f14b03fad6e875",
+  "status": "completed"
+}
+  [2] {
+  "call_id": "call_P98UBuTBD6SsKGbMLJc2shQv",
+  "output": "{'success': True, 'business_id': 'dImxI3K5p6zfelpS9rSE', 'name': 'futuremind', 'colors': ['#3b82f6', '#8ea6cc', '#152c51'], 'logo': 'https://firebasestorage.googleapis.com/v0/b/mindid-75079.firebasestorage.app/o/businesses%2F1766684164756%2Flogo.png?alt=media&token=06a5ef57-2532-4a8a-b4f4-7c579cc18312', 'profile': {'konular': 'teknolojik haberler'}, 'instagram_account_id': '17841477372978591', 'instagram_access_token': 'EAFluIpUKosMBPv
+... [truncated]
+[LLM:END] orchestrator
+[TOOL:START] orchestrator -> marketing_agent_tool
+
+[AGENT:START] marketing [model: gpt-5-mini]
+----------------------------------------
+[LLM:START] marketing
+[LLM:INPUT] 1 items
+  [0] {
+  "content": "İşletme: futuremind\nBusiness ID: dImxI3K5p6zfelpS9rSE\nInstagram Credentials: ig_user_id=17841477372978591, access_token=EAFluIpUKosMBPvADLJq1P10wgiZAeR5gS8oLhE8c1pFIO26R2Ek2UiyexN3SVxWOJdMKEmnKO7ZC7UziCjZCj0CB5IqtAbysRoTcTxF2nxWztoZAIGjQxYJQ3TbZBm7Ugi8XMG59rUJaUtZBk6jXzudhkDaZCbgTAZADVfuCmhlTES2POZBQZChnDbQHDZBc5hj97hI\nBugünün tarihi: 2025-12-31\n\nLütfen futuremind adlı işletmenin Instagram metriklerini analiz edip detaylı bir performans raporu oluştur.",
+  "role": "user"
+}
+[LLM:END] marketing
+[TOOL:START] marketing -> get_marketing_memory
+[TOOL:END] marketing <- get_marketing_memory
+[TOOL:OUTPUT] get_marketing_memory
+{
+  "success": true,
+  "has_memory": true,
+  "memory": {
+    "content_insights": {
+      "effective_hashtags": [
+        "#futuremind",
+        "#innovation",
+        "#tech",
+        "#AI",
+        "#businessgrowth"
+      ],
+      "best_posting_times": [
+        "Evenings between 7-9 PM"
+      ],
+      "best_performing_types": [
+        "Reels"
+      ],
+      "caption_styles_that_work": [
+        "Call-to-action"
+      ]
+    },
+    "business_understanding": {
+      "summary": "Futuremind is a tech-savvy company focusing on innovative technology, AI & business solutions, and customer partnerships.",
+      "voice_tone": "Professional, Innovative",
+      "audience": "Tech enthusiasts, businesses seeking innovation.",
+      "strengths": [
+        "Reels perform well for higher reach"
+      ]
+    },
+    "documentId": "marketing",
+    "last_updated": "2025-12-31T14:47:23.627992",
+    "learned_patterns": [
+      "Reels with topics on artificial intelligence and innovation are scheduled for evenings to maximize engagement.",
+      "Plan: Reels odaklı ilk hafta — 4 Reels/3 Görsel; içerik tipleri: Vaka çalışmaları, testimonial, hızlı ipuçları, ekip tanıtımı; CTA odaklı başlıklar.",
+      "Reels produce dramatically higher reach than images (avg reach ~113 vs images ~3) — ~38x difference. Reels views ~130 avg vs images ~14.6 (~9x). However Reels average watch time is low (~1.5s) indicating poor retention/weak hooks."
+    ],
+    "notes": [
+      {
+        "note": "Weekly content plan for futuremind from 2024-06-06 to 2024-06-12 has been created with a focus on Reels for higher reach, scheduled at best-performing timeslots (7-9 PM).",
+        "added_at": "2025-12-30T21:43:05.803036"
+      },
+      {
+        "note": "A new weekly content plan was created from 2025-12-31 to 2025-01-06, focusing on Reels and image posts scheduled between 19:00 and 21:00 to maximize engagement.",
+        "added_at": "2025-12-30T22:13:05.286857"
+      },
+      {
+        "note": "Haftalık plan oluştu
+... [truncated]
+[LLM:START] marketing
+[LLM:INPUT] 4 items
+  [0] {
+  "id": "rs_0f0409bad3006dc50069550f04140c819c9b34830198f81408",
+  "summary": [],
+  "type": "reasoning"
+}
+  [1] {
+  "arguments": "{\"business_id\":\"dImxI3K5p6zfelpS9rSE\"}",
+  "call_id": "call_2QwKWsUAsP0YbW0kr80SIiSC",
+  "name": "get_marketing_memory",
+  "type": "function_call",
+  "id": "fc_0f0409bad3006dc50069550f09dc88819c964b0f9e93b1d471",
+  "status": "completed"
+}
+  [2] {
+  "call_id": "call_2QwKWsUAsP0YbW0kr80SIiSC",
+  "output": "{'success': True, 'has_memory': True, 'memory': {'content_insights': {'effective_hashtags': ['#futuremind', '#innovation', '#tech', '#AI', '#businessgrowth'], 'best_posting_times': ['Evenings between 7-9 PM'], 'best_performing_types': ['Reels'], 'caption_styles_that_work': ['Call-to-action']}, 'business_understanding': {'summary': 'Futuremind is a tech-savvy company focusing on innovative technology, AI & business solutions, and custom
+... [truncated]
+[LLM:END] marketing
+[TOOL:START] marketing -> get_instagram_insights
+[TOOL:END] marketing <- get_instagram_insights
+[TOOL:OUTPUT] get_instagram_insights
+{
+  "success": true,
+  "media_items": [
+    {
+      "id": "18354393010207871",
+      "media_type": "IMAGE",
+      "media_product_type": "FEED",
+      "timestamp": "2025-12-27T17:04:40+0000",
+      "permalink": "https://www.instagram.com/p/DSxk1_mAKZI/",
+      "caption": "✨ Deneme paylasimi! Simdi incele ve destek ol! #futuremind #teknoloji #yenilik",
+      "metrics": {
+        "reach": 2,
+        "views": 7,
+        "total_interactions": 0,
+        "shares": 0,
+        "saved": 0
+      }
+    },
+    {
+      "id": "18078142343218430",
+      "media_type": "VIDEO",
+      "media_product_type": "REELS",
+      "timestamp": "2025-12-24T10:54:33+0000",
+      "permalink": "https://www.instagram.com/reel/DSpMDwvAof-/",
+      "caption": "mindid tanıtım videosu: İşinizi geleceğe taşıyın. Yapay zeka ile iş süreçlerinizi hızlandırın! #yapa",
+      "metrics": {
+        "reach": 110,
+        "views": 127,
+        "total_interactions": 0,
+        "shares": 0,
+        "saved": 0,
+        "ig_reels_avg_watch_time": 1670,
+        "ig_reels_avg_watch_time_ms": 1670,
+        "ig_reels_avg_watch_time_sec": 1.67,
+        "ig_reels_video_view_total_time": 187065,
+        "ig_reels_video_view_total_time_ms": 187065,
+        "ig_reels_video_view_total_time_sec": 187.065
+      }
+    },
+    {
+      "id": "18085707149102711",
+      "media_type": "IMAGE",
+      "media_product_type": "FEED",
+      "timestamp": "2025-12-24T10:49:48+0000",
+      "permalink": "https://www.instagram.com/p/DSpLjwXACVI/",
+      "caption": "mindid firmasının tanıtım görseli: SIZI ONE CIKARIYORUZ. Yenilikçi teknoloji ve profesyonel hizmet a",
+      "metrics": {
+        "reach": 3,
+        "views": 9,
+        "total_interactions": 0,
+        "shares": 0,
+        "saved": 0
+      }
+    },
+    {
+      "id": "18179226694364052",
+      "media_type": "VIDEO",
+      "media_product_type": "REELS",
+      "timestamp": "2025-12-18T15:51:22+0000",
+      "permalink": "https://www.instagram.com/reel/DSaRQtGDm8c/",
+      "caption": "dene
+... [truncated]
+[LLM:START] marketing
+[LLM:INPUT] 7 items
+  [0] {
+  "id": "rs_0f0409bad3006dc50069550f0d570c819ca7a463800a51f360",
+  "summary": [],
+  "type": "reasoning"
+}
+  [1] {
+  "arguments": "{\"ig_user_id\":\"17841477372978591\",\"access_token\":\"EAFluIpUKosMBPvADLJq1P10wgiZAeR5gS8oLhE8c1pFIO26R2Ek2UiyexN3SVxWOJdMKEmnKO7ZC7UziCjZCj0CB5IqtAbysRoTcTxF2nxWztoZAIGjQxYJQ3TbZBm7Ugi8XMG59rUJaUtZBk6jXzudhkDaZCbgTAZADVfuCmhlTES2POZBQZChnDbQHDZBc5hj97hI\",\"limit\":20,\"since\":null,\"include_reels_watch_time\":true,\"include_raw\":false,\"api_version\":\"v23.0\"}",
+  "call_id": "call_bq5Kt2iSHsIgjXTlsDte1NIB",
+  "name": "get_instagram_insights",
+  "type": "function_call",
+
+... [truncated]
+  [2] {
+  "call_id": "call_bq5Kt2iSHsIgjXTlsDte1NIB",
+  "output": "{'success': True, 'media_items': [{'id': '18354393010207871', 'media_type': 'IMAGE', 'media_product_type': 'FEED', 'timestamp': '2025-12-27T17:04:40+0000', 'permalink': 'https://www.instagram.com/p/DSxk1_mAKZI/', 'caption': '✨ Deneme paylasimi! Simdi incele ve destek ol! #futuremind #teknoloji #yenilik', 'metrics': {'reach': 2, 'views': 7, 'total_interactions': 0, 'shares': 0, 'saved': 0}}, {'id': '18078142343218430', 'media_type': 'VI
+... [truncated]
+[LLM:END] marketing
+[TOOL:START] marketing -> get_instagram_posts
+[TOOL:END] marketing <- get_instagram_posts
+[TOOL:OUTPUT] get_instagram_posts
+{
+  "success": true,
+  "posts": [],
+  "count": 0
+}
+[LLM:START] marketing
+[LLM:INPUT] 10 items
+  [0] {
+  "id": "rs_0f0409bad3006dc50069550f2ad830819c89820d41620876cd",
+  "summary": [],
+  "type": "reasoning"
+}
+  [1] {
+  "arguments": "{\"business_id\":\"dImxI3K5p6zfelpS9rSE\",\"limit\":50,\"topic_filter\":null}",
+  "call_id": "call_uArjMmx1fHa3LFBSxV7Bwlw5",
+  "name": "get_instagram_posts",
+  "type": "function_call",
+  "id": "fc_0f0409bad3006dc50069550f2f08cc819cba3bfb5fc17f6878",
+  "status": "completed"
+}
+  [2] {
+  "call_id": "call_uArjMmx1fHa3LFBSxV7Bwlw5",
+  "output": "{'success': True, 'posts': [], 'count': 0}",
+  "type": "function_call_output"
+}
+[LLM:END] marketing
+[TOOL:START] marketing -> update_marketing_memory
+[TOOL:END] marketing <- update_marketing_memory
+[TOOL:OUTPUT] update_marketing_memory
+{
+  "success": true,
+  "message": "Marketing memory updated"
+}
+[LLM:START] marketing
+[LLM:INPUT] 13 items
+  [0] {
+  "id": "rs_0f0409bad3006dc50069550f353a38819ca657c18fa1a473f3",
+  "summary": [],
+  "type": "reasoning"
+}
+  [1] {
+  "arguments": "{\"business_id\":\"dImxI3K5p6zfelpS9rSE\",\"new_pattern\":\"Analysis (2025-12-31): Son 20 gönderide 2 Reels toplam reach'in büyük kısmını sağladı (116 ve 110). Görseller ortalama reach ~3; Reels ort. izlenme süresi 1.51s ile düşük tutuluyor — ilk 2 saniyede izleyici kaybı var. Öneri: Reels öncelikli, ilk 2-3 saniyeye güçlü hook, altyazı/alt yazı, dikkat çekici thumbnail, trend ses kullanımı, net CTA; üst performanslı Reels'leri küçük bir bütçeyle destekle.\",\"new_note\":\"2025
+... [truncated]
+  [2] {
+  "call_id": "call_55w8qusW8WP0fPw9ShQn9jqw",
+  "output": "{'success': True, 'message': 'Marketing memory updated'}",
+  "type": "function_call_output"
+}
+[LLM:END] marketing
+[AGENT:END] marketing
+[AGENT:OUTPUT] marketing
+İnceleme tamamlandı — futuremind (Business ID: dImxI3K5p6zfelpS9rSE) için 2025-12-11 → 2025-12-27 aralığındaki son 20 gönderiye dayalı detaylı performans raporu aşağıda. Özetler ve öncelikli aksiyonlar açık ve uygulanabilir şekilde verildi. (Not: pazaryeri kayıtlarında daha önce kaydedilmiş Instagram post veri tabanı kaydı bulunmuyordu — ileride her paylaşımı kaydetmeliyiz.)
+
+1) Özet metrikler (son 20 gönderi)
+- Toplam gönderi: 20 (Reels: 2, Görsel (image): 18)
+- Toplam reach: 280
+- Toplam views: 523
+- Toplam etkileşim (likes/comments vb.): 2
+- Ortalama reach (gönderi başı): 14.0
+- Ortalama views (gönderi başı): 26.15
+- Reels sayısı: 2
+- Reels ort. izlenme süresi: 1.51 sn (avg_reels_watch_time_sec)
+- En yüksek reach’e sahip gönderi: Reel id 18179226694364052 — reach 116, views 133 (permalink: https://www.instagram.com/reel/DSaRQtGDm8c/)
+- İkinci en iyi Reel: id 18078142343218430 — reach 110, views 127 (https://www.instagram.com/reel/DSpMDwvAof-/)
+
+2) Tip bazlı performans (açık fark)
+- ...
+----------------------------------------
+[TOOL:END] orchestrator <- marketing_agent_tool
+[TOOL:OUTPUT] marketing_agent_tool
+İnceleme tamamlandı — futuremind (Business ID: dImxI3K5p6zfelpS9rSE) için 2025-12-11 → 2025-12-27 aralığındaki son 20 gönderiye dayalı detaylı performans raporu aşağıda. Özetler ve öncelikli aksiyonlar açık ve uygulanabilir şekilde verildi. (Not: pazaryeri kayıtlarında daha önce kaydedilmiş Instagram post veri tabanı kaydı bulunmuyordu — ileride her paylaşımı kaydetmeliyiz.)
+
+1) Özet metrikler (son 20 gönderi)
+- Toplam gönderi: 20 (Reels: 2, Görsel (image): 18)
+- Toplam reach: 280
+- Toplam views: 523
+- Toplam etkileşim (likes/comments vb.): 2
+- Ortalama reach (gönderi başı): 14.0
+- Ortalama views (gönderi başı): 26.15
+- Reels sayısı: 2
+- Reels ort. izlenme süresi: 1.51 sn (avg_reels_watch_time_sec)
+- En yüksek reach’e sahip gönderi: Reel id 18179226694364052 — reach 116, views 133 (permalink: https://www.instagram.com/reel/DSaRQtGDm8c/)
+- İkinci en iyi Reel: id 18078142343218430 — reach 110, views 127 (https://www.instagram.com/reel/DSpMDwvAof-/)
+
+2) Tip bazlı performans (açık fark)
+- Reels (2 gönderi): Toplam reach ≈ 226 (116 + 110) → Ortalama reach ≈ 113; ort. views ≈ 130. Çok yüksek organik erişim.
+- Görseller (18 gönderi): Toplam reach ≈ 54 → Ortalama reach ≈ 3; ort. views ≈ 14.6. Çok düşük erişim/etkileşim.
+- Yorum/saved/paylaşım neredeyse yok (çoğu gönderide 0). Tek anlamlı etkileşim: bir görselde toplam_interactions = 2.
+
+3) Ana bulgular / yorum
+- Net sonuç: Reels, tüm erişimin büyük kısmını sağlıyor; görseller ciddi şekilde düşük performans gösteriyor.
+- Ancak Reels için izlenme süresi çok kısa (1.51s), bu izleyici tutunmasının zayıf olduğunu gösterir — yani reach yüksek ama video izlemeleri yüzeysel, izleyiciyi tamamen izlemeye ikna edemiyor.
+- Etkileşimler (likes, comments, saves, shares) çok düşük — izleyiciler görüntülüyor ama etkileşime geçmiyor. Bu, CTA ve içerik etkileşim tetikleyicilerinin eksikliğine işaret eder.
+- Mevcut içerik başlıkları/kopyalarında güçlü CTA, net fayda/söz vaadi veya izleyiciyi harekete geçirecek yönlendirme yetersiz.
+
+4) Hızlı 
+... [truncated]
+[LLM:START] orchestrator
+[LLM:INPUT] 5 items
+  [0] {
+  "call_id": "call_P98UBuTBD6SsKGbMLJc2shQv",
+  "output": "{'success': True, 'business_id': 'dImxI3K5p6zfelpS9rSE', 'name': 'futuremind', 'colors': ['#3b82f6', '#8ea6cc', '#152c51'], 'logo': 'https://firebasestorage.googleapis.com/v0/b/mindid-75079.firebasestorage.app/o/businesses%2F1766684164756%2Flogo.png?alt=media&token=06a5ef57-2532-4a8a-b4f4-7c579cc18312', 'profile': {'konular': 'teknolojik haberler'}, 'instagram_account_id': '17841477372978591', 'instagram_access_token': 'EAFluIpUKosMBPv
+... [truncated]
+  [1] {
+  "arguments": "{\"input\":\"İşletme: futuremind\\nBusiness ID: dImxI3K5p6zfelpS9rSE\\nInstagram Credentials: ig_user_id=17841477372978591, access_token=EAFluIpUKosMBPvADLJq1P10wgiZAeR5gS8oLhE8c1pFIO26R2Ek2UiyexN3SVxWOJdMKEmnKO7ZC7UziCjZCj0CB5IqtAbysRoTcTxF2nxWztoZAIGjQxYJQ3TbZBm7Ugi8XMG59rUJaUtZBk6jXzudhkDaZCbgTAZADVfuCmhlTES2POZBQZChnDbQHDZBc5hj97hI\\nBugünün tarihi: 2025-12-31\\n\\nLütfen futuremind adlı işletmenin Instagram metriklerini analiz edip detaylı bir performans raporu oluştur.\"}
+... [truncated]
+  [2] {
+  "call_id": "call_RbUmiXe3yvSXJRF42Sy0Ws3i",
+  "output": "İnceleme tamamlandı — futuremind (Business ID: dImxI3K5p6zfelpS9rSE) için 2025-12-11 → 2025-12-27 aralığındaki son 20 gönderiye dayalı detaylı performans raporu aşağıda. Özetler ve öncelikli aksiyonlar açık ve uygulanabilir şekilde verildi. (Not: pazaryeri kayıtlarında daha önce kaydedilmiş Instagram post veri tabanı kaydı bulunmuyordu — ileride her paylaşımı kaydetmeliyiz.)\n\n1) Özet metrikler (son 20 gönderi)\n- Toplam gönderi: 20 (
+... [truncated]
+[LLM:END] orchestrator
+[AGENT:END] orchestrator
+[AGENT:OUTPUT] orchestrator
+futuremind işletmesinin Instagram metrikleri incelendi ve son 20 gönderiye dayalı detaylı bir performans raporu hazırlandı. 
+
+Özetle:
+- Reels gönderileri görsellerden çok daha yüksek erişim sağlıyor ancak izlenme süresi kısa ve etkileşimler çok düşük.
+- Görsellerde erişim ve etkileşim oldukça düşük.
+- İlk 1–2 saniyeye dikkat çekici hook koyma, altyazı ekleme, güçlü CTA kullanma gibi iyileştirmeler gerekiyor.
+- Reels ağırlıklı yayın planı ve küçük bütçeyle performans destekleme öneriliyor.
+- Ayrıca haftalık içerik planı, testler ve hashtag stratejisi tavsiyeleri mevcut.
+
+İsterseniz, bu rapora dayanarak hemen 4 Reels için içerik brief'leri oluşturarak video üretimine başlayabilir, ya da haftalık içerik takvimi oluşturup takvime kaydedebilirim. Hangi adımı uygulamamı istersiniz? Ayrıca takipçi sayısını paylaşırsanız, etkileşim oranlarını da hesaplayabilir ve rapora ekleyebilirim.
+----------------------------------------

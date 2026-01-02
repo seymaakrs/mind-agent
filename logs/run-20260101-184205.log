@@ -1,0 +1,138 @@
+================================================================================
+[TASK] 2026-01-01T18:42:05.864685
+================================================================================
+icerik planina gore paylasim yapilmasi gerekiyor mu kontrol et.
+================================================================================
+
+[AGENT:START] orchestrator [model: gpt-4.1-mini]
+----------------------------------------
+[LLM:START] orchestrator
+[LLM:INPUT] 1 items
+  [0] {
+  "content": "[Business ID: dImxI3K5p6zfelpS9rSE]\nicerik planina gore paylasim yapilmasi gerekiyor mu kontrol et.",
+  "role": "user"
+}
+[LLM:END] orchestrator
+[TOOL:START] orchestrator -> fetch_business
+[TOOL:END] orchestrator <- fetch_business
+[TOOL:OUTPUT] fetch_business
+{
+  "success": true,
+  "business_id": "dImxI3K5p6zfelpS9rSE",
+  "name": "futuremind",
+  "colors": [
+    "#3b82f6",
+    "#8ea6cc",
+    "#152c51"
+  ],
+  "logo": "https://firebasestorage.googleapis.com/v0/b/mindid-75079.firebasestorage.app/o/businesses%2F1766684164756%2Flogo.png?alt=media&token=06a5ef57-2532-4a8a-b4f4-7c579cc18312",
+  "profile": {
+    "konular": "teknolojik haberler"
+  },
+  "instagram_account_id": "17841477372978591",
+  "instagram_access_token": "EAFluIpUKosMBPvADLJq1P10wgiZAeR5gS8oLhE8c1pFIO26R2Ek2UiyexN3SVxWOJdMKEmnKO7ZC7UziCjZCj0CB5IqtAbysRoTcTxF2nxWztoZAIGjQxYJQ3TbZBm7Ugi8XMG59rUJaUtZBk6jXzudhkDaZCbgTAZADVfuCmhlTES2POZBQZChnDbQHDZBc5hj97hI"
+}
+[LLM:START] orchestrator
+[LLM:INPUT] 3 items
+  [0] {
+  "content": "[Business ID: dImxI3K5p6zfelpS9rSE]\nicerik planina gore paylasim yapilmasi gerekiyor mu kontrol et.",
+  "role": "user"
+}
+  [1] {
+  "arguments": "{\"business_id\":\"dImxI3K5p6zfelpS9rSE\"}",
+  "call_id": "call_Qa58DdSDoHKZxUp06Rcc1Yad",
+  "name": "fetch_business",
+  "type": "function_call",
+  "id": "fc_0234b1cdfe170167006956c003563c819db192cebbf8cf210c",
+  "status": "completed"
+}
+  [2] {
+  "call_id": "call_Qa58DdSDoHKZxUp06Rcc1Yad",
+  "output": "{'success': True, 'business_id': 'dImxI3K5p6zfelpS9rSE', 'name': 'futuremind', 'colors': ['#3b82f6', '#8ea6cc', '#152c51'], 'logo': 'https://firebasestorage.googleapis.com/v0/b/mindid-75079.firebasestorage.app/o/businesses%2F1766684164756%2Flogo.png?alt=media&token=06a5ef57-2532-4a8a-b4f4-7c579cc18312', 'profile': {'konular': 'teknolojik haberler'}, 'instagram_account_id': '17841477372978591', 'instagram_access_token': 'EAFluIpUKosMBPv
+... [truncated]
+[LLM:END] orchestrator
+[TOOL:START] orchestrator -> marketing_agent_tool
+
+[AGENT:START] marketing [model: gpt-5-mini]
+----------------------------------------
+[LLM:START] marketing
+[LLM:INPUT] 1 items
+  [0] {
+  "content": "Check if there is any Instagram content sharing required according to the content plan for business.\nBusiness ID: dImxI3K5p6zfelpS9rSE\nBusiness Name: futuremind\nToday: 2026-01-01\nInstagram Credentials: ig_user_id=17841477372978591, access_token=EAFluIpUKosMBPvADLJq1P10wgiZAeR5gS8oLhE8c1pFIO26R2Ek2UiyexN3SVxWOJdMKEmnKO7ZC7UziCjZCj0CB5IqtAbysRoTcTxF2nxWztoZAIGjQxYJQ3TbZBm7Ugi8XMG59rUJaUtZBk6jXzudhkDaZCbgTAZADVfuCmhlTES2POZBQZChnDbQHDZBc5hj97hI",
+  "role": "user"
+}
+[LLM:END] marketing
+[TOOL:START] marketing -> get_todays_posts
+[TOOL:END] marketing <- get_todays_posts
+[TOOL:OUTPUT] get_todays_posts
+{
+  "success": true,
+  "date": "2026-01-01",
+  "posts": [],
+  "count": 0
+}
+[LLM:START] marketing
+[LLM:INPUT] 4 items
+  [0] {
+  "id": "rs_0e6dbc0bf81d6d21006956c00a079c819d9a3440ffc034f4a9",
+  "summary": [],
+  "type": "reasoning"
+}
+  [1] {
+  "arguments": "{\"business_id\":\"dImxI3K5p6zfelpS9rSE\",\"status_filter\":\"planned\"}",
+  "call_id": "call_aboWjXeVFI9BDgkudfHdE5RK",
+  "name": "get_todays_posts",
+  "type": "function_call",
+  "id": "fc_0e6dbc0bf81d6d21006956c00e3918819da08bdd021dac7c3d",
+  "status": "completed"
+}
+  [2] {
+  "call_id": "call_aboWjXeVFI9BDgkudfHdE5RK",
+  "output": "{'success': True, 'date': '2026-01-01', 'posts': [], 'count': 0}",
+  "type": "function_call_output"
+}
+[LLM:END] marketing
+[AGENT:END] marketing
+[AGENT:OUTPUT] marketing
+I checked the active content plans for futuremind for today (2026-01-01).
+
+Result: No Instagram posts scheduled for today (0 planned posts).
+
+I have the provided Instagram credentials ready (ig_user_id=17841477372978591). Next steps I can take for you — pick one:
+- Create & publish a post now (image or reel). Tell me topic/brief or say “surprise” and I’ll produce caption + media and post it.
+- Schedule a post for today or another date (I can add it to a weekly plan or add a single post).
+- Create a full weekly content plan (I’ll build and save it as a draft).
+
+Which would you like me to do?
+----------------------------------------
+[TOOL:END] orchestrator <- marketing_agent_tool
+[TOOL:OUTPUT] marketing_agent_tool
+I checked the active content plans for futuremind for today (2026-01-01).
+
+Result: No Instagram posts scheduled for today (0 planned posts).
+
+I have the provided Instagram credentials ready (ig_user_id=17841477372978591). Next steps I can take for you — pick one:
+- Create & publish a post now (image or reel). Tell me topic/brief or say “surprise” and I’ll produce caption + media and post it.
+- Schedule a post for today or another date (I can add it to a weekly plan or add a single post).
+- Create a full weekly content plan (I’ll build and save it as a draft).
+
+Which would you like me to do?
+[LLM:START] orchestrator
+[LLM:INPUT] 5 items
+  [0] {
+  "call_id": "call_Qa58DdSDoHKZxUp06Rcc1Yad",
+  "output": "{'success': True, 'business_id': 'dImxI3K5p6zfelpS9rSE', 'name': 'futuremind', 'colors': ['#3b82f6', '#8ea6cc', '#152c51'], 'logo': 'https://firebasestorage.googleapis.com/v0/b/mindid-75079.firebasestorage.app/o/businesses%2F1766684164756%2Flogo.png?alt=media&token=06a5ef57-2532-4a8a-b4f4-7c579cc18312', 'profile': {'konular': 'teknolojik haberler'}, 'instagram_account_id': '17841477372978591', 'instagram_access_token': 'EAFluIpUKosMBPv
+... [truncated]
+  [1] {
+  "arguments": "{\"input\":\"Check if there is any Instagram content sharing required according to the content plan for business.\\nBusiness ID: dImxI3K5p6zfelpS9rSE\\nBusiness Name: futuremind\\nToday: 2026-01-01\\nInstagram Credentials: ig_user_id=17841477372978591, access_token=EAFluIpUKosMBPvADLJq1P10wgiZAeR5gS8oLhE8c1pFIO26R2Ek2UiyexN3SVxWOJdMKEmnKO7ZC7UziCjZCj0CB5IqtAbysRoTcTxF2nxWztoZAIGjQxYJQ3TbZBm7Ugi8XMG59rUJaUtZBk6jXzudhkDaZCbgTAZADVfuCmhlTES2POZBQZChnDbQHDZBc5hj97hI\"}",
+  "call_id
+... [truncated]
+  [2] {
+  "call_id": "call_YFUZL6yZRfyKNC6NHsfqxPbn",
+  "output": "I checked the active content plans for futuremind for today (2026-01-01).\n\nResult: No Instagram posts scheduled for today (0 planned posts).\n\nI have the provided Instagram credentials ready (ig_user_id=17841477372978591). Next steps I can take for you — pick one:\n- Create & publish a post now (image or reel). Tell me topic/brief or say “surprise” and I’ll produce caption + media and post it.\n- Schedule a post for today or another
+... [truncated]
+[LLM:END] orchestrator
+[AGENT:END] orchestrator
+[AGENT:OUTPUT] orchestrator
+Bugün için içerik planında Instagram paylaşımı planlanmamış. İsterseniz şimdi bir paylaşım oluşturabilir ve yayınlayabilirim, veya bugün ya da başka bir tarih için paylaşım planlayabilir ya da tam bir haftalık içerik planı hazırlayabilirim. Nasıl devam etmemi istersiniz?
+----------------------------------------

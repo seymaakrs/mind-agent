@@ -1,0 +1,229 @@
+
+[AGENT:START] marketing [model: gpt-5-mini]
+----------------------------------------
+[LLM:START] marketing
+[LLM:INPUT] 1 items
+  [0] {
+  "content": "Instagram metriklerini incele ve bir performans raporu hazırla.\nBusiness ID: dImxI3K5p6zfelpS9rSE\nBusiness Name: futuremind\nToday: 2025-12-31\nInstagram Credentials: ig_user_id=17841477372978591, access_token=EAFluIpUKosMBPvADLJq1P10wgiZAeR5gS8oLhE8c1pFIO26R2Ek2UiyexN3SVxWOJdMKEmnKO7ZC7UziCjZCj0CB5IqtAbysRoTcTxF2nxWztoZAIGjQxYJQ3TbZBm7Ugi8XMG59rUJaUtZBk6jXzudhkDaZCbgTAZADVfuCmhlTES2POZBQZChnDbQHDZBc5hj97hI",
+  "role": "user"
+}
+[LLM:END] marketing
+[TOOL:START] marketing -> get_marketing_memory
+[TOOL:END] marketing <- get_marketing_memory
+[TOOL:OUTPUT] get_marketing_memory
+{
+  "success": true,
+  "has_memory": true,
+  "memory": {
+    "documentId": "marketing",
+    "business_understanding": {
+      "summary": "Futuremind is a tech-savvy company focusing on innovative technology, AI & business solutions, and customer partnerships.",
+      "audience": "Tech enthusiasts, businesses seeking innovation.",
+      "strengths": [
+        "Reels perform well for higher reach"
+      ],
+      "voice_tone": "Professional, Innovative"
+    },
+    "content_insights": {
+      "best_posting_times": [
+        "Evenings between 7-9 PM"
+      ],
+      "caption_styles_that_work": [
+        "Call-to-action"
+      ],
+      "best_performing_types": [
+        "Reels"
+      ],
+      "effective_hashtags": [
+        "#futuremind",
+        "#innovation",
+        "#tech",
+        "#AI",
+        "#businessgrowth"
+      ]
+    },
+    "learned_patterns": [
+      "Reels with topics on artificial intelligence and innovation are scheduled for evenings to maximize engagement.",
+      "Plan: Reels odaklı ilk hafta — 4 Reels/3 Görsel; içerik tipleri: Vaka çalışmaları, testimonial, hızlı ipuçları, ekip tanıtımı; CTA odaklı başlıklar.",
+      "Reels produce dramatically higher reach than images (avg reach ~113 vs images ~3) — ~38x difference. Reels views ~130 avg vs images ~14.6 (~9x). However Reels average watch time is low (~1.5s) indicating poor retention/weak hooks.",
+      "Analysis (2025-12-31): Son 20 gönderide 2 Reels toplam reach'in büyük kısmını sağladı (116 ve 110). Görseller ortalama reach ~3; Reels ort. izlenme süresi 1.51s ile düşük tutuluyor — ilk 2 saniyede izleyici kaybı var. Öneri: Reels öncelikli, ilk 2-3 saniyeye güçlü hook, altyazı/alt yazı, dikkat çekici thumbnail, trend ses kullanımı, net CTA; üst performanslı Reels'leri küçük bir bütçeyle destekle.",
+      "2025-12-31 analysis: Son 44 gönderide 2 Reels (reach 116 ve 110) toplam reach'in büyük kısmını sağladı. Görseller ortalama reach düşük (≈7), toplam etkileşim çok düşük (14). Ortalama Reels izlenme süre
+... [truncated]
+[LLM:START] marketing
+[LLM:INPUT] 4 items
+  [0] {
+  "id": "rs_09965d1963d73bd70069553f160f3081a0ab0ffa82ba11919b",
+  "summary": [],
+  "type": "reasoning"
+}
+  [1] {
+  "arguments": "{\"business_id\":\"dImxI3K5p6zfelpS9rSE\"}",
+  "call_id": "call_iFVFzB6DuSQIyOogCXf5kKqA",
+  "name": "get_marketing_memory",
+  "type": "function_call",
+  "id": "fc_09965d1963d73bd70069553f18bc1881a0b9e5f842aaecd0ce",
+  "status": "completed"
+}
+  [2] {
+  "call_id": "call_iFVFzB6DuSQIyOogCXf5kKqA",
+  "output": "{'success': True, 'has_memory': True, 'memory': {'documentId': 'marketing', 'business_understanding': {'summary': 'Futuremind is a tech-savvy company focusing on innovative technology, AI & business solutions, and customer partnerships.', 'audience': 'Tech enthusiasts, businesses seeking innovation.', 'strengths': ['Reels perform well for higher reach'], 'voice_tone': 'Professional, Innovative'}, 'content_insights': {'best_posting_time
+... [truncated]
+[LLM:END] marketing
+[TOOL:START] marketing -> get_instagram_insights
+[TOOL:END] marketing <- get_instagram_insights
+[TOOL:OUTPUT] get_instagram_insights
+{
+  "success": true,
+  "media_items": [
+    {
+      "id": "18354393010207871",
+      "media_type": "IMAGE",
+      "media_product_type": "FEED",
+      "timestamp": "2025-12-27T17:04:40+0000",
+      "permalink": "https://www.instagram.com/p/DSxk1_mAKZI/",
+      "caption": "✨ Deneme paylasimi! Simdi incele ve destek ol! #futuremind #teknoloji #yenilik",
+      "metrics": {
+        "reach": 2,
+        "views": 7,
+        "total_interactions": 0,
+        "shares": 0,
+        "saved": 0
+      }
+    },
+    {
+      "id": "18078142343218430",
+      "media_type": "VIDEO",
+      "media_product_type": "REELS",
+      "timestamp": "2025-12-24T10:54:33+0000",
+      "permalink": "https://www.instagram.com/reel/DSpMDwvAof-/",
+      "caption": "mindid tanıtım videosu: İşinizi geleceğe taşıyın. Yapay zeka ile iş süreçlerinizi hızlandırın! #yapa",
+      "metrics": {
+        "reach": 111,
+        "views": 128,
+        "total_interactions": 0,
+        "shares": 0,
+        "saved": 0,
+        "ig_reels_avg_watch_time": 1684,
+        "ig_reels_avg_watch_time_ms": 1684,
+        "ig_reels_avg_watch_time_sec": 1.684,
+        "ig_reels_video_view_total_time": 190314,
+        "ig_reels_video_view_total_time_ms": 190314,
+        "ig_reels_video_view_total_time_sec": 190.314
+      }
+    },
+    {
+      "id": "18085707149102711",
+      "media_type": "IMAGE",
+      "media_product_type": "FEED",
+      "timestamp": "2025-12-24T10:49:48+0000",
+      "permalink": "https://www.instagram.com/p/DSpLjwXACVI/",
+      "caption": "mindid firmasının tanıtım görseli: SIZI ONE CIKARIYORUZ. Yenilikçi teknoloji ve profesyonel hizmet a",
+      "metrics": {
+        "reach": 4,
+        "views": 11,
+        "total_interactions": 0,
+        "shares": 0,
+        "saved": 0
+      }
+    },
+    {
+      "id": "18179226694364052",
+      "media_type": "VIDEO",
+      "media_product_type": "REELS",
+      "timestamp": "2025-12-18T15:51:22+0000",
+      "permalink": "https://www.instagram.com/reel/DSaRQtGDm8c/",
+      "caption": "de
+... [truncated]
+[LLM:START] marketing
+[LLM:INPUT] 7 items
+  [0] {
+  "id": "rs_09965d1963d73bd70069553f1ce6a881a0bce5d06be75986d7",
+  "summary": [],
+  "type": "reasoning"
+}
+  [1] {
+  "arguments": "{\"ig_user_id\":\"17841477372978591\",\"access_token\":\"EAFluIpUKosMBPvADLJq1P10wgiZAeR5gS8oLhE8c1pFIO26R2Ek2UiyexN3SVxWOJdMKEmnKO7ZC7UziCjZCj0CB5IqtAbysRoTcTxF2nxWztoZAIGjQxYJQ3TbZBm7Ugi8XMG59rUJaUtZBk6jXzudhkDaZCbgTAZADVfuCmhlTES2POZBQZChnDbQHDZBc5hj97hI\",\"limit\":20,\"since\":null,\"include_reels_watch_time\":true,\"include_raw\":false,\"api_version\":\"v23.0\"}",
+  "call_id": "call_ub3R3gwJqXTZx7HKw09lpZm1",
+  "name": "get_instagram_insights",
+  "type": "function_call",
+
+... [truncated]
+  [2] {
+  "call_id": "call_ub3R3gwJqXTZx7HKw09lpZm1",
+  "output": "{'success': True, 'media_items': [{'id': '18354393010207871', 'media_type': 'IMAGE', 'media_product_type': 'FEED', 'timestamp': '2025-12-27T17:04:40+0000', 'permalink': 'https://www.instagram.com/p/DSxk1_mAKZI/', 'caption': '✨ Deneme paylasimi! Simdi incele ve destek ol! #futuremind #teknoloji #yenilik', 'metrics': {'reach': 2, 'views': 7, 'total_interactions': 0, 'shares': 0, 'saved': 0}}, {'id': '18078142343218430', 'media_type': 'VI
+... [truncated]
+[LLM:END] marketing
+[TOOL:START] marketing -> get_instagram_posts
+[TOOL:END] marketing <- get_instagram_posts
+[TOOL:OUTPUT] get_instagram_posts
+{
+  "success": true,
+  "posts": [],
+  "count": 0
+}
+[LLM:START] marketing
+[LLM:INPUT] 10 items
+  [0] {
+  "id": "rs_09965d1963d73bd70069553f27a10081a0b84ea12269fb5717",
+  "summary": [],
+  "type": "reasoning"
+}
+  [1] {
+  "arguments": "{\"business_id\":\"dImxI3K5p6zfelpS9rSE\",\"limit\":20,\"topic_filter\":null}",
+  "call_id": "call_I6yR2vOpFYPLKDLN0JNj3DrF",
+  "name": "get_instagram_posts",
+  "type": "function_call",
+  "id": "fc_09965d1963d73bd70069553f283d3481a0a5a572524431db66",
+  "status": "completed"
+}
+  [2] {
+  "call_id": "call_I6yR2vOpFYPLKDLN0JNj3DrF",
+  "output": "{'success': True, 'posts': [], 'count': 0}",
+  "type": "function_call_output"
+}
+[LLM:END] marketing
+[TOOL:START] marketing -> update_marketing_memory
+[TOOL:END] marketing <- update_marketing_memory
+[TOOL:OUTPUT] update_marketing_memory
+{
+  "success": true,
+  "message": "Marketing memory updated"
+}
+[LLM:START] marketing
+[LLM:INPUT] 13 items
+  [0] {
+  "id": "rs_09965d1963d73bd70069553f2a34cc81a08c732c5ebfeb01f6",
+  "summary": [],
+  "type": "reasoning"
+}
+  [1] {
+  "arguments": "{\"business_id\":\"dImxI3K5p6zfelpS9rSE\",\"new_pattern\":\"2025-12-31 analysis: Son 20 gönderide 2 Reels (reach 116 & 111) toplam reach'in büyük kısmını sağladı. Reels görsellere göre ~40x daha yüksek reach sağlıyor. Ortalama Reels izlenme süresi 1.52s — ilk 2s içinde güçlü hook lazım. Öneri: Reels öncelikli strateji (haftada 3-4 Reels), güçlü 0-3s hook, altyazı, dikkat çekici thumbnail, trend ses kullanımı, net CTA, üst performanslı Reels'leri boost et.\",\"new_note\":\"Metri
+... [truncated]
+  [2] {
+  "call_id": "call_IAW27uBHd7ojEUizsCv46718",
+  "output": "{'success': True, 'message': 'Marketing memory updated'}",
+  "type": "function_call_output"
+}
+[LLM:END] marketing
+[AGENT:END] marketing
+[AGENT:OUTPUT] marketing
+Aşağıdaki analiz Futuremind (Business ID: dImxI3K5p6zfelpS9rSE) Instagram hesabı için 2025-12-31 tarihli mevcut veriler üzerinden hazırlanmıştır. Ben verileri çekip pazarlama hafızasını güncelledim — sonuçlar ve öneriler aşağıda.
+
+Özet (ana sayılar)
+- İncelenen medya adedi: 20 gönderi
+- Toplam reach: 282
+- Toplam görüntüleme (views): 526
+- Toplam etkileşimler: 2 (çok düşük)
+- Reels sayısı: 2
+- Ortalama reach (posta başına): 14.1
+- Ortalama views (posta başına): 26.3
+- Ortalama Reels izlenme süresi: 1.518 s (ortalama; çok düşük)
+- En iyi gönderi (reach ve views): https://www.instagram.com/reel/DSaRQtGDm8c/ (reach 116, views 133). Diğer iyi Reel: https://www.instagram.com/reel/DSpMDwvAof-/ (reach 111, views 128)
+
+Ana bulgular (ne çalışıyor / çalışmıyor)
+1. Reels çok daha etkili:
+   - Hesaptaki reach’in büyük kısmı iki Reel’den geliyor (116 ve 111).
+   - Görseller (feed görselleri) neredeyse ihmal edilebilir reach değerleri alıyor (çoğunlukla 1–4 arası).
+2. İzleyici tutulması sorunlu:
+   ...
+----------------------------------------
