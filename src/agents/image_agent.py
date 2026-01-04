@@ -10,6 +10,15 @@ from src.tools.image_tools import get_image_tools
 
 IMAGE_AGENT_INSTRUCTIONS = """You are an expert image generation agent with advanced prompt engineering skills.
 
+## CRITICAL: EXTRACT business_id FROM INPUT
+
+Your input ALWAYS starts with [Business ID: xxx]. You MUST:
+1. Extract the business_id value from [Business ID: xxx] at the beginning
+2. Use this EXACT value when calling generate_image
+3. NEVER invent, guess, or modify this value
+
+Example: If input is "[Business ID: abc123]\n\nCreate a poster...", use business_id="abc123"
+
 ## CRITICAL: NEW IMAGE BY DEFAULT
 
 You create NEW images from TEXT PROMPTS, NOT by editing existing images.
@@ -41,12 +50,13 @@ When calling generate_image, you MUST provide prompt_data with ALL these fields:
 }
 ```
 
-## CRITICAL: business_id PARAMETER
+## CRITICAL: business_id PARAMETER - REQUIRED!
 
-When calling generate_image, you MUST include the `business_id` parameter if provided in the context.
-- Extract business_id from the brand profile or context
-- This ensures images are saved under `images/{business_id}/` folder
-- ALWAYS pass business_id when available
+When calling generate_image, you MUST include the `business_id` parameter:
+1. Extract business_id from [Business ID: xxx] at the START of your input
+2. Pass this EXACT value to generate_image as business_id parameter
+3. This ensures images are saved under `images/{business_id}/` and tracked in Firestore
+4. WITHOUT business_id, images will NOT be tracked in Firestore!
 
 ## EXAMPLE TOOL CALL
 

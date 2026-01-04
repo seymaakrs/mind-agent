@@ -1,0 +1,177 @@
+"""
+Wrapper tools for sub-agents that ensure business_id is properly passed.
+
+These wrappers accept business_id as an explicit required parameter,
+ensuring the orchestrator LLM cannot forget or fabricate it.
+"""
+from __future__ import annotations
+
+from typing import Any
+
+from agents import Agent, Runner, FunctionTool, function_tool
+
+from src.agents.image_agent import create_image_agent
+from src.agents.video_agent import create_video_agent
+
+
+def create_image_agent_wrapper_tool(hooks: Any = None) -> FunctionTool:
+    """
+    Creates a wrapper tool for the image agent that requires business_id explicitly.
+
+    The wrapper ensures business_id is passed correctly by:
+    1. Requiring it as a parameter (not just in prompt text)
+    2. Prepending it to the prompt in a structured way
+    3. The image agent will extract and use it reliably
+    """
+
+    @function_tool(
+        name_override="image_agent_tool",
+        description_override=(
+            "Generate images using the image agent. REQUIRED PARAMETERS: "
+            "- business_id: The exact business ID from context (e.g., 'abc123') - REQUIRED! "
+            "- prompt: Detailed description of the image to generate, including brand context. "
+            "The image will be saved under images/{business_id}/ and tracked in Firestore."
+        ),
+        strict_mode=False,
+    )
+    async def image_agent_wrapper(
+        business_id: str,
+        prompt: str,
+    ) -> str:
+        """
+        Wrapper that runs image agent with explicit business_id.
+
+        Args:
+            business_id: The business ID from Firestore (REQUIRED).
+            prompt: Detailed image generation prompt with brand context.
+
+        Returns:
+            The image agent's response including path and public_url.
+        """
+        # Prepend business_id to ensure it's extracted correctly
+        effective_prompt = f"[Business ID: {business_id}]\n\n{prompt}"
+
+        image_agent = create_image_agent()
+
+        result = await Runner.run(
+            starting_agent=image_agent,
+            input=effective_prompt,
+            max_turns=3,
+            hooks=hooks,
+        )
+
+        return result.final_output
+
+    return image_agent_wrapper
+
+
+def create_video_agent_wrapper_tool(hooks: Any = None) -> FunctionTool:
+    """
+    Creates a wrapper tool for the video agent that requires business_id explicitly.
+    """
+
+    @function_tool(
+        name_override="video_agent_tool",
+        description_override=(
+            "Generate videos using the video agent. REQUIRED PARAMETERS: "
+            "- business_id: The exact business ID from context (e.g., 'abc123') - REQUIRED! "
+            "- prompt: Detailed description of the video to generate, including brand context. "
+            "The video will be saved under videos/{business_id}/ and tracked in Firestore."
+        ),
+        strict_mode=False,
+    )
+    async def video_agent_wrapper(
+        business_id: str,
+        prompt: str,
+    ) -> str:
+        """
+        Wrapper that runs video agent with explicit business_id.
+
+        Args:
+            business_id: The business ID from Firestore (REQUIRED).
+            prompt: Detailed video generation prompt with brand context.
+
+        Returns:
+            The video agent's response including path and public_url.
+        """
+        # Prepend business_id to ensure it's extracted correctly
+        effective_prompt = f"[Business ID: {business_id}]\n\n{prompt}"
+
+        video_agent = create_video_agent()
+
+        result = await Runner.run(
+            starting_agent=video_agent,
+            input=effective_prompt,
+            max_turns=5,
+            hooks=hooks,
+        )
+
+        return result.final_output
+
+    return video_agent_wrapper
+
+
+def create_marketing_agent_wrapper_tool(
+    marketing_agent: Agent,
+    hooks: Any = None,
+) -> FunctionTool:
+    """
+    Creates a wrapper tool for the marketing agent that requires business_id explicitly.
+    """
+
+    @function_tool(
+        name_override="marketing_agent_tool",
+        description_override=(
+            "Complete social media manager. REQUIRED PARAMETERS: "
+            "- business_id: The exact business ID from context (e.g., 'abc123') - REQUIRED! "
+            "- ig_user_id: Instagram Business Account ID from business profile - REQUIRED for posting! "
+            "- access_token: Instagram API access token from business profile - REQUIRED for posting! "
+            "- prompt: What you want the marketing agent to do (plan, post, analyze). "
+            "Use for: content planning, creating AND posting content, analyzing Instagram metrics. "
+            "Keywords: plan, planlama, takvim, icerik, post, paylas, metrik, analiz, strateji, haftalik"
+        ),
+        strict_mode=False,
+    )
+    async def marketing_agent_wrapper(
+        business_id: str,
+        ig_user_id: str,
+        access_token: str,
+        prompt: str,
+    ) -> str:
+        """
+        Wrapper that runs marketing agent with explicit credentials.
+
+        Args:
+            business_id: The business ID from Firestore (REQUIRED).
+            ig_user_id: Instagram Business Account ID (REQUIRED).
+            access_token: Instagram API access token (REQUIRED).
+            prompt: What the marketing agent should do.
+
+        Returns:
+            The marketing agent's response.
+        """
+        # Include all credentials in structured format
+        effective_prompt = (
+            f"[Business ID: {business_id}]\n"
+            f"[Instagram User ID: {ig_user_id}]\n"
+            f"[Access Token: {access_token}]\n\n"
+            f"{prompt}"
+        )
+
+        result = await Runner.run(
+            starting_agent=marketing_agent,
+            input=effective_prompt,
+            max_turns=15,
+            hooks=hooks,
+        )
+
+        return result.final_output
+
+    return marketing_agent_wrapper
+
+
+__all__ = [
+    "create_image_agent_wrapper_tool",
+    "create_video_agent_wrapper_tool",
+    "create_marketing_agent_wrapper_tool",
+]

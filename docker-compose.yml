@@ -21,13 +21,30 @@ services:
       - ./logs:/app/logs
       - ./serviceAccount.json:/app/credentials/serviceAccount.json:ro
 
-  ngrok:
-    image: ngrok/ngrok:latest
+  # Cloudflare Tunnel - Quick Tunnel (trycloudflare.com subdomain)
+  cloudflared:
+    image: cloudflare/cloudflared:latest
     depends_on:
       - api
-    environment:
-      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
     command:
-      - http
-      - --url=learning-partially-rabbit.ngrok-free.app
-      - api:8000
+      - tunnel
+      - --no-autoupdate
+      - --protocol
+      - http2
+      - --url
+      - http://api:8000
+
+  # Tunnel URL Watcher - URL degisince Firebase'i otomatik gunceller
+  tunnel-watcher:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - cloudflared
+    environment:
+      FIREBASE_CREDENTIALS_FILE: /app/credentials/serviceAccount.json
+    volumes:
+      - ./serviceAccount.json:/app/credentials/serviceAccount.json:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["python", "scripts/tunnel_watcher.py"]
+    restart: unless-stopped

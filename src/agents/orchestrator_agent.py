@@ -7,11 +7,14 @@ from agents import Agent
 
 from src.app.config import get_settings, get_model_settings
 from src.app.logging_hooks import CliLoggingHooks
-from src.agents.image_agent import create_image_agent
-from src.agents.video_agent import create_video_agent
 from src.agents.marketing_agent import create_marketing_agent
 from src.tools.orchestrator_tools import get_orchestrator_tools
 from src.tools.image_tools import fetch_business
+from src.tools.agent_wrapper_tools import (
+    create_image_agent_wrapper_tool,
+    create_video_agent_wrapper_tool,
+    create_marketing_agent_wrapper_tool,
+)
 
 
 def create_orchestrator_agent(model: str | None = None) -> Agent[dict[str, Any]]:
@@ -22,70 +25,22 @@ def create_orchestrator_agent(model: str | None = None) -> Agent[dict[str, Any]]
     model_settings = get_model_settings()
     hooks = CliLoggingHooks()
 
-    image_agent = create_image_agent()
-    image_tool = image_agent.as_tool(
-        tool_name="image_agent_tool",
-        tool_description=(
-            "Image generation tool. Call this with a prompt describing the desired image. "
-            "If you have brand/company profile information (from fetch_document), include it in the prompt "
-            "so the image reflects the brand identity. For editing/combining images, also provide the source image's path."
-        ),
-        max_turns=3,
-        hooks=hooks,
-    )
+    # Create wrapper tools that require business_id explicitly
+    # This ensures orchestrator LLM cannot forget or fabricate business_id
+    image_tool = create_image_agent_wrapper_tool(hooks=hooks)
+    video_tool = create_video_agent_wrapper_tool(hooks=hooks)
 
-    video_agent = create_video_agent()
-    video_tool = video_agent.as_tool(
-        tool_name="video_agent_tool",
-        tool_description=(
-            "Video generation tool. Call this with a prompt describing the desired video. "
-            "If you have brand/company profile information (from fetch_document), include it in the prompt "
-            "so the video reflects the brand identity. The video agent will apply prompt engineering "
-            "to create effective video generation prompts."
-        ),
-        max_turns=5,
-        hooks=hooks,
-    )
-
-    # Create sub-agent tools for marketing agent
-    image_sub_tool = image_agent.as_tool(
-        tool_name="image_agent_tool",
-        tool_description=(
-            "Generate images. Provide detailed brief with business context, colors, style. "
-            "Returns public_url and path of generated image."
-        ),
-        max_turns=3,
-        hooks=hooks,
-    )
-
-    video_sub_tool = video_agent.as_tool(
-        tool_name="video_agent_tool",
-        tool_description=(
-            "Generate videos/reels. Provide detailed brief with business context, colors, style. "
-            "Returns public_url and path of generated video."
-        ),
-        max_turns=5,
-        hooks=hooks,
-    )
+    # Create sub-agent wrapper tools for marketing agent (also require business_id)
+    image_sub_tool = create_image_agent_wrapper_tool(hooks=hooks)
+    video_sub_tool = create_video_agent_wrapper_tool(hooks=hooks)
 
     # Marketing agent with sub-agent tools
     marketing_agent = create_marketing_agent(
         image_agent_tool=image_sub_tool,
         video_agent_tool=video_sub_tool,
     )
-    marketing_tool = marketing_agent.as_tool(
-        tool_name="marketing_agent_tool",
-        tool_description=(
-            "Complete social media manager. Use this for: "
-            "- Content planning and calendar management (haftalık plan, içerik takvimi) "
-            "- Creating AND posting content (içerik oluştur ve paylaş, post at) "
-            "- Analyzing Instagram metrics (metrik analizi, performans raporu) "
-            "- Strategic recommendations and insights "
-            "The marketing agent can independently: create images/videos, write captions, post to Instagram, and track everything. "
-            "IMPORTANT: Include business_id and Instagram credentials (ig_user_id, access_token) from business profile. "
-            "Keywords: plan, planlama, takvim, içerik, post, paylaş, metrik, analiz, strateji, haftalık"
-        ),
-        max_turns=15,
+    marketing_tool = create_marketing_agent_wrapper_tool(
+        marketing_agent=marketing_agent,
         hooks=hooks,
     )
 
@@ -118,17 +73,18 @@ def create_orchestrator_agent(model: str | None = None) -> Agent[dict[str, Any]]
             "3) Once you have a successful result (e.g., fileId), proceed to the next step immediately. "
             "4) If a tool fails, do NOT retry it. Report the error and continue with what you have. "
             "\n\n"
-            "Business Profile Flow (IMPORTANT): "
-            "If the user input starts with [Business ID: xxx], extract that ID and use it: "
-            "1) FIRST, check if input contains [Business ID: xxx] at the beginning. "
-            "2) If business_id exists, call fetch_business with that ID to get business profile from Firestore 'businesses' collection. "
+            "CRITICAL - Business ID Flow: "
+            "Your input starts with [Business ID: xxx]. Extract this ID and use it EXACTLY as-is! "
+            "1) FIRST, extract the business_id from [Business ID: xxx] at the beginning of input. "
+            "2) Call fetch_business with that EXACT ID to get business profile. "
             "3) The business profile contains: "
             "   - name, colors (list), logo (Cloud Storage URL), profile (dynamic map) "
             "   - instagram_account_id: Instagram Business Account ID (for posting) "
             "   - instagram_access_token: Instagram API access token (for posting) "
-            "4) Use this information when calling image_agent_tool or video_agent_tool. "
-            "5) SAVE instagram_account_id and instagram_access_token for later use with post_on_instagram. "
-            "6) Do NOT call get_document separately - fetch_business is the correct tool for business data. "
+            "4) When calling image_agent_tool or video_agent_tool, you MUST pass business_id as parameter! "
+            "   Example: image_agent_tool(business_id='abc123', prompt='...') "
+            "5) NEVER invent, guess, or modify the business_id. Use the EXACT value from [Business ID: xxx]. "
+            "6) SAVE instagram_account_id and instagram_access_token for later use with post_on_instagram. "
             "\n\n"
             "Content + Instagram Flow: "
             "When the user asks to create content AND post to Instagram: "
@@ -194,22 +150,23 @@ def create_orchestrator_agent(model: str | None = None) -> Agent[dict[str, Any]]
             "This distinction is CRITICAL! If user says 'plana göre paylaş', DO NOT tell agent to create a plan! "
             "\n"
             "CRITICAL - When calling marketing_agent_tool: "
-            "1) First, get business profile using fetch_business if business_id is in context. "
-            "2) Extract instagram_account_id and instagram_access_token from the business profile. "
-            "3) IMPORTANT: Include ALL these details IN THE PROMPT TEXT: "
-            "   - Business ID and Name "
-            "   - Instagram Credentials (ig_user_id, access_token) "
-            "   - TODAY'S DATE from the system prompt (CRITICAL for calendar planning!) "
-            "   - CLEAR INSTRUCTION: whether to CREATE new plan or EXECUTE existing plan "
+            "1) First, get business profile using fetch_business. "
+            "2) Extract business_id, instagram_account_id, and instagram_access_token from the business profile. "
+            "3) Call marketing_agent_tool with ALL required parameters: "
+            "   - business_id: The EXACT business_id from [Business ID: xxx] "
+            "   - ig_user_id: instagram_account_id from business profile "
+            "   - access_token: instagram_access_token from business profile "
+            "   - prompt: What you want the marketing agent to do, including: "
+            f"     * TODAY'S DATE: {today_date} "
+            "     * CLEAR INSTRUCTION: whether to CREATE new plan or EXECUTE existing plan "
             "   Example for EXECUTE: "
-            "   'Check EXISTING content plans for today and execute the scheduled post. "
-            "   DO NOT create a new plan. Just find today's planned post and post it. "
-            "   Business ID: abc123 "
-            "   Business Name: MyBrand "
-            f"   Today: {today_date} "
-            "   Instagram Credentials: ig_user_id=17841477372978591, access_token=EABC123...' "
-            "4) The marketing agent CANNOT see fetch_business results - you MUST pass the values explicitly! "
-            "5) Marketing agent will use these credentials and date to execute plans. "
+            "   marketing_agent_tool( "
+            "     business_id='abc123', "
+            "     ig_user_id='17841477372978591', "
+            "     access_token='EABC123...', "
+            f"     prompt='Today is {today_date}. Check EXISTING plans and execute today\\'s scheduled post. DO NOT create new plan.' "
+            "   ) "
+            "4) The marketing agent receives credentials as parameters - use EXACT values from business profile! "
             "\n\n"
             "When to use which agent: "
             "- ONLY image/video generation (no planning/posting): use image_agent_tool or video_agent_tool directly "

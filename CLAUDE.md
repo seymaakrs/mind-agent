@@ -37,7 +37,8 @@ src/
 │   ├── image_tools.py         - generate_image, fetch_business
 │   ├── video_tools.py         - generate_video
 │   ├── instagram_tools.py     - get_instagram_insights
-│   └── marketing_tools.py     - calendar, memory, post tracking
+│   ├── marketing_tools.py     - calendar, memory, post tracking
+│   └── agent_wrapper_tools.py - Sub-agent wrapper tools (business_id enforcement)
 ├── models/
 │   ├── prompts.py             - ImagePrompt, VideoPrompt modelleri
 │   ├── tool_io.py             - Tool input/output modelleri
@@ -431,27 +432,35 @@ Response:
 
 ### Marketing Agent Flows
 
-**Content Planning Flow:**
+**KRITIK - EXECUTE vs CREATE Ayrimi:**
+- "plana göre paylaş", "bugünkü postu at" → EXECUTE (mevcut planı uygula)
+- "plan oluştur", "haftalık plan hazırla" → CREATE (yeni plan oluştur)
+- Orchestrator bu ayrımı marketing agent'a açıkça belirtmeli!
+
+**Execute Plan Flow (Mevcut planı uygula):**
+1. `fetch_business` → business profile + credentials
+2. `marketing_agent_tool` cagir (mesaj: "Check EXISTING plans, DO NOT create new")
+3. Marketing agent:
+   - `get_todays_posts(status_filter="planned")` → bugunku plani bul
+   - Eger post yoksa → "No posts scheduled" raporla ve DUR
+   - `get_marketing_memory` → voice/tone, hashtag'ler
+   - `image_agent_tool` veya `video_agent_tool` → icerik uret
+     - **KRITIK**: Brief'e `Business ID: {id}` MUTLAKA dahil et!
+     - Bu olmadan media Firestore'a KAYDEDILMEZ!
+   - Caption yaz (kendi LLM ile)
+   - `post_on_instagram` → paylas
+   - `save_instagram_post` → post kaydini olustur
+   - `update_post_in_plan(status="posted", generated_media_path=...)` → plani guncelle
+
+**Create Plan Flow (Yeni plan oluştur - sadece açıkça istendiğinde):**
 1. `fetch_business` → business profile al
-2. `marketing_agent_tool` cagir
+2. `marketing_agent_tool` cagir (mesaj: "Create a new weekly content plan")
 3. Marketing agent:
    - `get_marketing_memory` → onceki ogrenimleri oku
    - `get_instagram_insights` → mevcut performansi analiz et
    - `get_instagram_posts` → son postlari gor (tekrar onle)
-   - `create_calendar_entry` x 5-7 → haftalik plan olustur
+   - `create_weekly_plan(posts=[...])` → haftalik plan olustur (tek seferde)
    - `update_marketing_memory` → yeni ogrenimler kaydet
-
-**Content Creation + Posting Flow:**
-1. `fetch_business` → business profile + credentials
-2. `marketing_agent_tool` cagir
-3. Marketing agent:
-   - `get_calendar(status_filter="planned")` → bugunku plani bul
-   - `get_marketing_memory` → voice/tone, hashtag'ler
-   - `image_agent_tool` veya `video_agent_tool` → icerik uret
-   - Caption yaz (kendi LLM ile)
-   - `post_on_instagram` → paylas
-   - `save_instagram_post` → post kaydini olustur
-   - `update_calendar_entry(status="posted")` → takvimi guncelle
 
 **Analytics Flow:**
 1. `fetch_business` → credentials
@@ -469,12 +478,41 @@ Response:
 # Bagimliliklari yukle
 pip install -r requirements.txt
 
-# API'yi calistir
+# API'yi calistir (lokal)
 uvicorn src.app.api:app --host 0.0.0.0 --port 8000
 
 # CLI ile calistir
 python -m src.app.main -i "task burada"
+
+# Docker ile calistir (Cloudflare Tunnel + Firebase URL update)
+start-dev.bat
+# veya manuel:
+docker-compose up -d && python scripts/update_tunnel_url.py
 ```
+
+## Development Server (Cloudflare Tunnel)
+
+Development ortaminda API'yi disariya acmak icin Cloudflare Quick Tunnel kullaniliyor.
+
+**Ozellikler:**
+- Ngrok'taki 30s streaming timeout sorunu yok
+- Her restart'ta yeni URL (xxx.trycloudflare.com)
+- URL otomatik olarak Firebase `settings/app_settings.serverUrl`'e kaydediliyor
+
+**Kullanim:**
+```bash
+# Tek komutla baslatma (containers + tunnel URL update)
+start-dev.bat
+
+# Manuel baslatma
+docker-compose up -d
+python scripts/update_tunnel_url.py
+```
+
+**Dosyalar:**
+- `docker-compose.yml` - API + Cloudflare Tunnel containers
+- `scripts/update_tunnel_url.py` - Tunnel URL'i alip Firebase'e kaydeder
+- `start-dev.bat` - Tek komutla her seyi yapar
 
 ## Bekleyen Isler
 
@@ -646,6 +684,26 @@ Response'daki `gcsUri`'den video indirmek icin:
     - Post kayitlari ve topic tracking
     - Agent memory: isletme bazli ogrenme ve hafiza
     - Orchestrator'dan bagimsiz icerik uretme ve paylasma
+11. **Plan-Based Content Calendar** - Haftalik plan yapisi eklendi
+    - Her hafta 1 dokuman, icinde posts array
+    - Plan statusleri: draft, active, paused, completed, cancelled
+    - Post statusleri: planned, created, posted, skipped
+    - `create_weekly_plan`, `get_plans`, `get_todays_posts` tools
+12. **EXECUTE vs CREATE Ayrimi** - Marketing agent workflow'u duzeltildi
+    - "plana gore paylas" = mevcut plani uygula (yeni plan OLUSTURMA!)
+    - "plan olustur" = yeni plan olustur
+    - Orchestrator bu ayrimi marketing agent'a acikca belirtiyor
+    - Marketing agent soru sormadan otonom calisiyor
+13. **Business ID Propagation Fix** - Media kayitlari duzeltildi
+    - Marketing agent artik image/video brief'lerine `Business ID: {id}` ekliyor
+    - Image/video agent'lar business_id'yi extract edip generate fonksiyonlarina geciyor
+    - Uretilen medyalar `businesses/{id}/media/` subcollection'a kaydediliyor
+14. **Business ID Wrapper Tools** - Orchestrator'un uydurma ID kullanmasi engellendi
+    - `agent_wrapper_tools.py` eklendi - sub-agent'lar icin wrapper tools
+    - `image_agent_tool`, `video_agent_tool`, `marketing_agent_tool` artik wrapper olarak calisir
+    - `business_id` zorunlu parametre olarak alinir, LLM uydurma ID gecemez
+    - Wrapper'lar input'a `[Business ID: xxx]` prefix'i ekler
+    - Sub-agent'lar bu prefix'ten business_id'yi extract eder
 
 ## Test
 

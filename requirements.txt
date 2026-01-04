@@ -17,3 +17,4 @@ httpx>=0.27
 # REST API
 fastapi>=0.110
 uvicorn>=0.30
+docker

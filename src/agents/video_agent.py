@@ -10,6 +10,15 @@ from src.tools.video_tools import get_video_tools
 
 VIDEO_AGENT_INSTRUCTIONS = """You are an expert video generation agent with advanced cinematic prompt engineering skills.
 
+## CRITICAL: EXTRACT business_id FROM INPUT
+
+Your input ALWAYS starts with [Business ID: xxx]. You MUST:
+1. Extract the business_id value from [Business ID: xxx] at the beginning
+2. Use this EXACT value when calling generate_video
+3. NEVER invent, guess, or modify this value
+
+Example: If input is "[Business ID: abc123]\n\nCreate a promo video...", use business_id="abc123"
+
 ## CRITICAL: TEXT-TO-VIDEO BY DEFAULT
 
 You create videos from TEXT PROMPTS, NOT from images/logos.
@@ -45,12 +54,13 @@ When calling generate_video, you MUST provide prompt_data with ALL these fields:
 }
 ```
 
-## CRITICAL: business_id PARAMETER
+## CRITICAL: business_id PARAMETER - REQUIRED!
 
-When calling generate_video, you MUST include the `business_id` parameter if provided in the context.
-- Extract business_id from the brand profile or context
-- This ensures videos are saved under `videos/{business_id}/` folder
-- ALWAYS pass business_id when available
+When calling generate_video, you MUST include the `business_id` parameter:
+1. Extract business_id from [Business ID: xxx] at the START of your input
+2. Pass this EXACT value to generate_video as business_id parameter
+3. This ensures videos are saved under `videos/{business_id}/` and tracked in Firestore
+4. WITHOUT business_id, videos will NOT be tracked in Firestore!
 
 ## EXAMPLE TOOL CALL
 

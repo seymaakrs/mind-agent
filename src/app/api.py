@@ -70,13 +70,13 @@ async def run_task(payload: TaskRequest):
             run_orchestrator_async(user_input=payload.task, context=context)
         )
 
-        # Send heartbeats while waiting
+        # Send heartbeats while waiting (5 seconds to prevent proxy timeouts)
         heartbeat_count = 0
         while not task.done():
             heartbeat_count += 1
             heartbeat = json.dumps({"type": "heartbeat", "count": heartbeat_count}) + "\n"
             yield heartbeat
-            await asyncio.sleep(10)  # Heartbeat every 10 seconds
+            await asyncio.sleep(5)  # Heartbeat every 5 seconds (reduced for proxy compatibility)
 
         # Get result
         try:
@@ -101,7 +101,12 @@ async def run_task(payload: TaskRequest):
     return StreamingResponse(
         generate(),
         media_type="application/x-ndjson",
-        headers={"X-Accel-Buffering": "no"}  # Disable nginx buffering
+        headers={
+            "X-Accel-Buffering": "no",      # Disable nginx buffering
+            "Cache-Control": "no-cache",     # Prevent caching
+            "Connection": "keep-alive",      # Keep connection alive
+            "Transfer-Encoding": "chunked",  # Enable chunked transfer
+        }
     )
 
 

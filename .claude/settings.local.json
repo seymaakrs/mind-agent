@@ -16,7 +16,16 @@
       "Bash(docker-compose logs:*)",
       "Bash(ls:*)",
       "Bash(sort:*)",
-      "Bash(docker-compose up:*)"
+      "Bash(docker-compose up:*)",
+      "Bash(cloudflared tunnel list:*)",
+      "Bash(docker-compose down:*)",
+      "Bash(docker-compose:*)",
+      "Bash(curl:*)",
+      "Bash(docker builder prune:*)",
+      "Bash(docker rm:*)",
+      "Bash(timeout /t 8 /nobreak)",
+      "Bash(git -C D:/agents-sdk ls-files:*)",
+      "Bash(del \"\\\\?\\\\D:\\\\agents-sdk\\\\nul\")"
     ]
   }
 }
