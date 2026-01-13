@@ -10,10 +10,6 @@ from src.infra.google_ai_client import get_image_generation_client
 from src.models.prompts import ImagePrompt
 
 
-def _slugify(text: str) -> str:
-    """Basit dosya adi olusturucu."""
-    slug = re.sub(r"[^a-zA-Z0-9]+", "-", text.lower()).strip("-")
-    return slug or "image"
 
 
 @function_tool(

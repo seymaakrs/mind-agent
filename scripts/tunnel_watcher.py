@@ -59,26 +59,48 @@ def update_firebase_url(url: str) -> bool:
         return False
 
 
+def is_valid_tunnel_url(url: str) -> bool:
+    """
+    Validate that URL is a real tunnel URL (4 words separated by hyphens).
+    Rejects: api.trycloudflare.com, www.trycloudflare.com, etc.
+    Accepts: miles-age-performing-lemon.trycloudflare.com
+    """
+    # Extract subdomain
+    match = re.match(r'https://([\w-]+)\.trycloudflare\.com', url)
+    if not match:
+        return False
+
+    subdomain = match.group(1)
+    # Real tunnel URLs have 4 random words separated by hyphens
+    parts = subdomain.split('-')
+    return len(parts) >= 3 and all(p.isalpha() for p in parts)
+
+
 def get_latest_url_from_logs() -> str | None:
     """Docker loglarindan en son tunnel URL'ini al."""
     global docker_client
 
     try:
-        # Find cloudflared container
-        containers = docker_client.containers.list(filters={"name": "cloudflared"})
-        if not containers:
+        # Find cloudflared container - use partial match for compose naming
+        containers = docker_client.containers.list()
+        cloudflared_container = None
+        for c in containers:
+            if "cloudflared" in c.name:
+                cloudflared_container = c
+                break
+
+        if not cloudflared_container:
             print("[WARN] cloudflared container not found")
             return None
 
-        container = containers[0]
-
         # Get logs (last 100 lines)
-        logs = container.logs(tail=100).decode("utf-8", errors="ignore")
+        logs = cloudflared_container.logs(tail=100).decode("utf-8", errors="ignore")
 
-        # Find all URLs, return the last one
+        # Find all URLs, filter valid ones, return the last valid one
         matches = re.findall(r'https://[\w-]+\.trycloudflare\.com', logs)
-        if matches:
-            return matches[-1]
+        valid_urls = [url for url in matches if is_valid_tunnel_url(url)]
+        if valid_urls:
+            return valid_urls[-1]
 
     except Exception as e:
         print(f"[ERROR] Failed to read logs: {e}")

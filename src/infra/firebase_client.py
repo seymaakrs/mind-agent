@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import mimetypes
+from datetime import timedelta
 from functools import lru_cache
 from typing import Any
 
@@ -164,16 +165,27 @@ class FirebaseStorageClient:
         Returns:
             list: Dosya bilgilerini iceren liste.
         """
-        blobs = self.bucket.list_blobs(prefix=prefix, max_results=max_results)
-        return [
-            {
+        blobs = list(self.bucket.list_blobs(prefix=prefix, max_results=max_results))
+        result = []
+        for blob in blobs:
+            # Generate signed URL (valid for 1 hour) for external access
+            try:
+                signed_url = blob.generate_signed_url(
+                    version="v4",
+                    expiration=timedelta(hours=1),
+                    method="GET",
+                )
+            except Exception:
+                # Fallback to public_url if signing fails
+                signed_url = blob.public_url
+
+            result.append({
                 "name": blob.name,
                 "size": blob.size,
                 "content_type": blob.content_type,
-                "public_url": blob.public_url if blob.public_url else None,
-            }
-            for blob in blobs
-        ]
+                "public_url": signed_url,
+            })
+        return result
 
     def get_public_url(self, file_path: str) -> str:
         """

@@ -13,6 +13,7 @@ class TaskLogger:
     Log yapisi:
     businesses/{business_id}/logs/{log_id}
     ├── task: string              # Istek metni
+    ├── task_id: string | null    # Admin panelinden gelen task ID
     ├── started_at: timestamp     # Baslangic zamani
     ├── completed_at: timestamp   # Bitis zamani
     ├── status: "running" | "success" | "error"
@@ -25,12 +26,14 @@ class TaskLogger:
     └── error: string | null      # Hata varsa
     """
 
-    def __init__(self, business_id: str | None = None) -> None:
+    def __init__(self, business_id: str | None = None, task_id: str | None = None) -> None:
         self.business_id = business_id
+        self.task_id = task_id
         self.log_id: str | None = None
         self.actions: list[dict[str, Any]] = []
         self.outputs: list[dict[str, Any]] = []
         self._started_at: datetime | None = None
+        self._task: str | None = None  # Store task text for tasks collection
         self._doc_client = get_document_client("businesses")
 
     def start(self, task: str) -> str | None:
@@ -47,9 +50,11 @@ class TaskLogger:
             return None
 
         self._started_at = datetime.now(timezone.utc)
+        self._task = task  # Store for tasks collection
 
         log_data = {
             "task": task,
+            "task_id": self.task_id,
             "started_at": self._started_at.isoformat(),
             "completed_at": None,
             "status": "running",
@@ -64,6 +69,21 @@ class TaskLogger:
             data=log_data,
         )
         self.log_id = result["documentId"]
+
+        # Update tasks subcollection if task_id provided
+        if self.task_id:
+            self._doc_client.update_subcollection_doc(
+                document_id=self.business_id,
+                subcollection_name="tasks",
+                subdoc_id=self.task_id,
+                data={
+                    "status": "running",
+                    "logId": self.log_id,
+                    "startedAt": self._started_at.isoformat(),
+                },
+                merge=True,
+            )
+
         return self.log_id
 
     def log_action(
@@ -130,6 +150,7 @@ class TaskLogger:
             return
 
         completed_at = datetime.now(timezone.utc)
+        status = "failed" if error else "completed"
 
         update_data = {
             "completed_at": completed_at.isoformat(),
@@ -146,6 +167,33 @@ class TaskLogger:
             data=update_data,
             merge=True,
         )
+
+        # Update tasks subcollection if task_id provided
+        if self.task_id:
+            task_update: dict[str, Any] = {
+                "status": status,
+                "completedAt": completed_at.isoformat(),
+            }
+            if error:
+                task_update["error"] = error
+            else:
+                # Get final output from last action if available
+                if self.actions:
+                    last_output = self.actions[-1].get("output", {})
+                    if isinstance(last_output, dict):
+                        task_update["result"] = last_output.get("message", "Task completed")
+                    else:
+                        task_update["result"] = "Task completed"
+                else:
+                    task_update["result"] = "Task completed"
+
+            self._doc_client.update_subcollection_doc(
+                document_id=self.business_id,
+                subcollection_name="tasks",
+                subdoc_id=self.task_id,
+                data=task_update,
+                merge=True,
+            )
 
 
 __all__ = ["TaskLogger"]

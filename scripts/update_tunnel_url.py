@@ -13,6 +13,21 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 
 
+def is_valid_tunnel_url(url: str) -> bool:
+    """
+    Validate that URL is a real tunnel URL (4 words separated by hyphens).
+    Rejects: api.trycloudflare.com, www.trycloudflare.com, etc.
+    Accepts: miles-age-performing-lemon.trycloudflare.com
+    """
+    match = re.match(r'https://([\w-]+)\.trycloudflare\.com', url)
+    if not match:
+        return False
+
+    subdomain = match.group(1)
+    parts = subdomain.split('-')
+    return len(parts) >= 3 and all(p.isalpha() for p in parts)
+
+
 def get_tunnel_url(max_retries: int = 10, retry_delay: float = 2.0) -> str | None:
     """Docker logs'dan Cloudflare tunnel URL'ini ceker (en son URL'i alir)."""
 
@@ -25,12 +40,13 @@ def get_tunnel_url(max_retries: int = 10, retry_delay: float = 2.0) -> str | Non
                 cwd=r"D:\agents-sdk"
             )
 
-            # URL pattern: https://xxx.trycloudflare.com - find ALL matches, return LAST one
+            # URL pattern: https://xxx.trycloudflare.com - find ALL matches, filter valid ones
             matches = re.findall(r'https://[\w-]+\.trycloudflare\.com', result.stdout)
-            if matches:
-                return matches[-1]  # Return the most recent URL
+            valid_urls = [url for url in matches if is_valid_tunnel_url(url)]
+            if valid_urls:
+                return valid_urls[-1]  # Return the most recent valid URL
 
-            print(f"Attempt {attempt + 1}/{max_retries}: URL not found yet, waiting...")
+            print(f"Attempt {attempt + 1}/{max_retries}: Valid URL not found yet, waiting...")
             time.sleep(retry_delay)
 
         except Exception as e:

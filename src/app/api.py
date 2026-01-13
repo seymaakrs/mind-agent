@@ -34,6 +34,9 @@ class TaskRequest(BaseModel):
     business_id: str | None = Field(
         default=None, description="Business ID from Firestore 'businesses' collection."
     )
+    task_id: str | None = Field(
+        default=None, description="Task ID for tracking in Firebase and admin panel."
+    )
     extras: dict[str, Any] | None = Field(
         default=None, description="Optional flexible data - structure may vary per request."
     )
@@ -58,10 +61,12 @@ async def run_task(payload: TaskRequest):
     {"type": "result", "success": false, "error": "..."}
     """
     async def generate():
-        # Merge business_id and extras into context
+        # Merge business_id, task_id and extras into context
         context = payload.context or {}
         if payload.business_id:
             context["business_id"] = payload.business_id
+        if payload.task_id:
+            context["task_id"] = payload.task_id
         if payload.extras:
             context["extras"] = payload.extras
 

@@ -630,13 +630,15 @@ async def get_marketing_memory(
     Get the marketing agent's memory for a business.
 
     This memory contains learned patterns, business understanding,
-    and content insights that persist across sessions.
+    content insights, and admin notes that persist across sessions.
+
+    IMPORTANT: Always check admin_notes first - these are mandatory guidelines!
 
     Args:
         business_id: Business ID.
 
     Returns:
-        dict with memory contents.
+        dict with memory contents including admin_notes.
     """
     try:
         doc_client = get_document_client(f"businesses/{business_id}/agent_memory")
@@ -669,10 +671,18 @@ async def get_marketing_memory(
                     },
                     "learned_patterns": [],
                     "notes": [],
+                    "admin_notes": [],
                 },
             }
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+# Memory size thresholds for auto-compact
+PATTERNS_THRESHOLD = 50  # Auto-compact when patterns exceed this
+NOTES_THRESHOLD = 100    # Auto-compact when notes exceed this
+PATTERNS_KEEP = 20       # Keep this many patterns after compact
+NOTES_KEEP = 30          # Keep this many notes after compact
 
 
 @function_tool(strict_mode=False)
@@ -685,6 +695,8 @@ async def update_marketing_memory(
 ) -> dict[str, Any]:
     """
     Update the marketing agent's memory for a business.
+
+    Auto-compacts when memory gets too large (>50 patterns or >100 notes).
 
     Args:
         business_id: Business ID.
@@ -705,6 +717,7 @@ async def update_marketing_memory(
             "content_insights": {},
             "learned_patterns": [],
             "notes": [],
+            "admin_notes": [],
         }
 
         # Update business_understanding (merge)
@@ -726,7 +739,7 @@ async def update_marketing_memory(
             patterns = existing.get("learned_patterns", [])
             if new_pattern not in patterns:
                 patterns.append(new_pattern)
-                existing["learned_patterns"] = patterns[-50:]  # Keep last 50
+                existing["learned_patterns"] = patterns
 
         # Add new note
         if new_note:
@@ -735,7 +748,23 @@ async def update_marketing_memory(
                 "note": new_note,
                 "added_at": datetime.now().isoformat(),
             })
-            existing["notes"] = notes[-100:]  # Keep last 100
+            existing["notes"] = notes
+
+        # Auto-compact if thresholds exceeded
+        compacted = False
+        patterns = existing.get("learned_patterns", [])
+        notes = existing.get("notes", [])
+
+        if len(patterns) > PATTERNS_THRESHOLD:
+            existing["learned_patterns"] = patterns[-PATTERNS_KEEP:]
+            compacted = True
+
+        if len(notes) > NOTES_THRESHOLD:
+            existing["notes"] = notes[-NOTES_KEEP:]
+            compacted = True
+
+        if compacted:
+            existing["last_compacted"] = datetime.now().isoformat()
 
         # Update timestamp
         existing["last_updated"] = datetime.now().isoformat()
@@ -743,9 +772,275 @@ async def update_marketing_memory(
         # Save
         doc_client.set_document("marketing", existing)
 
-        return {
+        result = {
             "success": True,
             "message": "Marketing memory updated",
+        }
+
+        if compacted:
+            result["auto_compacted"] = True
+            result["patterns_count"] = len(existing["learned_patterns"])
+            result["notes_count"] = len(existing["notes"])
+
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# =============================================================================
+# Admin Notes Tools (Mandatory Guidelines for Agent)
+# =============================================================================
+
+@function_tool
+async def get_admin_notes(
+    business_id: str,
+) -> dict[str, Any]:
+    """
+    Get admin notes for a business. These are mandatory guidelines the agent MUST follow.
+
+    Admin notes contain rules like:
+    - "Only create content about technology topics"
+    - "Never use emojis in captions"
+    - "Always include brand hashtag #TechBrand"
+
+    Args:
+        business_id: Business ID.
+
+    Returns:
+        dict with admin notes list.
+    """
+    try:
+        doc_client = get_document_client(f"businesses/{business_id}/agent_memory")
+
+        memory = doc_client.get_document("marketing")
+
+        admin_notes = memory.get("admin_notes", []) if memory else []
+
+        return {
+            "success": True,
+            "admin_notes": admin_notes,
+            "count": len(admin_notes),
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e), "admin_notes": []}
+
+
+@function_tool
+async def add_admin_note(
+    business_id: str,
+    note: str,
+    priority: str = "normal",
+) -> dict[str, Any]:
+    """
+    Add an admin note (mandatory guideline) for the marketing agent.
+
+    These notes are ALWAYS shown to the agent and must be followed.
+
+    Args:
+        business_id: Business ID.
+        note: The guideline/rule to add.
+        priority: "high", "normal", or "low" (high priority notes shown first).
+
+    Returns:
+        dict with success status.
+    """
+    try:
+        doc_client = get_document_client(f"businesses/{business_id}/agent_memory")
+
+        # Get existing memory
+        existing = doc_client.get_document("marketing") or {
+            "business_understanding": {},
+            "content_insights": {},
+            "learned_patterns": [],
+            "notes": [],
+            "admin_notes": [],
+        }
+
+        admin_notes = existing.get("admin_notes", [])
+
+        # Add new note
+        new_note = {
+            "note": note,
+            "priority": priority,
+            "added_at": datetime.now().isoformat(),
+            "active": True,
+        }
+
+        admin_notes.append(new_note)
+
+        # Sort by priority (high first)
+        priority_order = {"high": 0, "normal": 1, "low": 2}
+        admin_notes.sort(key=lambda x: priority_order.get(x.get("priority", "normal"), 1))
+
+        existing["admin_notes"] = admin_notes
+        existing["last_updated"] = datetime.now().isoformat()
+
+        doc_client.set_document("marketing", existing)
+
+        return {
+            "success": True,
+            "message": "Admin note added",
+            "total_notes": len(admin_notes),
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@function_tool
+async def remove_admin_note(
+    business_id: str,
+    note_index: int,
+) -> dict[str, Any]:
+    """
+    Remove an admin note by index.
+
+    Args:
+        business_id: Business ID.
+        note_index: Index of the note to remove (0-based).
+
+    Returns:
+        dict with success status.
+    """
+    try:
+        doc_client = get_document_client(f"businesses/{business_id}/agent_memory")
+
+        existing = doc_client.get_document("marketing")
+        if not existing:
+            return {"success": False, "error": "No memory found"}
+
+        admin_notes = existing.get("admin_notes", [])
+
+        if note_index < 0 or note_index >= len(admin_notes):
+            return {"success": False, "error": f"Invalid index: {note_index}"}
+
+        removed = admin_notes.pop(note_index)
+        existing["admin_notes"] = admin_notes
+        existing["last_updated"] = datetime.now().isoformat()
+
+        doc_client.set_document("marketing", existing)
+
+        return {
+            "success": True,
+            "removed_note": removed.get("note"),
+            "remaining_notes": len(admin_notes),
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# =============================================================================
+# Memory Compaction Tools
+# =============================================================================
+
+@function_tool
+async def compact_marketing_memory(
+    business_id: str,
+    keep_patterns: int = 20,
+    keep_notes: int = 30,
+) -> dict[str, Any]:
+    """
+    Compact the marketing memory by keeping only recent/important entries.
+
+    This removes old learned_patterns and notes to prevent memory bloat.
+    Admin notes are NEVER removed by this function.
+
+    Args:
+        business_id: Business ID.
+        keep_patterns: Number of recent patterns to keep (default 20).
+        keep_notes: Number of recent notes to keep (default 30).
+
+    Returns:
+        dict with compaction stats.
+    """
+    try:
+        doc_client = get_document_client(f"businesses/{business_id}/agent_memory")
+
+        existing = doc_client.get_document("marketing")
+        if not existing:
+            return {"success": True, "message": "No memory to compact"}
+
+        old_patterns = len(existing.get("learned_patterns", []))
+        old_notes = len(existing.get("notes", []))
+
+        # Keep only recent patterns
+        patterns = existing.get("learned_patterns", [])
+        existing["learned_patterns"] = patterns[-keep_patterns:] if len(patterns) > keep_patterns else patterns
+
+        # Keep only recent notes
+        notes = existing.get("notes", [])
+        existing["notes"] = notes[-keep_notes:] if len(notes) > keep_notes else notes
+
+        existing["last_compacted"] = datetime.now().isoformat()
+        existing["last_updated"] = datetime.now().isoformat()
+
+        doc_client.set_document("marketing", existing)
+
+        return {
+            "success": True,
+            "patterns_before": old_patterns,
+            "patterns_after": len(existing["learned_patterns"]),
+            "notes_before": old_notes,
+            "notes_after": len(existing["notes"]),
+            "admin_notes_preserved": len(existing.get("admin_notes", [])),
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@function_tool
+async def clear_marketing_memory(
+    business_id: str,
+    keep_admin_notes: bool = True,
+) -> dict[str, Any]:
+    """
+    Clear all marketing memory (reset to empty state).
+
+    WARNING: This removes all learned patterns, notes, and insights.
+
+    Args:
+        business_id: Business ID.
+        keep_admin_notes: If True, admin notes are preserved (default True).
+
+    Returns:
+        dict with success status.
+    """
+    try:
+        doc_client = get_document_client(f"businesses/{business_id}/agent_memory")
+
+        # Get admin notes if we need to preserve them
+        admin_notes = []
+        if keep_admin_notes:
+            existing = doc_client.get_document("marketing")
+            if existing:
+                admin_notes = existing.get("admin_notes", [])
+
+        # Create fresh memory
+        fresh_memory = {
+            "business_understanding": {
+                "summary": None,
+                "strengths": [],
+                "audience": None,
+                "voice_tone": None,
+            },
+            "content_insights": {
+                "best_performing_types": [],
+                "best_posting_times": [],
+                "effective_hashtags": [],
+                "caption_styles_that_work": [],
+            },
+            "learned_patterns": [],
+            "notes": [],
+            "admin_notes": admin_notes,
+            "last_updated": datetime.now().isoformat(),
+            "cleared_at": datetime.now().isoformat(),
+        }
+
+        doc_client.set_document("marketing", fresh_memory)
+
+        return {
+            "success": True,
+            "message": "Marketing memory cleared",
+            "admin_notes_preserved": len(admin_notes),
         }
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -756,7 +1051,7 @@ async def update_marketing_memory(
 # =============================================================================
 
 def get_marketing_tools() -> list:
-    """Return list of marketing-specific tools."""
+    """Return list of marketing-specific tools for the agent."""
     return [
         # Calendar (Plan-Based)
         create_weekly_plan,
@@ -771,9 +1066,20 @@ def get_marketing_tools() -> list:
         save_instagram_post,
         get_instagram_posts,
         get_post_by_instagram_id,
-        # Memory
+        # Memory (agent can read and update, but not manage admin notes)
         get_marketing_memory,
         update_marketing_memory,
+    ]
+
+
+def get_admin_tools() -> list:
+    """Return list of admin-only tools (for panel/API, NOT for agent)."""
+    return [
+        get_admin_notes,
+        add_admin_note,
+        remove_admin_note,
+        compact_marketing_memory,
+        clear_marketing_memory,
     ]
 
 
@@ -794,5 +1100,13 @@ __all__ = [
     # Memory
     "get_marketing_memory",
     "update_marketing_memory",
-    "get_marketing_tools",
+    # Admin-only tools
+    "get_admin_notes",
+    "add_admin_note",
+    "remove_admin_note",
+    "compact_marketing_memory",
+    "clear_marketing_memory",
+    # Tool lists
+    "get_marketing_tools",  # For agent
+    "get_admin_tools",      # For panel/API only
 ]

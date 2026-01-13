@@ -153,6 +153,16 @@ model_settings.image_generation_model  # "gemini-2.5-flash-image"
   - Otomatik format donusumu yapar (PNG→JPG, video→Instagram MP4)
   - Returns: {success, post_id, creation_id, content_type, message}
 
+- `post_carousel_on_instagram(media_items, caption, instagram_account_id, instagram_access_token)`
+  - `media_items`: Medya listesi, her item: `{"url": str, "type": "image" | "video"}`
+    - Ornek: `[{"url": "https://...", "type": "image"}, {"url": "https://...", "type": "video"}]`
+  - `caption`: Post aciklamasi
+  - `instagram_account_id`: Business profile'dan
+  - `instagram_access_token`: Business profile'dan
+  - En az 2, en fazla 10 medya
+  - Otomatik format donusumu yapar (PNG→JPG, video→Instagram MP4)
+  - Returns: {success, post_id, creation_id, content_type, item_count, message}
+
 ### Instagram Tools (instagram_tools.py) - Marketing Agent
 
 **get_instagram_insights(ig_user_id, access_token, limit=10, ...)**
@@ -222,8 +232,17 @@ model_settings.image_generation_model  # "gemini-2.5-flash-image"
 - `get_post_by_instagram_id(business_id, instagram_media_id)` - Post detayi
 
 **Agent Memory:**
-- `get_marketing_memory(business_id)` - Marketing agent hafizasini oku
+- `get_marketing_memory(business_id)` - Marketing agent hafizasini oku (admin_notes dahil)
 - `update_marketing_memory(business_id, business_understanding, content_insights, new_pattern, new_note)` - Hafiza guncelle
+
+**Admin Notes (Zorunlu Kurallar):**
+- `get_admin_notes(business_id)` - Admin notlarini oku (agent bu kurallara UYMAK ZORUNDA)
+- `add_admin_note(business_id, note, priority="normal")` - Admin notu ekle (high/normal/low)
+- `remove_admin_note(business_id, note_index)` - Admin notu sil (index ile)
+
+**Memory Compaction:**
+- `compact_marketing_memory(business_id, keep_patterns=20, keep_notes=30)` - Eski notlari temizle
+- `clear_marketing_memory(business_id, keep_admin_notes=True)` - Hafizayi sifirla (admin_notes korunur)
 
 ## Prompt Modelleri
 
@@ -373,7 +392,23 @@ businesses/
             │   └── {tool, input, output, timestamp}
             ├── outputs: array            # Uretilen dosyalar
             │   └── {type, path, public_url}
-            └── error: string | null      # Hata mesaji
+            └── error: string | null      # Hata varsa
+
+### tasks Collection
+Her doc bir task'i temsil eder (document ID = taskId):
+```
+tasks/{task_id}
+├── businessId: string        # Ilgili business
+├── jobId: string | null      # planned/routine icin kaynak job ID
+├── type: string              # "immediate" | "planned" | "routine"
+├── task: string              # Gorev icerigi
+├── status: string            # "pending" | "running" | "completed" | "failed"
+├── createdAt: timestamp
+├── startedAt: timestamp
+├── completedAt: timestamp | null
+├── logId: string | null      # businesses/{id}/logs/{log_id} ile baglanti
+├── result: string | null     # Basarili sonuc mesaji
+└── error: string | null      # Hata mesaji
 ```
 
 ## API
@@ -674,6 +709,8 @@ Response'daki `gcsUri`'den video indirmek icin:
    - Reels icin ek metrikler: avg_watch_time, video_view_total_time
    - Fail-soft pattern: bir metric hatasi digerleri etkilemez
    - Summary hesaplama: total, average, top performers
+   - Marketing agent `post_on_instagram` ve `post_carousel_on_instagram` tool'larina sahip
+   - Orchestrator "paylas" dediginde marketing agent tum sureci yonetir
 9. **API Extras Alani** - Task endpoint'ine esnek `extras` alani eklendi
    - Her istekte farkli yapi olabilir
    - `context.extras` olarak agent'a iletiliyor
@@ -704,6 +741,20 @@ Response'daki `gcsUri`'den video indirmek icin:
     - `business_id` zorunlu parametre olarak alinir, LLM uydurma ID gecemez
     - Wrapper'lar input'a `[Business ID: xxx]` prefix'i ekler
     - Sub-agent'lar bu prefix'ten business_id'yi extract eder
+15. **Admin Notes + Memory Compaction** - Agent icin zorunlu kurallar ve hafiza yonetimi
+    - `admin_notes` array eklendi - agent'in UYMAK ZORUNDA oldugu kurallar
+    - `add_admin_note(business_id, note, priority)` - Kural ekle (high/normal/low oncelik)
+    - `remove_admin_note(business_id, note_index)` - Kural sil
+    - `compact_marketing_memory(business_id)` - Eski notlari temizle, son 20 pattern + 30 not tut
+    - `clear_marketing_memory(business_id)` - Hafizayi sifirla (admin_notes korunur)
+    - Marketing agent her calistiginda admin_notes'u okuyup kurallara uyar
+16. **Instagram Carousel Posting** - Coklu medya paylasimi
+    - `post_carousel_on_instagram` tool eklendi
+    - 2-10 arasi image/video destegi
+    - Her medya icin ayri item container olusturma
+    - Video item'lar icin status polling
+    - CloudConvert ile otomatik format donusumu
+    - Instagram Graph API v24.0 kullaniliyor
 
 ## Test
 
@@ -865,6 +916,14 @@ Instagram posting icin Facebook Graph API kullaniliyor.
 1. `POST /{account_id}/media` (video_url, caption, media_type=REELS) → creation_id
 2. Poll: `GET /{creation_id}?fields=status_code` until FINISHED
 3. `POST /{account_id}/media_publish` (creation_id) → post_id
+
+**Carousel Post Flow:**
+1. Her medya icin item container olustur:
+   - Image: `POST /{account_id}/media` (image_url, is_carousel_item=true) → item_id
+   - Video: `POST /{account_id}/media` (video_url, media_type=VIDEO, is_carousel_item=true) → item_id
+2. Video item'lar icin poll: `GET /{item_id}?fields=status_code` until FINISHED
+3. Carousel container olustur: `POST /{account_id}/media` (media_type=CAROUSEL, children=id1,id2,id3, caption) → creation_id
+4. `POST /{account_id}/media_publish` (creation_id) → post_id
 
 ## Instagram Insights API (Marketing Agent)
 

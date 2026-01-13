@@ -239,6 +239,125 @@ async def post_on_instagram(
         }
 
 
+@function_tool(
+    name_override="post_carousel_on_instagram",
+    description_override=(
+        "Post a carousel (multiple images/videos) to Instagram. "
+        "Automatically converts media formats for Instagram compatibility.\n\n"
+        "REQUIRED PARAMETERS:\n"
+        "1. media_items: List of 2-10 media objects. EACH object MUST have:\n"
+        '   - "url": Full Firebase Storage URL (e.g., "https://storage.googleapis.com/...")\n'
+        '   - "type": Either "image" or "video"\n'
+        '   Example: [{"url": "https://storage.googleapis.com/bucket/img1.png", "type": "image"}, '
+        '{"url": "https://storage.googleapis.com/bucket/img2.png", "type": "image"}]\n'
+        "2. caption: Post caption text\n"
+        "3. instagram_account_id: From business profile\n"
+        "4. instagram_access_token: From business profile\n\n"
+        "DO NOT include business_id - it is NOT a parameter of this tool."
+    ),
+    strict_mode=False,
+)
+async def post_carousel_on_instagram(
+    media_items: list[dict],
+    caption: str,
+    instagram_account_id: str,
+    instagram_access_token: str,
+) -> dict[str, Any]:
+    """
+    Post a carousel to Instagram.
+
+    Automatically converts:
+    - Images: PNG/WebP → JPG (via CloudConvert)
+    - Videos: Any → MP4 with x264/aac codec (via CloudConvert)
+
+    Args:
+        media_items: List of media items. Each item: {"url": str, "type": "image" | "video"}
+                     Example: [{"url": "https://...", "type": "image"}, {"url": "https://...", "type": "video"}]
+        caption: Post caption.
+        instagram_account_id: Instagram Business Account ID from business profile.
+        instagram_access_token: Instagram Graph API access token from business profile.
+
+    Returns:
+        dict with success, post_id, and details.
+    """
+    try:
+        if len(media_items) < 2:
+            return {"success": False, "error": "Carousel requires at least 2 media items"}
+
+        if len(media_items) > 10:
+            return {"success": False, "error": "Carousel cannot have more than 10 media items"}
+
+        # Validate media_items structure and URL accessibility
+        import httpx
+        for i, item in enumerate(media_items):
+            if not isinstance(item, dict):
+                return {"success": False, "error": f"media_items[{i}] must be a dict, got {type(item).__name__}"}
+            url = item.get("url")
+            if not url:
+                return {"success": False, "error": f"media_items[{i}] missing required 'url' field. Each item must have {{'url': 'https://...', 'type': 'image'|'video'}}"}
+            if not url.startswith("http"):
+                return {"success": False, "error": f"media_items[{i}] has invalid URL '{url}'. URL must start with http:// or https://"}
+            if item.get("type") not in ("image", "video", None):
+                return {"success": False, "error": f"media_items[{i}] has invalid type '{item.get('type')}'. Must be 'image' or 'video'"}
+
+        # Pre-check URL accessibility before CloudConvert
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            for i, item in enumerate(media_items):
+                url = item.get("url")
+                try:
+                    resp = await client.head(url)
+                    if resp.status_code == 403:
+                        return {"success": False, "error": f"media_items[{i}] URL returns 403 Forbidden. File may not be public. URL: {url[:100]}..."}
+                    if resp.status_code == 404:
+                        return {"success": False, "error": f"media_items[{i}] URL returns 404 Not Found. File does not exist. URL: {url[:100]}..."}
+                    if resp.status_code >= 400:
+                        return {"success": False, "error": f"media_items[{i}] URL returns {resp.status_code}. URL: {url[:100]}..."}
+                except Exception as e:
+                    return {"success": False, "error": f"media_items[{i}] URL is not accessible: {type(e).__name__}. URL: {url[:100]}..."}
+
+        # Step 1: Convert all media formats via CloudConvert
+        cloudconvert = get_cloudconvert_client()
+        converted_items = []
+
+        for item in media_items:
+            url = item.get("url")
+            media_type = item.get("type", "image")
+
+            if media_type == "image":
+                converted_url = await cloudconvert.convert_image_to_jpg(url)
+            else:  # video
+                converted_url = await cloudconvert.convert_video_for_instagram(url)
+
+            converted_items.append({
+                "url": converted_url,
+                "type": media_type,
+            })
+
+        # Step 2: Post carousel to Instagram
+        instagram = InstagramClient(
+            account_id=instagram_account_id,
+            access_token=instagram_access_token,
+        )
+
+        result = await instagram.post_carousel(converted_items, caption)
+
+        return {
+            "success": True,
+            "post_id": result.get("post_id"),
+            "creation_id": result.get("creation_id"),
+            "content_type": "carousel",
+            "item_count": result.get("item_count"),
+            "message": f"Successfully posted carousel with {result.get('item_count')} items to Instagram",
+        }
+
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": f"Instagram carousel posting failed: {type(exc).__name__}: {exc}",
+            "item_count": len(media_items),
+        }
+
+
 def get_orchestrator_tools() -> list[FunctionTool]:
     """Return the list of tools for the orchestrator agent."""
     return [
@@ -249,6 +368,7 @@ def get_orchestrator_tools() -> list[FunctionTool]:
         save_document,
         query_documents,
         post_on_instagram,
+        post_carousel_on_instagram,
     ]
 
 
@@ -260,5 +380,6 @@ __all__ = [
     "save_document",
     "query_documents",
     "post_on_instagram",
+    "post_carousel_on_instagram",
     "get_orchestrator_tools",
 ]

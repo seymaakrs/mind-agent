@@ -43,8 +43,9 @@ def run_orchestrator(user_input: str, context: dict[str, Any] | None = None) -> 
     business_id = ctx.get("business_id")
     effective_input = _build_effective_input(user_input, ctx)
 
-    # Firebase task logger (sadece business_id varsa aktif)
-    task_logger = TaskLogger(business_id=business_id)
+    # Firebase task logger
+    task_id = ctx.get("task_id")
+    task_logger = TaskLogger(business_id=business_id, task_id=task_id)
     task_logger.start(user_input)
 
     hooks = CliLoggingHooks(task_logger=task_logger)
@@ -76,8 +77,9 @@ async def run_orchestrator_async(
     business_id = ctx.get("business_id")
     effective_input = _build_effective_input(user_input, ctx)
 
-    # Firebase task logger (sadece business_id varsa aktif)
-    task_logger = TaskLogger(business_id=business_id)
+    # Firebase task logger
+    task_id = ctx.get("task_id")
+    task_logger = TaskLogger(business_id=business_id, task_id=task_id)
     task_logger.start(user_input)
 
     hooks = CliLoggingHooks(echo=False, task_logger=task_logger)
