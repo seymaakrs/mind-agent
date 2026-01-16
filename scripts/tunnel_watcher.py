@@ -46,13 +46,13 @@ def init_docker():
 
 
 def update_firebase_url(url: str) -> bool:
-    """Firebase'e URL kaydet."""
+    """Firebase'e URL kaydet (test server icin)."""
     global db
 
     try:
         settings_ref = db.collection("settings").document("app_settings")
-        settings_ref.set({"serverUrl": url}, merge=True)
-        print(f"[FIREBASE] Updated serverUrl = {url}")
+        settings_ref.set({"testServerUrl": url}, merge=True)
+        print(f"[FIREBASE] Updated testServerUrl = {url}")
         return True
     except Exception as e:
         print(f"[ERROR] Firebase update failed: {e}")

@@ -394,22 +394,24 @@ businesses/
             │   └── {type, path, public_url}
             └── error: string | null      # Hata varsa
 
-### tasks Collection
-Her doc bir task'i temsil eder (document ID = taskId):
+### tasks Subcollection
+Her business altinda task'lari tutar (document ID = taskId):
 ```
-tasks/{task_id}
-├── businessId: string        # Ilgili business
+businesses/{business_id}/tasks/{task_id}
 ├── jobId: string | null      # planned/routine icin kaynak job ID
 ├── type: string              # "immediate" | "planned" | "routine"
 ├── task: string              # Gorev icerigi
 ├── status: string            # "pending" | "running" | "completed" | "failed"
-├── createdAt: timestamp
-├── startedAt: timestamp
+├── createdAt: timestamp      # Admin panel tarafindan set edilir
+├── startedAt: timestamp      # TaskLogger tarafindan set edilir
 ├── completedAt: timestamp | null
 ├── logId: string | null      # businesses/{id}/logs/{log_id} ile baglanti
 ├── result: string | null     # Basarili sonuc mesaji
 └── error: string | null      # Hata mesaji
 ```
+
+**Not:** `type`, `jobId`, `task`, `createdAt` admin panel tarafindan olusturulur.
+TaskLogger sadece `status`, `startedAt`, `completedAt`, `logId`, `result`, `error` gunceller.
 
 ## API
 
@@ -418,6 +420,7 @@ tasks/{task_id}
 {
   "task": "tanitim posteri olustur",
   "business_id": "abc123",  // Opsiyonel - businesses collection doc ID
+  "task_id": "task-xyz",    // Opsiyonel - Firebase tasks subcollection'da takip icin
   "extras": {               // Opsiyonel - esnek yapi, her istekte farkli olabilir
     "key1": "value1",
     "nested": { "a": 1 }
@@ -755,6 +758,12 @@ Response'daki `gcsUri`'den video indirmek icin:
     - Video item'lar icin status polling
     - CloudConvert ile otomatik format donusumu
     - Instagram Graph API v24.0 kullaniliyor
+17. **TaskId Entegrasyonu** - Task tracking sistem
+    - API task_id parametresi alir (`POST /task`)
+    - TaskLogger: `businesses/{id}/tasks/{task_id}` subcollection'a yazar
+    - `start()`: status="running", logId, startedAt
+    - `complete()`: status="completed"/"failed", completedAt, result/error
+    - Log'lara da task_id yaziliyor (`businesses/{id}/logs/{log_id}.task_id`)
 
 ## Test
 
