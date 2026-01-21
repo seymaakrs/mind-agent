@@ -138,27 +138,38 @@ class VideoPrompt(BaseModel):
     )
 
     def to_prompt_string(self) -> str:
-        """Convert structured prompt to a single detailed prompt string."""
-        parts = [
-            f"Concept: {self.concept}",
-            f"Opening: {self.opening_scene}",
-            f"Main action: {self.main_action}",
-            f"Closing: {self.closing_scene}",
-            f"Visual style: {self.visual_style}",
-            f"Colors: {', '.join(self.color_palette)}",
-            f"Mood: {self.mood_atmosphere}",
-            f"Camera: {self.camera_movement}",
-            f"Lighting: {self.lighting_style}",
-            f"Pacing: {self.pacing}",
-        ]
+        """
+        Convert structured prompt to a Veo-optimized prompt string.
+        
+        Veo works best with:
+        - Clear, action-focused descriptions
+        - Natural flowing language
+        - Explicit camera and lighting directions
+        """
+        # Build a natural, flowing prompt that Veo understands well
+        parts = []
+        
+        # Start with the main action and concept (most important for Veo)
+        parts.append(self.concept)
+        parts.append(f"The video opens with: {self.opening_scene}")
+        parts.append(f"Main action: {self.main_action}")
+        parts.append(f"The video ends with: {self.closing_scene}")
+        
+        # Add cinematic details
+        parts.append(f"Visual style: {self.visual_style}")
+        parts.append(f"Camera movement: {self.camera_movement}")
+        parts.append(f"Lighting: {self.lighting_style}")
+        parts.append(f"Mood and atmosphere: {self.mood_atmosphere}")
+        parts.append(f"Color palette: {', '.join(self.color_palette)}")
+        parts.append(f"Pacing: {self.pacing}")
+        
+        # Optional elements
         if self.transitions:
             parts.append(f"Transitions: {self.transitions}")
         if self.text_overlays:
             parts.append(f"Text overlays: {self.text_overlays}")
-        if self.audio_suggestion:
-            parts.append(f"Audio: {self.audio_suggestion}")
         if self.additional_effects:
-            parts.append(f"Effects: {self.additional_effects}")
+            parts.append(f"Special effects: {self.additional_effects}")
 
         return ". ".join(parts)
 

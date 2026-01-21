@@ -788,6 +788,63 @@ async def update_marketing_memory(
 
 
 # =============================================================================
+# Job Scheduling Tools (Retry/Planned Jobs)
+# =============================================================================
+
+@function_tool
+async def schedule_retry_job(
+    business_id: str,
+    task: str,
+    delay_minutes: int = 15,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    """
+    Schedule a retry job for later execution. Use this when you encounter
+    rate limits, quota errors, or temporary failures.
+
+    The job will be picked up by Cloud Functions after the delay period.
+
+    Args:
+        business_id: Business ID.
+        task: The FULL original task text to retry.
+        delay_minutes: Minutes to wait before retry (default 15).
+        reason: Optional reason for scheduling the retry.
+
+    Returns:
+        dict with job_id and scheduled time.
+    """
+    try:
+        from datetime import timezone
+        doc_client = get_document_client(f"businesses/{business_id}/jobs")
+
+        now = datetime.now(timezone.utc)
+        scheduled_at = now + timedelta(minutes=delay_minutes)
+
+        job_data = {
+            "businessId": business_id,
+            "task": task,
+            "type": "planned",
+            "isExecuted": False,
+            "createdAt": now.isoformat(),
+            "scheduledAt": scheduled_at.isoformat(),
+            "executedAt": None,
+            "reason": reason,
+        }
+
+        result = doc_client.add_document(job_data)
+
+        return {
+            "success": True,
+            "job_id": result["documentId"],
+            "scheduled_at": scheduled_at.isoformat(),
+            "delay_minutes": delay_minutes,
+            "message": f"Retry job scheduled for {delay_minutes} minutes later",
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# =============================================================================
 # Admin Notes Tools (Mandatory Guidelines for Agent)
 # =============================================================================
 
@@ -1069,6 +1126,8 @@ def get_marketing_tools() -> list:
         # Memory (agent can read and update, but not manage admin notes)
         get_marketing_memory,
         update_marketing_memory,
+        # Job scheduling (for retry on rate limits)
+        schedule_retry_job,
     ]
 
 
@@ -1100,6 +1159,8 @@ __all__ = [
     # Memory
     "get_marketing_memory",
     "update_marketing_memory",
+    # Job scheduling
+    "schedule_retry_job",
     # Admin-only tools
     "get_admin_notes",
     "add_admin_note",

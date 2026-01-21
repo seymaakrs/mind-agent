@@ -3,6 +3,18 @@
 Bu dosya Claude Code session'lari arasinda sureklilik saglamak icin olusturuldu.
 Yeni session'da "CLAUDE.md oku" diyerek kaldigi yerden devam edebilir.
 
+## TEMEL KURALLAR
+
+1. **HER SESSION'DA BU DOSYAYI GUNCELLE**: Yeni ozellikler, degisiklikler ve onemli bilgiler eklendiginde MUTLAKA bu dosyayi guncelle. Boylece sonraki session'larda bilgi kaybi olmaz.
+
+2. **BILMEDIGIN SEYLERI SOR**: Belirsiz veya eksik bilgi varsa MUTLAKA kullaniciya sor. Varsayim yapma, tahmin etme. Ornegin:
+   - API anahtarlari, credential'lar
+   - Is mantigi veya is akisi detaylari
+   - Kullanicinin tercihleri veya kararlari
+   - Proje ile ilgili ozel bilgiler
+
+3. **ONCEKI CALISMALARI OKU**: Bu dosyayi okuyarak onceki session'larda yapilan calismalar, kararlar ve onemli notlar hakkinda bilgi edin.
+
 ## Proje Ozeti
 
 OpenAI Agents SDK uzerine kurulu multi-agent orchestrator sistemi.
@@ -764,6 +776,21 @@ Response'daki `gcsUri`'den video indirmek icin:
     - `start()`: status="running", logId, startedAt
     - `complete()`: status="completed"/"failed", completedAt, result/error
     - Log'lara da task_id yaziliyor (`businesses/{id}/logs/{log_id}.task_id`)
+18. **Retry Job Scheduling** - Rate limit hatalarinda otomatik yeniden deneme
+    - `schedule_retry_job(business_id, task, delay_minutes, reason)` tool eklendi
+    - Rate limit/quota hatasi alindiginda agent jobs collection'a yeni job ekler
+    - Cloud Functions 15 dk sonra job'i tekrar calistirir
+    - `businesses/{id}/jobs/` altina `isExecuted: false`, `scheduledAt: now+15dk` ile kayit
+19. **Sub-agent Firebase Logging** - Tum tool call'lar loglanir (v1.0.2)
+    - task_logger orchestrator'dan sub-agent'lara gecirilir
+    - Marketing, image, video agent icindeki tool call'lar da Firebase'e kaydedilir
+    - Tek bir `actions` listesinde tum tool call'lar gorunur
+20. **Video Generation Improvements** - Veo optimizasyonu (v1.0.2)
+    - Veo API'ye `aspectRatio` ve `durationSeconds` parametreleri eklendi
+    - Instagram Reels icin varsayilan 9:16 (dikey) format
+    - Video agent instruction'ina Reels optimizasyon rehberi eklendi
+    - VEO prompt best practices: action-focused, natural language
+    - `VideoPrompt.to_prompt_string()` Veo icin optimize edildi
 
 ## Test
 

@@ -29,6 +29,10 @@ from src.models.prompts import VideoPrompt
         "- audio_suggestion: (optional) Music style suggestion "
         "- additional_effects: (optional) Special effects "
         "\n\n"
+        "aspect_ratio: Video aspect ratio. Use '9:16' for Instagram Reels/Stories (VERTICAL), '16:9' for YouTube (HORIZONTAL). Default is '9:16' for social media."
+        "\n\n"
+        "duration_seconds: Video length in seconds. Default is 8 seconds. Instagram Reels can be up to 90 seconds."
+        "\n\n"
         "business_id: REQUIRED if available in context. The business ID for organizing files. "
         "\n\n"
         "WHEN TO USE source_file_path: "
@@ -43,6 +47,8 @@ async def generate_video(
     file_name: str,
     business_id: str | None = None,
     source_file_path: str | None = None,
+    aspect_ratio: str = "9:16",  # Default vertical for Instagram Reels
+    duration_seconds: int = 8,
 ) -> dict[str, str | bool]:
     """
     Generate a video using Google Veo 3.1.
@@ -52,6 +58,8 @@ async def generate_video(
         file_name: Name to save the generated video as in Firebase Storage.
         business_id: Business ID for organizing files under videos/{id}/.
         source_file_path: Optional. Firebase Storage path of source image for image-to-video.
+        aspect_ratio: Video aspect ratio ("9:16" for vertical, "16:9" for horizontal).
+        duration_seconds: Video length in seconds (default 8).
 
     Returns:
         dict with success, path, public_url, and fileName.
@@ -72,12 +80,18 @@ async def generate_video(
             video_data = await video_client.generate_video_from_image(
                 prompt=prompt,
                 source_image_path=source_file_path.strip(),
+                aspect_ratio=aspect_ratio,
+                duration_seconds=duration_seconds,
             )
             message = "Video gorsel uzerinden olusturuldu"
         else:
             # Text-to-video mode (using Veo 3.1)
-            print(f"[video_tools] Text-to-video mode")
-            video_data = await video_client.generate_video(prompt=prompt)
+            print(f"[video_tools] Text-to-video mode: aspect={aspect_ratio}, duration={duration_seconds}s")
+            video_data = await video_client.generate_video(
+                prompt=prompt,
+                aspect_ratio=aspect_ratio,
+                duration_seconds=duration_seconds,
+            )
             message = "Video olusturuldu"
 
         # Upload video to Firebase Storage

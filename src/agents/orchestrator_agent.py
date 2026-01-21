@@ -17,13 +17,21 @@ from src.tools.agent_wrapper_tools import (
 )
 
 
-def create_orchestrator_agent(model: str | None = None) -> Agent[dict[str, Any]]:
+def create_orchestrator_agent(
+    model: str | None = None,
+    task_logger: Any = None,
+) -> Agent[dict[str, Any]]:
     """
     Orchestrator agent: kullanici istegini alir, uygun alt agent/tool secip calistirir.
+
+    Args:
+        model: Optional model override.
+        task_logger: Optional TaskLogger instance for Firebase logging in sub-agents.
     """
     settings = get_settings()
     model_settings = get_model_settings()
-    hooks = CliLoggingHooks()
+    # Create hooks with task_logger for sub-agent Firebase logging
+    hooks = CliLoggingHooks(echo=False, task_logger=task_logger)
 
     # Create wrapper tools that require business_id explicitly
     # This ensures orchestrator LLM cannot forget or fabricate business_id
@@ -72,11 +80,19 @@ def create_orchestrator_agent(model: str | None = None) -> Agent[dict[str, Any]]
             "- INSTAGRAM POSTING keywords (use marketing_agent_tool): paylaş, post, at, instagram, instagramda, yayınla, share "
             "- ANALYTICS/PLANNING keywords (use marketing_agent_tool): metrik, analiz, strateji, planlama, takvim, insight, rapor "
             "- CAROUSEL keywords (use marketing_agent_tool): carousel, çoklu görsel, multi-image, slide "
-            "- VIDEO ONLY keywords (use video_agent_tool): video oluştur, video üret (WITHOUT posting) "
-            "- IMAGE ONLY keywords (use image_agent_tool): görsel oluştur, resim üret (WITHOUT posting) "
-            "\n"
-            "CRITICAL RULE: If user says 'paylaş', 'post', 'at', 'instagram' → ALWAYS use marketing_agent_tool! "
-            "Marketing agent handles the full flow: create content → write caption → post to Instagram. "
+            "- VIDEO ONLY keywords (use video_agent_tool): video oluştur, video üret (WITHOUT posting) \r"
+            "- IMAGE ONLY keywords (use image_agent_tool): görsel oluştur, resim üret (WITHOUT posting) \r"
+            "\n\r"
+            "CRITICAL RULE: If user says 'paylaş', 'post', 'at', 'instagram' → ALWAYS use marketing_agent_tool! \r"
+            "Marketing agent handles the full flow: create content → write caption → post to Instagram. \r"
+            "\n\r"
+            "CRITICAL - BEFORE CALLING marketing_agent_tool, YOU MUST: \r"
+            "1) Call fetch_business FIRST to get Instagram credentials! \r"
+            "2) Extract instagram_account_id and instagram_access_token from the response. \r"
+            "3) Use these EXACT values when calling marketing_agent_tool: \r"
+            "   - ig_user_id = instagram_account_id from fetch_business \r"
+            "   - access_token = instagram_access_token from fetch_business \r"
+            "4) NEVER guess or invent these values! They MUST come from fetch_business! \r"
             "\n"
             "CRITICAL - CAROUSEL POSTS: "
             "When user asks for carousel/multi-slide Instagram posts: "
@@ -85,8 +101,14 @@ def create_orchestrator_agent(model: str | None = None) -> Agent[dict[str, Any]]
             "3) Marketing agent will handle BOTH image generation AND posting internally "
             "4) This prevents duplicate image generation "
             "\n"
-            "This decision is CRITICAL. Do NOT confuse these requests. "
-            "\n\n"
+            "This decision is CRITICAL. Do NOT confuse these requests. \n\n"
+            "CRITICAL - SOURCE MEDIA (from Extras): \n"
+            "When [Extras] contains 'source_media' array with existing images/videos: \n"
+            "1) Each item has: id, type, public_url, storage_path, file_name, signed_url \n"
+            "2) ALWAYS use 'signed_url' field (NOT 'public_url') for accessing the file! \n"
+            "3) signed_url is time-limited but guarantees access to the file \n"
+            "4) Pass these signed_url values to marketing_agent when posting carousels \n"
+            "5) If signed_url is missing, fall back to public_url \n\n"
             "CRITICAL RULES - Follow these strictly: "
             "1) Call ONE tool at a time. Wait for its result before calling the next tool. "
             "2) NEVER call the same tool twice for the same task. "

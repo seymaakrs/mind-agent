@@ -37,8 +37,6 @@ def run_orchestrator(user_input: str, context: dict[str, Any] | None = None) -> 
         user_input: Kullanicidan gelen metin.
         context: Opsiyonel calisma baglami (mutable dict beklenir).
     """
-    orchestrator = create_orchestrator()
-
     ctx = context or {}
     business_id = ctx.get("business_id")
     effective_input = _build_effective_input(user_input, ctx)
@@ -47,6 +45,9 @@ def run_orchestrator(user_input: str, context: dict[str, Any] | None = None) -> 
     task_id = ctx.get("task_id")
     task_logger = TaskLogger(business_id=business_id, task_id=task_id)
     task_logger.start(user_input)
+
+    # Create orchestrator with task_logger for sub-agent Firebase logging
+    orchestrator = create_orchestrator(task_logger=task_logger)
 
     hooks = CliLoggingHooks(task_logger=task_logger)
     hooks.log_task(user_input)
@@ -71,8 +72,6 @@ async def run_orchestrator_async(
     user_input: str, context: dict[str, Any] | None = None
 ) -> tuple[str, str | None]:
     """Run orchestrator asynchronously and return (output, log_path)."""
-    orchestrator = create_orchestrator()
-
     ctx = context or {}
     business_id = ctx.get("business_id")
     effective_input = _build_effective_input(user_input, ctx)
@@ -81,6 +80,9 @@ async def run_orchestrator_async(
     task_id = ctx.get("task_id")
     task_logger = TaskLogger(business_id=business_id, task_id=task_id)
     task_logger.start(user_input)
+
+    # Create orchestrator with task_logger for sub-agent Firebase logging
+    orchestrator = create_orchestrator(task_logger=task_logger)
 
     hooks = CliLoggingHooks(echo=False, task_logger=task_logger)
     hooks.log_task(user_input)

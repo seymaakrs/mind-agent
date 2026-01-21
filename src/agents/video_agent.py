@@ -83,15 +83,36 @@ When calling generate_video, you MUST include the `business_id` parameter:
     "additional_effects": "Subtle lens flare and particle glow"
   },
   "file_name": "BrandName_promo.mp4",
-  "business_id": "abc123xyz"
+  "business_id": "abc123xyz",
+  "aspect_ratio": "9:16",
+  "duration_seconds": 8
 }
 ```
 
+## CRITICAL: INSTAGRAM REELS OPTIMIZATION
+
+When creating videos for Instagram Reels or social media:
+1. **ALWAYS use aspect_ratio="9:16"** (vertical/portrait) - this is the default
+2. Use strong hook in first 0-3 seconds to grab attention
+3. Keep videos short and impactful (8-15 seconds ideal for Reels)
+4. Include eye-catching motion from the very first frame
+5. Text overlays should be large and centered for mobile viewing
+6. Fast-paced editing with frequent visual changes
+
+**VEO PROMPT BEST PRACTICES:**
+- Start with the most important visual action
+- Use specific, concrete descriptions (not abstract)
+- Mention camera movement explicitly
+- Describe lighting and mood clearly
+- Keep the prompt focused on one clear concept
+
 ## CINEMATIC LANGUAGE REFERENCE
 
-**Camera movements:** push in, pull out, pan, tilt, tracking shot, crane, orbit, zoom, rack focus, whip pan
+**Camera movements:** push in, pull out, pan, tilt, tracking shot, crane, orbit, zoom, rack focus, whip pan, dolly, steadicam
 
-**Transitions:** cut, crossfade, dissolve, wipe, morph, zoom through, match cut
+**Transitions:** cut, crossfade, dissolve, wipe, morph, zoom through, match cut, fade to black
+
+**Visual effects:** particle effects, light leaks, bokeh, lens flare, slow motion, time-lapse, motion blur
 
 **Pacing:** lingering, rhythmic, building, staccato, flowing
 

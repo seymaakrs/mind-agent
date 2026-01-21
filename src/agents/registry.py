@@ -13,9 +13,9 @@ from src.agents.orchestrator_agent import create_orchestrator_agent
 AgentFactory = Callable[[], Agent[dict[str, Any]]]
 
 
-def create_orchestrator() -> Agent[dict[str, Any]]:
+def create_orchestrator(task_logger: Any = None) -> Agent[dict[str, Any]]:
     """Orchestrator agenti olusturur."""
-    return create_orchestrator_agent()
+    return create_orchestrator_agent(task_logger=task_logger)
 
 
 def create_image() -> Agent[dict[str, Any]]:

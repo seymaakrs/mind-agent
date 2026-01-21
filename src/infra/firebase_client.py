@@ -27,11 +27,26 @@ def _normalize_bucket_name(bucket: str | None) -> str | None:
 @lru_cache(maxsize=1)
 def _initialize_firebase() -> firebase_admin.App:
     """Firebase app'i initialize eder ve cache'ler."""
+    import json
+    import os
+
     settings = get_settings()
     if not settings.firebase_credentials_file:
         raise ValueError("FIREBASE_CREDENTIALS_FILE env degiskeni ayarlanmamis")
 
-    cred = credentials.Certificate(settings.firebase_credentials_file)
+    cred_value = settings.firebase_credentials_file
+
+    # Check if it's a JSON string or a file path
+    if cred_value.strip().startswith("{"):
+        # It's a JSON string (Cloud Run secret as env var)
+        cred_dict = json.loads(cred_value)
+        cred = credentials.Certificate(cred_dict)
+    elif os.path.isfile(cred_value):
+        # It's a file path
+        cred = credentials.Certificate(cred_value)
+    else:
+        raise ValueError(f"FIREBASE_CREDENTIALS_FILE gecersiz: dosya bulunamadi veya gecersiz JSON")
+
     bucket_name = _normalize_bucket_name(settings.firebase_storage_bucket)
     return firebase_admin.initialize_app(cred, {
         "storageBucket": bucket_name,

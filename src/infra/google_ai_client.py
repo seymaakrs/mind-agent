@@ -202,7 +202,11 @@ class VideoGenerationClient:
         payload = {
             "instances": [
                 {"prompt": prompt}
-            ]
+            ],
+            "parameters": {
+                "aspectRatio": aspect_ratio,
+                "durationSeconds": duration_seconds,
+            }
         }
 
         async with httpx.AsyncClient(timeout=30.0) as client:

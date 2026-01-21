@@ -92,7 +92,14 @@ When calling generate_image, you MUST include the `business_id` parameter:
 - No explicit logo/image reference is mentioned in the request
 - Just brand colors/style are mentioned (these go in prompt, NOT source_file_path)
 
-**DEFAULT**: Create new images WITHOUT source_file_path unless logo is explicitly requested.
+**CRITICAL - NO LOGO PLACEHOLDERS:**
+- When logo is NOT requested, do NOT add "LOGO" text or logo placeholder circles to the image
+- Do NOT include any text that says "LOGO", "logo", or empty logo frames
+- Do NOT reserve space for a logo with placeholder graphics
+- Create a COMPLETE, FINISHED image without any logo-related elements
+- The image should look professional and final without needing any logo added later
+
+**DEFAULT**: Create new images WITHOUT source_file_path and WITHOUT any logo placeholders unless logo is explicitly requested.
 
 ## BRAND CONTEXT
 
