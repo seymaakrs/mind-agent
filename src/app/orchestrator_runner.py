@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
 
@@ -69,7 +70,9 @@ def run_orchestrator(user_input: str, context: dict[str, Any] | None = None) -> 
 
 
 async def run_orchestrator_async(
-    user_input: str, context: dict[str, Any] | None = None
+    user_input: str,
+    context: dict[str, Any] | None = None,
+    progress_queue: asyncio.Queue | None = None,
 ) -> tuple[str, str | None]:
     """Run orchestrator asynchronously and return (output, log_path)."""
     ctx = context or {}
@@ -82,9 +85,16 @@ async def run_orchestrator_async(
     task_logger.start(user_input)
 
     # Create orchestrator with task_logger for sub-agent Firebase logging
-    orchestrator = create_orchestrator(task_logger=task_logger)
+    orchestrator = create_orchestrator(
+        task_logger=task_logger,
+        progress_queue=progress_queue,
+    )
 
-    hooks = CliLoggingHooks(echo=False, task_logger=task_logger)
+    hooks = CliLoggingHooks(
+        echo=False,
+        task_logger=task_logger,
+        progress_queue=progress_queue,
+    )
     hooks.log_task(user_input)
 
     try:

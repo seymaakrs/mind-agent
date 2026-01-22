@@ -66,7 +66,6 @@ class ImageGenerationClient:
             ],
             "generationConfig": {
                 "responseModalities": ["image", "text"],
-                "aspectRatio": aspect_ratio,
             },
         }
 
@@ -119,7 +118,6 @@ class ImageGenerationClient:
             ],
             "generationConfig": {
                 "responseModalities": ["image", "text"],
-                "aspectRatio": aspect_ratio,
             },
         }
 

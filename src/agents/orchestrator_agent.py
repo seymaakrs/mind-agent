@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import asyncio
 from typing import Any
 
 from agents import Agent
@@ -20,6 +21,7 @@ from src.tools.agent_wrapper_tools import (
 def create_orchestrator_agent(
     model: str | None = None,
     task_logger: Any = None,
+    progress_queue: asyncio.Queue | None = None,
 ) -> Agent[dict[str, Any]]:
     """
     Orchestrator agent: kullanici istegini alir, uygun alt agent/tool secip calistirir.
@@ -27,11 +29,16 @@ def create_orchestrator_agent(
     Args:
         model: Optional model override.
         task_logger: Optional TaskLogger instance for Firebase logging in sub-agents.
+        progress_queue: Optional asyncio.Queue for streaming progress events.
     """
     settings = get_settings()
     model_settings = get_model_settings()
-    # Create hooks with task_logger for sub-agent Firebase logging
-    hooks = CliLoggingHooks(echo=False, task_logger=task_logger)
+    # Create hooks with task_logger for sub-agent Firebase logging AND progress streaming
+    hooks = CliLoggingHooks(
+        echo=False,
+        task_logger=task_logger,
+        progress_queue=progress_queue,
+    )
 
     # Create wrapper tools that require business_id explicitly
     # This ensures orchestrator LLM cannot forget or fabricate business_id

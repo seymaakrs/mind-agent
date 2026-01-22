@@ -48,13 +48,14 @@ class TaskRequest(BaseModel):
 @app.post("/task")
 async def run_task(payload: TaskRequest):
     """
-    Streaming endpoint - sends heartbeat every 10s to prevent timeout.
+    Streaming endpoint - sends progress events and heartbeats to prevent timeout.
     Final result is sent as JSON with 'type': 'result'.
 
     Response format (NDJSON - each line is valid JSON):
-    {"type": "heartbeat", "count": 1}
-    {"type": "heartbeat", "count": 2}
-    ...
+    {"type": "progress", "event": "agent_start", "message": "🤖 orchestrator agent başladı"}
+    {"type": "progress", "event": "tool_start", "message": "🔧 fetch_business çalıştırılıyor..."}
+    {"type": "progress", "event": "tool_end", "message": "✅ fetch_business tamamlandı"}
+    {"type": "heartbeat"}
     {"type": "result", "success": true, "output": "...", "log_path": "..."}
 
     Or on error:
@@ -70,18 +71,30 @@ async def run_task(payload: TaskRequest):
         if payload.extras:
             context["extras"] = payload.extras
 
+        # Create progress queue for streaming events
+        progress_queue: asyncio.Queue = asyncio.Queue(maxsize=100)
+
         # Create task for the orchestrator
         task = asyncio.create_task(
-            run_orchestrator_async(user_input=payload.task, context=context)
+            run_orchestrator_async(
+                user_input=payload.task,
+                context=context,
+                progress_queue=progress_queue,
+            )
         )
 
-        # Send heartbeats while waiting (5 seconds to prevent proxy timeouts)
-        heartbeat_count = 0
+        # Stream progress events and heartbeats while waiting
         while not task.done():
-            heartbeat_count += 1
-            heartbeat = json.dumps({"type": "heartbeat", "count": heartbeat_count}) + "\n"
-            yield heartbeat
-            await asyncio.sleep(5)  # Heartbeat every 5 seconds (reduced for proxy compatibility)
+            try:
+                # Wait for progress event with 2 second timeout
+                progress = await asyncio.wait_for(
+                    progress_queue.get(),
+                    timeout=2.0
+                )
+                yield json.dumps(progress, ensure_ascii=False) + "\n"
+            except asyncio.TimeoutError:
+                # No progress event, send heartbeat to keep connection alive
+                yield json.dumps({"type": "heartbeat"}) + "\n"
 
         # Get result
         try:
@@ -91,7 +104,7 @@ async def run_task(payload: TaskRequest):
                 "success": True,
                 "output": output,
                 "log_path": log_path
-            }) + "\n"
+            }, ensure_ascii=False) + "\n"
             yield result
         except Exception as exc:
             error_detail = f"{type(exc).__name__}: {str(exc)}"
@@ -100,7 +113,7 @@ async def run_task(payload: TaskRequest):
                 "type": "result",
                 "success": False,
                 "error": error_detail
-            }) + "\n"
+            }, ensure_ascii=False) + "\n"
             yield result
 
     return StreamingResponse(

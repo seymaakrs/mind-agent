@@ -301,7 +301,80 @@ def _extract_keywords(soup: BeautifulSoup) -> list[str]:
 
 def get_web_tools() -> list:
     """Return list of web tools for the web agent."""
-    return [web_search, scrape_website]
+    return [web_search, scrape_website, update_business_profile]
 
 
-__all__ = ["web_search", "scrape_website", "get_web_tools"]
+@function_tool(strict_mode=False)
+async def update_business_profile(
+    business_id: str,
+    profile_data: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    Update business profile in Firebase with analyzed data.
+    
+    Saves the given profile data to businesses/{business_id} document's 'profile' field.
+    The profile field is a map, so new fields will be merged with existing ones.
+    
+    Args:
+        business_id: The business ID to update.
+        profile_data: Dictionary containing profile fields to update. 
+                      Common fields: slogan, industry, sub_category, market_position,
+                      location_city, tone, brand_values, unique_points, 
+                      brand_story_short, target_description, target_age_range, 
+                      content_pillars, contact_info, social_links.
+    
+    Returns:
+        Dictionary with success status and updated fields.
+    """
+    try:
+        from src.infra.firebase_client import get_document_client
+        
+        if not business_id:
+            return {
+                "success": False,
+                "error": "business_id is required",
+            }
+        
+        if not profile_data or not isinstance(profile_data, dict):
+            return {
+                "success": False,
+                "error": "profile_data must be a non-empty dictionary",
+            }
+        
+        # Get document client for businesses collection
+        doc_client = get_document_client("businesses")
+        
+        # Get current document to merge with existing profile
+        current_doc = doc_client.get_document(business_id)
+        if not current_doc:
+            return {
+                "success": False,
+                "error": f"Business not found: {business_id}",
+            }
+        
+        # Get existing profile or start fresh
+        existing_profile = current_doc.get("profile", {})
+        if not isinstance(existing_profile, dict):
+            existing_profile = {}
+        
+        # Merge new data with existing profile
+        updated_profile = {**existing_profile, **profile_data}
+        
+        # Update only the profile field using set_document with merge
+        doc_client.set_document(business_id, {"profile": updated_profile}, merge=True)
+        
+        return {
+            "success": True,
+            "business_id": business_id,
+            "updated_fields": list(profile_data.keys()),
+            "message": f"Profile updated with {len(profile_data)} fields",
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+        }
+
+
+__all__ = ["web_search", "scrape_website", "update_business_profile", "get_web_tools"]

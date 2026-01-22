@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import sys
@@ -23,6 +24,7 @@ class CliLoggingHooks(RunHooksBase):
         echo: bool = True,
         task_logger: TaskLogger | None = None,
         verbose: bool = True,
+        progress_queue: asyncio.Queue | None = None,
     ) -> None:
         self.log_dir = log_dir
         self.file_prefix = file_prefix
@@ -31,6 +33,7 @@ class CliLoggingHooks(RunHooksBase):
         self._fh: IO[str] | None = None
         self.task_logger = task_logger
         self.verbose = verbose
+        self.progress_queue = progress_queue
 
         # Store pending tool calls from LLM response
         self._pending_tool_calls: dict[str, dict[str, Any]] = {}
@@ -46,6 +49,20 @@ class CliLoggingHooks(RunHooksBase):
             if self.echo:
                 print(f"[log] file logging disabled: {exc}")
             self._fh = None
+
+    def _send_progress(self, event_type: str, message: str, data: dict | None = None) -> None:
+        """Send progress event to queue (non-blocking)."""
+        if self.progress_queue:
+            try:
+                self.progress_queue.put_nowait({
+                    "type": "progress",
+                    "event": event_type,
+                    "message": message,
+                    "data": data or {},
+                    "timestamp": datetime.now().isoformat(),
+                })
+            except asyncio.QueueFull:
+                pass  # Drop if queue is full
 
     def _write_only(self, message: str) -> None:
         """Write to file only (no echo)."""
@@ -114,6 +131,9 @@ class CliLoggingHooks(RunHooksBase):
         self._log(f"\n[AGENT:START] {agent.name}{model_str}")
         self._write_only("-" * 40)
 
+        # Send progress
+        self._send_progress("agent_start", f"🤖 {agent.name} agent başladı")
+
     async def on_llm_start(self, context, agent, system_prompt, input_items) -> None:
         self._log(f"[LLM:START] {agent.name}")
 
@@ -158,6 +178,9 @@ class CliLoggingHooks(RunHooksBase):
             self._write_only(f"[TOOL:INPUT] {tool.name}")
             self._write_only(self._format_json(call_info.get("arguments", {}), max_length=2000))
 
+        # Send progress
+        self._send_progress("tool_start", f"🔧 {tool.name} çalıştırılıyor...", {"tool": tool.name})
+
     async def on_tool_end(self, context, agent, tool, result) -> None:
         # Get input from pending calls
         input_data = None
@@ -175,10 +198,14 @@ class CliLoggingHooks(RunHooksBase):
             self._log(f"[TOOL:ERROR] {agent.name} <- {tool.name}")
             self._write_only(f"[TOOL:OUTPUT] {tool.name} (ERROR)")
             self._write_only(self._format_json(result, max_length=3000))
+            # Send progress
+            self._send_progress("tool_error", f"❌ {tool.name} hata verdi", {"tool": tool.name})
         else:
             self._log(f"[TOOL:END] {agent.name} <- {tool.name}")
             self._write_only(f"[TOOL:OUTPUT] {tool.name}")
             self._write_only(self._format_json(result, max_length=2000))
+            # Send progress
+            self._send_progress("tool_end", f"✅ {tool.name} tamamlandı", {"tool": tool.name})
 
         # Firebase logging
         if self.task_logger:
@@ -191,6 +218,8 @@ class CliLoggingHooks(RunHooksBase):
 
     async def on_handoff(self, context, from_agent, to_agent) -> None:
         self._log(f"[HANDOFF] {from_agent.name} -> {to_agent.name}")
+        # Send progress
+        self._send_progress("handoff", f"🔄 {from_agent.name} → {to_agent.name} geçiş yapılıyor")
 
     async def on_agent_end(self, context, agent, output) -> None:
         self._log(f"[AGENT:END] {agent.name}")
@@ -204,6 +233,9 @@ class CliLoggingHooks(RunHooksBase):
 
         self._write_only(preview)
         self._write_only("-" * 40)
+
+        # Send progress
+        self._send_progress("agent_end", f"✅ {agent.name} agent tamamlandı")
 
     def close(self) -> None:
         if self._fh:
