@@ -23,6 +23,7 @@ OpenAI Agents SDK uzerine kurulu multi-agent orchestrator sistemi.
 - Image Agent: Google AI (Nano Banana / Gemini) ile gorsel uretimi
 - Video Agent: Google AI (Veo 3.1) ile video uretimi
 - Marketing Agent: Sosyal medya metrikleri, analiz ve planlama
+- Web Agent: Web arama ve website scraping/analiz
 - Orchestrator Agent: Alt agent'lari yoneten ana agent
 - Storage: Firebase Storage (gorsel/video depolama)
 - Database: Firebase Firestore (dokuman/brand profile)
@@ -37,6 +38,7 @@ src/
 │   ├── image_agent.py         - Gorsel uretimi
 │   ├── video_agent.py         - Video uretimi
 │   ├── marketing_agent.py     - Sosyal medya analiz/planlama
+│   ├── web_agent.py           - Web arama ve scraping
 │   └── registry.py            - Agent registry
 ├── infra/
 │   ├── firebase_client.py     - Firebase Storage + Firestore client
@@ -45,11 +47,12 @@ src/
 │   ├── instagram_client.py    - Instagram Graph API client
 │   └── task_logger.py         - Firebase task logging
 ├── tools/
-│   ├── orchestrator_tools.py  - Firebase storage/firestore/instagram tools
-│   ├── image_tools.py         - generate_image, fetch_business
+│   ├── orchestrator_tools.py  - Firebase storage/firestore/instagram + fetch_business
+│   ├── image_tools.py         - generate_image
 │   ├── video_tools.py         - generate_video
 │   ├── instagram_tools.py     - get_instagram_insights
 │   ├── marketing_tools.py     - calendar, memory, post tracking
+│   ├── web_tools.py           - web_search, scrape_website
 │   └── agent_wrapper_tools.py - Sub-agent wrapper tools (business_id enforcement)
 ├── models/
 │   ├── prompts.py             - ImagePrompt, VideoPrompt modelleri
@@ -97,6 +100,7 @@ Model ayarlari artik .env'den degil Firebase'den okunuyor.
   imageAgentModel: "gpt-4o",             // Image agent LLM
   videoAgentModel: "gpt-4o",             // Video agent LLM
   marketingAgentModel: "gpt-4o",         // Marketing agent LLM
+  webAgentModel: "gpt-4o",               // Web agent LLM
   imageGenerationModel: "gemini-2.5-flash-image",  // Nano Banana
   videoGenerationModel: "veo-3.1-generate-preview", // Veo 3.1
   vertexVideoModel: "veo-2.0-generate-001"  // Vertex AI (image-to-video)
@@ -116,17 +120,14 @@ model_settings.image_generation_model  # "gemini-2.5-flash-image"
 
 ### Image Tools (image_tools.py)
 
-**generate_image(prompt_data, file_name, business_id=None, source_file_path=None)**
+**generate_image(prompt_data, file_name, business_id=None, source_file_path=None, aspect_ratio="1:1")**
 - `prompt_data`: ImagePrompt (scene, subject, style, colors, mood, composition, lighting, background)
 - `file_name`: Kaydedilecek dosya adi
 - `business_id`: Opsiyonel business ID (varsa `images/{id}/` altina kaydeder)
 - `source_file_path`: Opsiyonel kaynak gorsel (edit/combine icin)
+- `aspect_ratio`: "1:1" (default), "16:9", "9:16", "4:3", "3:4"
 - Returns: {success, message, path, public_url, fileName}
 - **Storage Path**: `images/{business_id}/{file_name}` veya `images/{file_name}`
-
-**fetch_business(business_id)**
-- Firestore 'businesses' collection'indan isletme profili okur
-- Returns: {success, business_id, name, colors, logo, profile, instagram_account_id, instagram_access_token}
 
 ### Video Tools (video_tools.py)
 
@@ -150,6 +151,7 @@ model_settings.image_generation_model  # "gemini-2.5-flash-image"
 - `get_document(document_id, collection)` - Dokuman oku
 - `save_document(document_id, data, collection, merge)` - Dokuman kaydet
 - `query_documents(field, operator, value, collection, limit)` - Sorgu
+- `fetch_business(business_id)` - Isletme profili oku (name, colors, logo, profile, instagram credentials)
 
 **Media (firebase_client.py):**
 - `save_media_record(business_id, media_type, storage_path, public_url, file_name, ...)` - Media kaydet
@@ -255,6 +257,51 @@ model_settings.image_generation_model  # "gemini-2.5-flash-image"
 **Memory Compaction:**
 - `compact_marketing_memory(business_id, keep_patterns=20, keep_notes=30)` - Eski notlari temizle
 - `clear_marketing_memory(business_id, keep_admin_notes=True)` - Hafizayi sifirla (admin_notes korunur)
+
+### Web Tools (web_tools.py)
+
+**web_search(query, num_results=5)**
+- Google araması yapar
+- `query`: Arama sorgusu
+- `num_results`: Sonuç sayısı (1-10, default 5)
+- Returns: `{success, query, result_count, results: [{url, title, snippet}]}`
+
+**scrape_website(url, extract_type="business_analysis")**
+- Website'i scrape ederek işletme analizi yapar
+- `url`: Analiz edilecek website URL'i
+- `extract_type`: "business_analysis" (default) veya "content"
+- Returns:
+  ```json
+  {
+    "success": true,
+    "url": "https://example.com",
+    "title": "Site Title",
+    "description": "Meta description",
+    "og_data": {"title": "...", "description": "...", "image": "..."},
+    "contact_info": {
+      "emails": ["info@example.com"],
+      "phones": ["+90 555 123 4567"],
+      "address": "Address text"
+    },
+    "social_links": {
+      "instagram": "https://instagram.com/example",
+      "facebook": "https://facebook.com/example",
+      "twitter": null,
+      "linkedin": null,
+      "youtube": null,
+      "tiktok": null
+    },
+    "keywords": ["keyword1", "keyword2"],
+    "main_content_preview": "First 1000 chars of content",
+    "content_length": 5000
+  }
+  ```
+
+**Kullanım Senaryoları:**
+- Rakip analizi (competitor research)
+- İşletme profili oluşturma için website inceleme
+- Sosyal medya profillerini bulma
+- Genel web araştırması
 
 ## Prompt Modelleri
 
@@ -791,6 +838,19 @@ Response'daki `gcsUri`'den video indirmek icin:
     - Video agent instruction'ina Reels optimizasyon rehberi eklendi
     - VEO prompt best practices: action-focused, natural language
     - `VideoPrompt.to_prompt_string()` Veo icin optimize edildi
+21. **Instagram Posting Fixes** - Source media ve credentials düzeltmeleri (v1.0.3)
+    - Orchestrator artik `fetch_business` cagirilmadan marketing_agent_tool'u CAGIRMAYACAK
+    - Instagram credentials (ig_user_id, access_token) halucinasyon sorunu duzeltildi
+    - Orchestrator source_media URL'lerini marketing_agent prompt'una dahil ediyor
+    - Marketing agent'a "source_media varsa yeni resim URETME" kurali eklendi
+22. **Code Refactoring** - Temizlik ve organizasyon
+    - Gereksiz `image_sub_tool` / `video_sub_tool` degiskenleri kaldirildi (tek instance)
+    - `fetch_business` fonksiyonu `image_tools.py`'den `orchestrator_tools.py`'ye tasindi
+    - Duplicate import'lar temizlendi
+23. **Image Aspect Ratio Fix** - generationConfig eklendi
+    - `generate_image()` ve `edit_image()` fonksiyonlarina `generationConfig.aspectRatio` eklendi
+    - `image_tools.py` generate_image tool'una `aspect_ratio` parametresi eklendi
+    - Desteklenen degerler: "1:1" (default), "16:9", "9:16", "4:3", "3:4"
 
 ## Test
 

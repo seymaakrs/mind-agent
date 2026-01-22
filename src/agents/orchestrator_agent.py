@@ -8,12 +8,12 @@ from agents import Agent
 from src.app.config import get_settings, get_model_settings
 from src.app.logging_hooks import CliLoggingHooks
 from src.agents.marketing_agent import create_marketing_agent
-from src.tools.orchestrator_tools import get_orchestrator_tools
-from src.tools.image_tools import fetch_business
+from src.tools.orchestrator_tools import fetch_business, get_orchestrator_tools
 from src.tools.agent_wrapper_tools import (
     create_image_agent_wrapper_tool,
     create_video_agent_wrapper_tool,
     create_marketing_agent_wrapper_tool,
+    create_web_agent_wrapper_tool,
 )
 
 
@@ -38,19 +38,19 @@ def create_orchestrator_agent(
     image_tool = create_image_agent_wrapper_tool(hooks=hooks)
     video_tool = create_video_agent_wrapper_tool(hooks=hooks)
 
-    # Create sub-agent wrapper tools for marketing agent (also require business_id)
-    image_sub_tool = create_image_agent_wrapper_tool(hooks=hooks)
-    video_sub_tool = create_video_agent_wrapper_tool(hooks=hooks)
 
-    # Marketing agent with sub-agent tools
+    # Marketing agent with image/video tools for content generation
     marketing_agent = create_marketing_agent(
-        image_agent_tool=image_sub_tool,
-        video_agent_tool=video_sub_tool,
+        image_agent_tool=image_tool,
+        video_agent_tool=video_tool,
     )
     marketing_tool = create_marketing_agent_wrapper_tool(
         marketing_agent=marketing_agent,
         hooks=hooks,
     )
+
+    # Web agent wrapper tool
+    web_tool = create_web_agent_wrapper_tool(hooks=hooks)
 
     # Orchestrator tools (Firebase storage/firestore/instagram)
     orchestrator_tools = get_orchestrator_tools()
@@ -74,6 +74,7 @@ def create_orchestrator_agent(
             "- image_agent_tool: for IMAGE generation ONLY (gorsel, resim, fotograf, poster, banner) - use when user wants image WITHOUT posting "
             "- video_agent_tool: for VIDEO generation ONLY (video, klip, animasyon, reel) - use when user wants video WITHOUT posting "
             "- marketing_agent_tool: for INSTAGRAM POSTING + ANALYTICS + PLANNING - use when user wants to POST to Instagram! "
+            "- web_agent_tool: for WEB SEARCH and WEBSITE ANALYSIS (arama, search, site analizi, rakip analizi, website incele) "
             "\n\n"
             "CRITICAL - TOOL SELECTION DECISION: "
             "FIRST, determine what the user wants: "
@@ -222,7 +223,7 @@ def create_orchestrator_agent(
             "\n\n"
             "Respond in the same language the user writes in."
         ),
-        tools=[image_tool, video_tool, marketing_tool, fetch_business, *orchestrator_tools],
+        tools=[image_tool, video_tool, marketing_tool, web_tool, fetch_business, *orchestrator_tools],
         tool_use_behavior="run_llm_again",
         output_type=str,
         model=model or model_settings.orchestrator_model or settings.openai_model,

@@ -372,6 +372,41 @@ def get_orchestrator_tools() -> list[FunctionTool]:
     ]
 
 
+@function_tool(
+    name_override="fetch_business",
+    description_override=(
+        "Fetches a business profile from Firestore by business_id. "
+        "Returns business info including name, colors, logo URL, profile data, "
+        "and Instagram credentials (instagram_account_id, instagram_access_token) for posting."
+    ),
+)
+async def fetch_business(business_id: str) -> dict[str, Any]:
+    """
+    Fetch business profile from Firestore.
+
+    Args:
+        business_id: Firestore document ID in 'businesses' collection.
+
+    Returns:
+        dict: Business data including name, colors, logo, profile, and Instagram credentials.
+    """
+    doc_client = get_document_client("businesses")
+    doc = doc_client.get_document(business_id)
+    if doc is None:
+        return {"success": False, "business_id": business_id, "error": "Business not found"}
+
+    return {
+        "success": True,
+        "business_id": business_id,
+        "name": doc.get("name"),
+        "colors": doc.get("colors"),
+        "logo": doc.get("logo"),  # Cloud Storage URL
+        "profile": doc.get("profile"),  # Dynamic map
+        "instagram_account_id": doc.get("instagram_account_id"),  # Instagram Business Account ID
+        "instagram_access_token": doc.get("instagram_access_token"),  # Instagram API token
+    }
+
+
 __all__ = [
     "upload_file",
     "list_files",
@@ -382,4 +417,5 @@ __all__ = [
     "post_on_instagram",
     "post_carousel_on_instagram",
     "get_orchestrator_tools",
+    "fetch_business",
 ]

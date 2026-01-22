@@ -64,6 +64,10 @@ class ImageGenerationClient:
                     "parts": [{"text": prompt}]
                 }
             ],
+            "generationConfig": {
+                "responseModalities": ["image", "text"],
+                "aspectRatio": aspect_ratio,
+            },
         }
 
         async with httpx.AsyncClient(timeout=120.0) as client:
@@ -113,6 +117,10 @@ class ImageGenerationClient:
                     ]
                 }
             ],
+            "generationConfig": {
+                "responseModalities": ["image", "text"],
+                "aspectRatio": aspect_ratio,
+            },
         }
 
         async with httpx.AsyncClient(timeout=120.0) as client:

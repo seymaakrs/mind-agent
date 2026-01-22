@@ -37,6 +37,8 @@ from src.models.prompts import ImagePrompt
         "\n\n"
         "WHEN TO LEAVE source_file_path EMPTY: "
         "If creating a completely NEW image from scratch without referencing existing images."
+        "\n\n"
+        "aspect_ratio: Image aspect ratio. Options: '1:1' (square), '16:9' (widescreen), '9:16' (portrait), '4:3', '3:4'. Default: '1:1'."
     ),
     strict_mode=False,
 )
@@ -45,6 +47,7 @@ async def generate_image(
     file_name: str,
     business_id: str | None = None,
     source_file_path: str | None = None,
+    aspect_ratio: str = "1:1",
 ) -> dict[str, str | bool]:
     """
     Generate a new image or edit/combine with an existing image.
@@ -56,6 +59,7 @@ async def generate_image(
         source_file_path: Optional. Firebase Storage path of source image to use (e.g., logo).
                           If provided, the image will be edited/combined with this source.
                           If None, a completely new image will be generated.
+        aspect_ratio: Image aspect ratio ("1:1", "16:9", "9:16", "4:3", "3:4"). Default is "1:1".
     """
     image_client = get_image_generation_client()
     storage_client = get_storage_client()
@@ -70,11 +74,15 @@ async def generate_image(
             images = await image_client.edit_image(
                 prompt=prompt,
                 source_image=source_image,
+                aspect_ratio=aspect_ratio,
             )
             message = "Gorsel duzenlendi ve kaydedildi"
         else:
             # Generate mode - create new image from scratch
-            images = await image_client.generate_image(prompt=prompt)
+            images = await image_client.generate_image(
+                prompt=prompt,
+                aspect_ratio=aspect_ratio,
+            )
             message = "Gorsel olusturuldu"
 
         if not images:
@@ -118,44 +126,9 @@ async def generate_image(
         return {"success": False, "error": f"Servis hatasi (image): {type(exc).__name__}: {exc}"}
 
 
-@function_tool(
-    name_override="fetch_business",
-    description_override=(
-        "Fetches a business profile from Firestore by business_id. "
-        "Returns business info including name, colors, logo URL, profile data, "
-        "and Instagram credentials (instagram_account_id, instagram_access_token) for posting."
-    ),
-)
-async def fetch_business(business_id: str) -> dict[str, Any]:
-    """
-    Fetch business profile from Firestore.
-
-    Args:
-        business_id: Firestore document ID in 'businesses' collection.
-
-    Returns:
-        dict: Business data including name, colors, logo, profile, and Instagram credentials.
-    """
-    doc_client = get_document_client("businesses")
-    doc = doc_client.get_document(business_id)
-    if doc is None:
-        return {"success": False, "business_id": business_id, "error": "Business not found"}
-
-    return {
-        "success": True,
-        "business_id": business_id,
-        "name": doc.get("name"),
-        "colors": doc.get("colors"),
-        "logo": doc.get("logo"),  # Cloud Storage URL
-        "profile": doc.get("profile"),  # Dynamic map
-        "instagram_account_id": doc.get("instagram_account_id"),  # Instagram Business Account ID
-        "instagram_access_token": doc.get("instagram_access_token"),  # Instagram API token
-    }
-
-
 def get_image_tools() -> list[FunctionTool]:
     """Image agent icin kullanilabilir tool listesi."""
     return [generate_image]
 
 
-__all__ = ["generate_image", "fetch_business", "get_image_tools"]
+__all__ = ["generate_image", "get_image_tools"]
