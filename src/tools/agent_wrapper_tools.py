@@ -222,9 +222,58 @@ def create_web_agent_wrapper_tool(hooks: Any = None) -> FunctionTool:
     return web_agent_wrapper
 
 
+def create_analysis_agent_wrapper_tool(
+    analysis_agent: Agent,
+    hooks: Any = None,
+) -> FunctionTool:
+    """
+    Creates a wrapper tool for the analysis agent that requires business_id explicitly.
+    """
+
+    @function_tool(
+        name_override="analysis_agent_tool",
+        description_override=(
+            "Business analysis agent for SWOT analysis and strategic reports. REQUIRED PARAMETERS: "
+            "- business_id: The exact business ID from context (e.g., 'abc123') - REQUIRED! "
+            "- prompt: What analysis you want (e.g., 'SWOT analizi yap', 'stratejik analiz'). "
+            "Use for: SWOT analysis, strategic analysis, business reports. "
+            "Keywords: analiz, swot, rapor, analysis, report, strateji, strategy, güçlü yönler, zayıf yönler"
+        ),
+        strict_mode=False,
+    )
+    async def analysis_agent_wrapper(
+        business_id: str,
+        prompt: str,
+    ) -> str:
+        """
+        Wrapper that runs analysis agent with explicit business_id.
+
+        Args:
+            business_id: The business ID from Firestore (REQUIRED).
+            prompt: What analysis to perform.
+
+        Returns:
+            The analysis agent's response including report details.
+        """
+        # Prepend business_id to ensure it's extracted correctly
+        effective_prompt = f"[Business ID: {business_id}]\n\n{prompt}"
+
+        result = await Runner.run(
+            starting_agent=analysis_agent,
+            input=effective_prompt,
+            max_turns=10,  # Allow more turns for complex analysis workflows
+            hooks=hooks,
+        )
+
+        return result.final_output
+
+    return analysis_agent_wrapper
+
+
 __all__ = [
     "create_image_agent_wrapper_tool",
     "create_video_agent_wrapper_tool",
     "create_marketing_agent_wrapper_tool",
     "create_web_agent_wrapper_tool",
+    "create_analysis_agent_wrapper_tool",
 ]

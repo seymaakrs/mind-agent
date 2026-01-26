@@ -25,7 +25,9 @@
       "Bash(docker rm:*)",
       "Bash(timeout /t 8 /nobreak)",
       "Bash(git -C D:/agents-sdk ls-files:*)",
-      "Bash(del \"\\\\?\\\\D:\\\\agents-sdk\\\\nul\")"
+      "Bash(del \"\\\\?\\\\D:\\\\agents-sdk\\\\nul\")",
+      "Bash(docker tag:*)",
+      "Bash(docker push:*)"
     ]
   }
 }

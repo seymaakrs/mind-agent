@@ -9,12 +9,14 @@ from agents import Agent
 from src.app.config import get_settings, get_model_settings
 from src.app.logging_hooks import CliLoggingHooks
 from src.agents.marketing_agent import create_marketing_agent
+from src.agents.analysis_agent import create_analysis_agent
 from src.tools.orchestrator_tools import fetch_business, get_orchestrator_tools
 from src.tools.agent_wrapper_tools import (
     create_image_agent_wrapper_tool,
     create_video_agent_wrapper_tool,
     create_marketing_agent_wrapper_tool,
     create_web_agent_wrapper_tool,
+    create_analysis_agent_wrapper_tool,
 )
 
 
@@ -59,6 +61,13 @@ def create_orchestrator_agent(
     # Web agent wrapper tool
     web_tool = create_web_agent_wrapper_tool(hooks=hooks)
 
+    # Analysis agent with web agent tool for enriched analysis
+    analysis_agent = create_analysis_agent(web_agent_tool=web_tool)
+    analysis_tool = create_analysis_agent_wrapper_tool(
+        analysis_agent=analysis_agent,
+        hooks=hooks,
+    )
+
     # Orchestrator tools (Firebase storage/firestore/instagram)
     orchestrator_tools = get_orchestrator_tools()
 
@@ -82,12 +91,14 @@ def create_orchestrator_agent(
             "- video_agent_tool: for VIDEO generation ONLY (video, klip, animasyon, reel) - use when user wants video WITHOUT posting "
             "- marketing_agent_tool: for INSTAGRAM POSTING + ANALYTICS + PLANNING - use when user wants to POST to Instagram! "
             "- web_agent_tool: for WEB SEARCH and WEBSITE ANALYSIS (arama, search, site analizi, rakip analizi, website incele) "
+            "- analysis_agent_tool: for BUSINESS ANALYSIS (SWOT analizi, stratejik analiz, güçlü/zayıf yönler, fırsatlar, tehditler) "
             "\n\n"
             "CRITICAL - TOOL SELECTION DECISION: "
             "FIRST, determine what the user wants: "
             "- INSTAGRAM POSTING keywords (use marketing_agent_tool): paylaş, post, at, instagram, instagramda, yayınla, share "
-            "- ANALYTICS/PLANNING keywords (use marketing_agent_tool): metrik, analiz, strateji, planlama, takvim, insight, rapor "
+            "- INSTAGRAM ANALYTICS/PLANNING keywords (use marketing_agent_tool): metrik, planlama, takvim, insight, içerik planı "
             "- CAROUSEL keywords (use marketing_agent_tool): carousel, çoklu görsel, multi-image, slide "
+            "- BUSINESS ANALYSIS keywords (use analysis_agent_tool): SWOT, swot analizi, güçlü yönler, zayıf yönler, fırsatlar, tehditler, stratejik analiz, iş analizi "
             "- VIDEO ONLY keywords (use video_agent_tool): video oluştur, video üret (WITHOUT posting) \r"
             "- IMAGE ONLY keywords (use image_agent_tool): görsel oluştur, resim üret (WITHOUT posting) \r"
             "\n\r"
@@ -220,9 +231,23 @@ def create_orchestrator_agent(
             "   ) "
             "4) The marketing agent receives credentials as parameters - use EXACT values from business profile! "
             "\n\n"
+            "Analysis Agent Flow (SWOT Analysis): "
+            "Use analysis_agent_tool for business analysis requests like SWOT: "
+            "- SWOT analysis: 'SWOT analizi yap', 'güçlü/zayıf yönleri analiz et', 'stratejik analiz' "
+            "- Business reports: 'iş analizi raporu', 'fırsatlar ve tehditler' "
+            "\n"
+            "CRITICAL - When calling analysis_agent_tool: "
+            "1) Extract business_id from [Business ID: xxx] at the start of your input. "
+            "2) Call analysis_agent_tool with: "
+            "   - business_id: The EXACT business_id "
+            "   - prompt: What analysis you want (e.g., 'SWOT analizi yap') "
+            "3) The analysis agent will fetch business profile, optionally do web research, and save the report. "
+            "4) Reports are saved to Firebase and can be accessed later. "
+            "\n\n"
             "When to use which agent: "
             "- ONLY image/video generation (no planning/posting): use image_agent_tool or video_agent_tool directly "
-            "- Planning, posting, analytics, or combined workflows: use marketing_agent_tool "
+            "- Planning, posting, Instagram analytics: use marketing_agent_tool "
+            "- Business analysis (SWOT, strategic): use analysis_agent_tool "
             "\n\n"
             "Other tools: "
             "You have tools for Firebase operations (upload_file, list_files, delete_file, get_document, save_document, query_documents). "
@@ -230,7 +255,7 @@ def create_orchestrator_agent(
             "\n\n"
             "Respond in the same language the user writes in."
         ),
-        tools=[image_tool, video_tool, marketing_tool, web_tool, fetch_business, *orchestrator_tools],
+        tools=[image_tool, video_tool, marketing_tool, web_tool, analysis_tool, fetch_business, *orchestrator_tools],
         tool_use_behavior="run_llm_again",
         output_type=str,
         model=model or model_settings.orchestrator_model or settings.openai_model,

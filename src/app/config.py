@@ -68,6 +68,7 @@ class ModelSettings(BaseModel):
     video_agent_model: str = "gpt-4o"
     marketing_agent_model: str = "gpt-4o"
     web_agent_model: str = "gpt-4o"
+    analysis_agent_model: str = "gpt-4o"
     image_generation_model: str = "gemini-2.5-flash-image"
     video_generation_model: str = "veo-3.1-generate-preview"
     vertex_video_model: str = "veo-2.0-generate-001"
@@ -114,6 +115,7 @@ def get_model_settings() -> ModelSettings:
             video_agent_model=doc.get("videoAgentModel", "gpt-4o"),
             marketing_agent_model=doc.get("marketingModel", "gpt-4o"),  # Firebase uses "marketingModel"
             web_agent_model=doc.get("webAgentModel", "gpt-4o"),
+            analysis_agent_model=doc.get("analysisAgentModel", "gpt-4o"),
             image_generation_model=doc.get("imageGenerationModel", "gemini-2.5-flash-image"),
             video_generation_model=doc.get("videoGenerationModel", "veo-3.1-generate-preview"),
             vertex_video_model=doc.get("vertexVideoModel", "veo-2.0-generate-001"),

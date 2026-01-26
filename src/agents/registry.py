@@ -7,6 +7,7 @@ from agents import Agent
 from src.agents.image_agent import create_image_agent
 from src.agents.video_agent import create_video_agent
 from src.agents.marketing_agent import create_marketing_agent
+from src.agents.analysis_agent import create_analysis_agent
 from src.agents.orchestrator_agent import create_orchestrator_agent
 
 # Agent factory tipi: parametresiz cagrida yeni agent dondurur.
@@ -39,6 +40,11 @@ def create_marketing() -> Agent[dict[str, Any]]:
     return create_marketing_agent()
 
 
+def create_analysis() -> Agent[dict[str, Any]]:
+    """Analysis agenti olusturur."""
+    return create_analysis_agent()
+
+
 def get_agent_registry() -> dict[str, AgentFactory]:
     """
     Tum agent olusturucularini isim bazli dondurur.
@@ -49,6 +55,7 @@ def get_agent_registry() -> dict[str, AgentFactory]:
         "image": create_image,
         "video": create_video,
         "marketing": create_marketing,
+        "analysis": create_analysis,
     }
 
 
@@ -57,6 +64,7 @@ __all__ = [
     "create_image",
     "create_video",
     "create_marketing",
+    "create_analysis",
     "get_agent_registry",
     "AgentFactory",
 ]

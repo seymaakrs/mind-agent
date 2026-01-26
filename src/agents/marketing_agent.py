@@ -7,6 +7,7 @@ from agents import Agent
 from src.app.config import get_settings, get_model_settings
 from src.tools.instagram_tools import get_instagram_tools
 from src.tools.marketing_tools import get_marketing_tools
+from src.tools.analysis_tools import get_report_tools
 from src.tools.orchestrator_tools import post_on_instagram, post_carousel_on_instagram
 
 
@@ -110,6 +111,11 @@ You are the complete social media manager for businesses. You:
 ### Memory (Your Learning)
 - `get_marketing_memory`: Read your learned patterns and insights about this business
 - `update_marketing_memory`: Save new learnings, patterns, and notes
+
+### Reports (Formal Analysis Reports)
+- `save_instagram_report`: Save Instagram metrics analysis as a formal report (use when user says "rapor kaydet")
+- `get_reports`: List saved reports for a business
+- `get_report`: Get a specific report by ID
 
 ### Job Scheduling (Retry on Errors)
 - `schedule_retry_job`: Schedule a retry job when you encounter rate limits or quota errors
@@ -308,6 +314,31 @@ If there's a scheduled post → just create and post it. That's your job.
 5. Provide actionable insights and recommendations
 ```
 
+### 4. Save Analysis as Report ("Rapor kaydet", "Rapor olarak kaydet", "Analizi kaydet")
+
+When user asks to SAVE the analysis as a REPORT (keywords: "rapor kaydet", "rapor olarak kaydet"):
+```
+1. First complete the analysis workflow above
+2. Call save_instagram_report with:
+   - business_id: From [Business ID: xxx]
+   - date_range: "YYYY-MM-DD - YYYY-MM-DD"
+   - total_posts: Number of posts analyzed
+   - totals: {reach, views, interactions, shares, saved}
+   - by_type: {reels: {...}, image: {...}, carousel: {...}}
+   - top_posts: [{id, type, reach, views, permalink}, ...]
+   - insights: ["Bulgu 1", "Bulgu 2", ...] ← TÜRKÇE YAZ!
+   - recommendations: ["Öneri 1", "Öneri 2", ...] ← TÜRKÇE YAZ!
+   - best_posting_time: "19:00-21:00" (or determined time)
+3. Confirm the report_id to user
+```
+
+CRITICAL: insights ve recommendations MUTLAKA TÜRKÇE yazılmalı!
+Örnek insights: ["Reels içerikler toplam erişimin %88'ini sağlıyor", "Carousel paylaşımlar en yüksek etkileşimi alıyor"]
+Örnek recommendations: ["Haftada 3-4 Reels paylaşın", "Kaydet/Paylaş çağrısı ekleyin"]
+
+IMPORTANT: Only use save_instagram_report when user explicitly asks to "save as report" or "rapor kaydet".
+For regular analysis, just update_marketing_memory is sufficient.
+
 ## CONTENT CREATION GUIDELINES
 
 When calling image_agent_tool or video_agent_tool:
@@ -406,6 +437,7 @@ def create_marketing_agent(
     tools = [
         *get_instagram_tools(),    # get_instagram_insights
         *get_marketing_tools(),    # calendar, memory, post tracking
+        *get_report_tools(),       # save_instagram_report, get_reports, get_report
         post_on_instagram,         # Instagram single media posting
         post_carousel_on_instagram,  # Instagram carousel posting
     ]
