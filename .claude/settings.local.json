@@ -29,7 +29,8 @@
       "Bash(docker tag:*)",
       "Bash(docker push:*)",
       "Bash(docker exec:*)",
-      "Bash(del \"d:\\\\agents-sdk\\\\src\\\\infra\\\\cloudconvert_client.py\")"
+      "Bash(del \"d:\\\\agents-sdk\\\\src\\\\infra\\\\cloudconvert_client.py\")",
+      "Bash(pip install:*)"
     ]
   }
 }

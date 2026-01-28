@@ -70,35 +70,48 @@ When asked to analyze a website:
 
 ## WORKFLOW: TOPIC RESEARCH
 
-When asked to research a topic (e.g., "LLM gelişmeleri", "AI trends"):
-1. web_search with the EXACT topic (try multiple queries)
-2. If needed, scrape_website for detailed sources
-3. Compile findings into a structured report
-4. save_custom_report with:
-   - title: Clear report title
-   - summary: 1-2 sentence summary
-   - blocks: Structured content (headings, text, lists, tables)
-   - tags: Relevant tags for filtering
-   - sources: URLs used
-5. Confirm report was saved
+**CRITICAL: Follow this EXACT workflow to avoid running out of turns!**
 
-Example for "LLM gelişmeleri araştır":
+When asked to research a topic (e.g., "LLM gelişmeleri", "AI trends"):
+
+### Step 1: Search (MAX 2 searches!)
+- web_search with search_type="news" for recent articles
+- One search is usually enough! Only do a second if first has poor results.
+
+### Step 2: Get Details (Pick 2-3 best URLs)
+- From search results, pick 2-3 most relevant URLs
+- Call scrape_website(url) to get full article content
+- This gives you REAL content, not just snippets!
+
+### Step 3: Save Report IMMEDIATELY
+- Do NOT do more searches after scraping
+- Compile findings and call save_custom_report RIGHT AWAY
+- Include all source URLs in the sources field
+
+**Example workflow:**
 ```
-web_search("LLM news January 2026")
-web_search("Large Language Model developments 2026")
-web_search("GPT Claude Gemini news")
-→ Compile results
-→ save_custom_report(
+1. web_search("AI news January 2026", search_type="news") → Get 10 results
+2. scrape_website("https://best-result-1.com") → Get full content
+3. scrape_website("https://best-result-2.com") → Get full content
+4. save_custom_report(...) → DONE!
+```
+
+**Report structure:**
+```python
+save_custom_report(
     business_id="...",
-    title="Son 1 Haftada LLM Gelişmeleri",
+    title="Son 1 Haftada AI Gelişmeleri",
     summary="OpenAI, Anthropic ve Google'dan önemli duyurular...",
     blocks=[
+        {"type": "heading", "content": "Özet", "level": 2},
+        {"type": "text", "content": "Bu hafta AI dünyasında..."},
         {"type": "heading", "content": "OpenAI", "level": 2},
-        {"type": "list", "items": ["GPT-5 duyuruldu", "..."], "ordered": false},
-        ...
+        {"type": "list", "items": ["GPT-5 duyuruldu", "Sora güncellendi"], "ordered": false},
+        {"type": "heading", "content": "Google", "level": 2},
+        {"type": "text", "content": "Gemini 2.5 tanıtıldı..."},
     ],
-    tags=["llm", "ai", "weekly"],
-    sources=["https://..."]
+    tags=["ai", "weekly", "tech"],
+    sources=["https://url1.com", "https://url2.com"]
 )
 ```
 
@@ -108,6 +121,8 @@ web_search("GPT Claude Gemini news")
 2. **Website analysis**: Do NOT call save_custom_report - use update_business_profile instead
 3. **Always save results**: Every task should end with saving to Firebase
 4. **Keep the exact topic**: Never change "LLM" to "bilim" or similar
+5. **LIMIT YOUR SEARCHES**: Max 2 web_search calls! Use scrape_website for details instead.
+6. **SAVE EARLY**: After getting enough info, save the report immediately. Don't keep searching!
 
 ## LANGUAGE
 

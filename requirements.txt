@@ -21,4 +21,4 @@ docker
 
 # Web scraping / search
 beautifulsoup4>=4.12
-googlesearch-python>=1.2
+ddgs>=7.0

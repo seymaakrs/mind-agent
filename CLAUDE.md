@@ -104,8 +104,11 @@ settings = get_model_settings()
 - `get_admin_notes`, `add_admin_note` - Zorunlu kurallar
 
 ### Web Tools
-- `web_search(query)` - Google arama
+- `web_search(query, num_results, search_type)` - DuckDuckGo ile arama
+  - search_type: "text" (default) veya "news" (son haberler)
 - `scrape_website(url)` - Website analizi
+- `save_custom_report(...)` - Esnek block-bazli rapor kaydetme
+- `update_business_profile(...)` - Website analizinden profil guncelleme
 
 ### Analysis Tools
 - `save_swot_report(...)` - SWOT raporu kaydet

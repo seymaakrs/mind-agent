@@ -2,7 +2,7 @@
 Web tools for web search and website scraping.
 
 Tools:
-- web_search: Search the web using Google
+- web_search: Search the web using DuckDuckGo
 - scrape_website: Scrape a website for business analysis
 """
 from __future__ import annotations
@@ -16,30 +16,32 @@ from bs4 import BeautifulSoup
 from agents import function_tool
 
 try:
-    from googlesearch import search as google_search
+    from ddgs import DDGS
 except ImportError:
-    google_search = None
+    DDGS = None
 
 
 @function_tool
 async def web_search(
     query: str,
     num_results: int = 5,
+    search_type: str = "text",
 ) -> dict[str, Any]:
     """
-    Search the web using Google.
+    Search the web using DuckDuckGo.
 
     Args:
         query: Search query string.
         num_results: Number of results to return (default 5, max 10).
+        search_type: Type of search - "text" (default) or "news" for recent news.
 
     Returns:
         Dictionary with search results including titles, URLs, and snippets.
     """
-    if google_search is None:
+    if DDGS is None:
         return {
             "success": False,
-            "error": "googlesearch-python not installed. Run: pip install googlesearch-python",
+            "error": "ddgs not installed. Run: pip install ddgs",
             "query": query,
             "results": [],
         }
@@ -47,40 +49,37 @@ async def web_search(
     try:
         # Limit results
         num_results = min(num_results, 10)
-        
-        results = []
-        for url in google_search(query, num_results=num_results, lang="tr"):
-            results.append({
-                "url": url,
-                "title": None,  # googlesearch doesn't return titles directly
-                "snippet": None,
-            })
 
-        # Try to fetch titles for each result
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            for result in results:
-                try:
-                    response = await client.get(
-                        result["url"],
-                        follow_redirects=True,
-                        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-                    )
-                    if response.status_code == 200:
-                        soup = BeautifulSoup(response.text, "html.parser")
-                        title_tag = soup.find("title")
-                        if title_tag:
-                            result["title"] = title_tag.get_text(strip=True)
-                        # Get meta description as snippet
-                        meta_desc = soup.find("meta", attrs={"name": "description"})
-                        if meta_desc and meta_desc.get("content"):
-                            result["snippet"] = meta_desc["content"][:200]
-                except Exception:
-                    # Skip if we can't fetch the page
-                    pass
+        results = []
+
+        with DDGS() as ddgs:
+            if search_type == "news":
+                # News search for recent articles
+                search_results = ddgs.news(query, max_results=num_results)
+            else:
+                # Regular text search
+                search_results = ddgs.text(query, max_results=num_results)
+
+            for r in search_results:
+                if search_type == "news":
+                    results.append({
+                        "url": r.get("url", ""),
+                        "title": r.get("title", ""),
+                        "snippet": r.get("body", ""),
+                        "date": r.get("date", ""),
+                        "source": r.get("source", ""),
+                    })
+                else:
+                    results.append({
+                        "url": r.get("href", ""),
+                        "title": r.get("title", ""),
+                        "snippet": r.get("body", ""),
+                    })
 
         return {
             "success": True,
             "query": query,
+            "search_type": search_type,
             "result_count": len(results),
             "results": results,
         }

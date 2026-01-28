@@ -209,7 +209,7 @@ def create_web_agent_wrapper_tool(hooks: Any = None) -> FunctionTool:
         result = await Runner.run(
             starting_agent=web_agent,
             input=effective_prompt,
-            max_turns=5,
+            max_turns=10,  # Increased for research + report workflows
             hooks=hooks,
         )
 
