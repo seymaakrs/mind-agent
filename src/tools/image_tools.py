@@ -1,13 +1,22 @@
 from __future__ import annotations
 
-import re
-from typing import Any
-
 from agents import FunctionTool, function_tool
 
-from src.infra.firebase_client import get_storage_client, get_document_client, save_media_record
+from src.app.config import get_settings
+from src.infra.firebase_client import get_storage_client, save_media_record, save_dry_run_log
 from src.infra.google_ai_client import get_image_generation_client
 from src.models.prompts import ImagePrompt
+
+
+def _count_tokens(text: str) -> int:
+    """Tahmini token sayisini hesaplar (tiktoken cl100k_base encoding)."""
+    try:
+        import tiktoken
+        encoding = tiktoken.get_encoding("cl100k_base")
+        return len(encoding.encode(text))
+    except ImportError:
+        # tiktoken yoksa basit tahmin: ~4 karakter = 1 token
+        return len(text) // 4
 
 
 
@@ -61,11 +70,45 @@ async def generate_image(
                           If None, a completely new image will be generated.
         aspect_ratio: Image aspect ratio ("1:1", "16:9", "9:16", "4:3", "3:4"). Default is "1:1".
     """
-    image_client = get_image_generation_client()
-    storage_client = get_storage_client()
+    settings = get_settings()
 
     # Convert structured prompt to string
     prompt = prompt_data.to_prompt_string()
+
+    # DRY-RUN MODE: Log prompt without calling Google API
+    if settings.dry_run:
+        token_count = _count_tokens(prompt)
+        print(f"[DRY-RUN] Image prompt token count: {token_count}")
+        print(f"[DRY-RUN] Full prompt:\n{prompt[:500]}...")
+
+        # Save to Firestore for analysis
+        if business_id:
+            try:
+                save_dry_run_log(
+                    business_id=business_id,
+                    media_type="image",
+                    prompt_data=prompt_data.model_dump(),
+                    full_prompt=prompt,
+                    token_count=token_count,
+                    file_name=file_name,
+                    aspect_ratio=aspect_ratio,
+                )
+            except Exception as e:
+                print(f"[DRY-RUN] Firestore log hatasi: {e}")
+
+        return {
+            "success": True,
+            "message": f"[DRY-RUN] Gorsel uretimi simule edildi. Token sayisi: {token_count}",
+            "path": f"[DRY-RUN] images/{business_id or 'unknown'}/{file_name}",
+            "public_url": "[DRY-RUN] No actual image generated",
+            "fileName": file_name,
+            "dry_run": True,
+            "token_count": token_count,
+        }
+
+    # NORMAL MODE: Call Google API
+    image_client = get_image_generation_client()
+    storage_client = get_storage_client()
 
     try:
         if source_file_path:

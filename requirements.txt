@@ -22,3 +22,6 @@ docker
 # Web scraping / search
 beautifulsoup4>=4.12
 ddgs>=7.0
+
+# Token counting (for dry-run mode cost analysis)
+tiktoken>=0.5

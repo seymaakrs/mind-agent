@@ -545,6 +545,92 @@ def list_media(
     return results
 
 
+def save_dry_run_log(
+    business_id: str,
+    media_type: str,
+    prompt_data: dict[str, Any],
+    full_prompt: str,
+    token_count: int,
+    file_name: str,
+    aspect_ratio: str | None = None,
+    duration_seconds: int | None = None,
+) -> dict[str, str]:
+    """
+    Dry-run modunda uretilen prompt'u Firestore'a kaydeder.
+
+    Path: businesses/{business_id}/dry_run_logs/{log_id}
+
+    Args:
+        business_id: Isletme ID'si.
+        media_type: "image" veya "video".
+        prompt_data: Orjinal prompt model verisi (dict olarak).
+        full_prompt: to_prompt_string() ciktisi.
+        token_count: Tahmini token sayisi.
+        file_name: Hedeflenen dosya adi.
+        aspect_ratio: Gorsel/video orani.
+        duration_seconds: Video suresi (sadece video icin).
+
+    Returns:
+        dict: documentId bilgisi.
+    """
+    from datetime import datetime, timezone
+
+    doc_client = get_document_client("businesses")
+
+    log_data = {
+        "type": media_type,
+        "prompt_data": prompt_data,
+        "full_prompt": full_prompt,
+        "token_count": token_count,
+        "file_name": file_name,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    if aspect_ratio:
+        log_data["aspect_ratio"] = aspect_ratio
+    if duration_seconds:
+        log_data["duration_seconds"] = duration_seconds
+
+    result = doc_client.add_to_subcollection(
+        document_id=business_id,
+        subcollection_name="dry_run_logs",
+        data=log_data,
+    )
+    return result
+
+
+def list_dry_run_logs(
+    business_id: str,
+    media_type: str | None = None,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """
+    Dry-run loglarini listeler.
+
+    Args:
+        business_id: Isletme ID'si.
+        media_type: Filtrelemek icin "image" veya "video" (opsiyonel).
+        limit: Maksimum sonuc sayisi.
+
+    Returns:
+        list: Log dokumanlari listesi.
+    """
+    doc_client = get_document_client("businesses")
+
+    results = doc_client.list_subcollection(
+        document_id=business_id,
+        subcollection_name="dry_run_logs",
+        order_by="created_at",
+        order_direction="DESCENDING",
+        limit=limit,
+    )
+
+    if media_type:
+        results = [r for r in results if r.get("type") == media_type]
+
+    return results
+
+
 __all__ = [
     "FirebaseStorageClient",
     "FirestoreDocumentClient",
@@ -554,4 +640,6 @@ __all__ = [
     "get_storage_bucket",
     "save_media_record",
     "list_media",
+    "save_dry_run_log",
+    "list_dry_run_logs",
 ]

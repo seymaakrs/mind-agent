@@ -37,6 +37,9 @@ class Settings(BaseModel):
     # Late API (Instagram posting via Late)
     late_api_key: str | None = Field(default=None, alias="LATE_API_KEY")
 
+    # Dry-run mode - Google API'lerine gercek cagri yapmadan prompt'lari loglar
+    dry_run: bool = Field(default=False, alias="DRY_RUN")
+
     @classmethod
     def from_env(cls) -> "Settings":
         """Ortami okuyup Settings ornegi dondurur."""
@@ -50,6 +53,7 @@ class Settings(BaseModel):
                 "firebase_credentials_file": os.getenv("FIREBASE_CREDENTIALS_FILE"),
                 "firebase_storage_bucket": os.getenv("FIREBASE_STORAGE_BUCKET"),
                 "late_api_key": os.getenv("LATE_API_KEY"),
+                "dry_run": os.getenv("DRY_RUN", "").lower() in ("true", "1", "yes"),
             }
         )
 

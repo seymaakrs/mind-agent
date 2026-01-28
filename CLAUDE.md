@@ -73,7 +73,43 @@ GCP_LOCATION=us-central1
 FIREBASE_CREDENTIALS_FILE=path/to/serviceAccount.json
 FIREBASE_STORAGE_BUCKET=bucket.appspot.com
 LATE_API_KEY=...              # Late API key (Instagram posting)
+DRY_RUN=false                 # true: API cagirmadan prompt logla
 ```
+
+## Dry-Run Mode
+
+Token kullanimi ve maliyetleri analiz etmek icin dry-run modu.
+
+**Aktiflestime:**
+```bash
+# .env dosyasinda
+DRY_RUN=true
+
+# Docker rebuild gerekli
+docker-compose build && docker-compose up -d
+```
+
+**Calisma mantigi:**
+- Image/Video tool'lari Google API'lerini CAGIRMAZ
+- Prompt'lar Firestore'a loglanir: `businesses/{id}/dry_run_logs/`
+- Token sayisi tiktoken ile hesaplanir
+
+**Firestore Log Yapisi:**
+```json
+{
+  "type": "image" | "video",
+  "prompt_data": { ... },
+  "full_prompt": "...",
+  "token_count": 340,
+  "file_name": "...",
+  "aspect_ratio": "1:1",
+  "created_at": "2026-01-28T..."
+}
+```
+
+**Ilgili fonksiyonlar:**
+- `save_dry_run_log()` - Log kaydet
+- `list_dry_run_logs()` - Loglari listele
 
 ## Firebase Model Settings
 
@@ -84,6 +120,20 @@ from src.app.config import get_model_settings
 settings = get_model_settings()
 # orchestrator_model, image_agent_model, video_agent_model, etc.
 ```
+
+**Onerilen Model Ayarlari (Maliyet Optimizasyonu):**
+| Alan | Onerilen Model | Notlar |
+|------|---------------|--------|
+| imageGenerationModel | gemini-2.0-flash-image-generation | gemini-3-pro cok pahali! |
+| orchestratorModel | gpt-4o-mini | Hafif gorevler icin yeterli |
+| imageAgentModel | gpt-4o | Prompt uretimi icin |
+| videoAgentModel | gpt-4o | Prompt uretimi icin |
+| marketingModel | gpt-4o | Strateji ve planlama |
+| webAgentModel | gpt-4o | Web arama/scraping |
+| analysisAgentModel | gpt-4o | SWOT analizi |
+| videoGenerationModel | veo-3.1-generate-preview | Video uretimi |
+
+**DIKKAT:** `gemini-3-pro-image-preview` modeli **~%90 daha pahali**. Kullanmayin!
 
 ## Ana Tools
 
@@ -127,7 +177,8 @@ businesses/{business_id}/
 ├── reports/         - Analiz raporlari
 ├── agent_memory/    - Agent hafizasi
 ├── tasks/           - Task tracking
-└── logs/            - Task loglari
+├── logs/            - Task loglari
+└── dry_run_logs/    - Token analizi loglari (DRY_RUN=true)
 ```
 
 ## API
@@ -168,7 +219,10 @@ start-dev.bat  # Docker
 
 ## Bekleyen Isler
 
-1. **Video SDK Gecisi (ASKIDA)** - Veo 3 icin google-genai SDK'ya gecis dusunuluyor
+1. **Firebase Model Ayarlari Guncelleme** - `settings/app_settings` dokumaninda:
+   - `imageGenerationModel`: gemini-3-pro-image-preview → gemini-2.0-flash-image-generation
+   - Agent modelleri: gpt-5/gpt-4.1 → gpt-4o (maliyet optimizasyonu)
+2. **Video SDK Gecisi (ASKIDA)** - Veo 3 icin google-genai SDK'ya gecis dusunuluyor
 
 ## Late API (Instagram Posting)
 
