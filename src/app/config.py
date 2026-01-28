@@ -34,8 +34,8 @@ class Settings(BaseModel):
         default=None, alias="FIREBASE_STORAGE_BUCKET"
     )
 
-    # CloudConvert (for Instagram media conversion)
-    cloudconvert_api_key: str | None = Field(default=None, alias="CLOUDCONVERT_API_KEY")
+    # Late API (Instagram posting via Late)
+    late_api_key: str | None = Field(default=None, alias="LATE_API_KEY")
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -49,7 +49,7 @@ class Settings(BaseModel):
                 "gcp_location": os.getenv("GCP_LOCATION"),
                 "firebase_credentials_file": os.getenv("FIREBASE_CREDENTIALS_FILE"),
                 "firebase_storage_bucket": os.getenv("FIREBASE_STORAGE_BUCKET"),
-                "cloudconvert_api_key": os.getenv("CLOUDCONVERT_API_KEY"),
+                "late_api_key": os.getenv("LATE_API_KEY"),
             }
         )
 

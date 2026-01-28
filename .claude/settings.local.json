@@ -27,7 +27,9 @@
       "Bash(git -C D:/agents-sdk ls-files:*)",
       "Bash(del \"\\\\?\\\\D:\\\\agents-sdk\\\\nul\")",
       "Bash(docker tag:*)",
-      "Bash(docker push:*)"
+      "Bash(docker push:*)",
+      "Bash(docker exec:*)",
+      "Bash(del \"d:\\\\agents-sdk\\\\src\\\\infra\\\\cloudconvert_client.py\")"
     ]
   }
 }

@@ -13,8 +13,8 @@ services:
       # Firebase
       FIREBASE_CREDENTIALS_FILE: /app/credentials/serviceAccount.json
       FIREBASE_STORAGE_BUCKET: ${FIREBASE_STORAGE_BUCKET}
-      # CloudConvert
-      CLOUDCONVERT_API_KEY: ${CLOUDCONVERT_API_KEY}
+      # Late API (Instagram posting)
+      LATE_API_KEY: ${LATE_API_KEY}
     ports:
       - "8000:8000"
     volumes:

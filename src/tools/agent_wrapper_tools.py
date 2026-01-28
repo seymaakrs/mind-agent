@@ -124,8 +124,7 @@ def create_marketing_agent_wrapper_tool(
         description_override=(
             "Complete social media manager. REQUIRED PARAMETERS: "
             "- business_id: The exact business ID from context (e.g., 'abc123') - REQUIRED! "
-            "- ig_user_id: Instagram Business Account ID from business profile - REQUIRED for posting! "
-            "- access_token: Instagram API access token from business profile - REQUIRED for posting! "
+            "- instagram_id: Late API account ID from business profile (acc_xxxxx format) - REQUIRED for posting! "
             "- prompt: What you want the marketing agent to do (plan, post, analyze). "
             "Use for: content planning, creating AND posting content, analyzing Instagram metrics. "
             "Keywords: plan, planlama, takvim, icerik, post, paylas, metrik, analiz, strateji, haftalik"
@@ -134,8 +133,7 @@ def create_marketing_agent_wrapper_tool(
     )
     async def marketing_agent_wrapper(
         business_id: str,
-        ig_user_id: str,
-        access_token: str,
+        instagram_id: str,
         prompt: str,
     ) -> str:
         """
@@ -143,18 +141,16 @@ def create_marketing_agent_wrapper_tool(
 
         Args:
             business_id: The business ID from Firestore (REQUIRED).
-            ig_user_id: Instagram Business Account ID (REQUIRED).
-            access_token: Instagram API access token (REQUIRED).
+            instagram_id: Late API account ID for Instagram posting (REQUIRED).
             prompt: What the marketing agent should do.
 
         Returns:
             The marketing agent's response.
         """
-        # Include all credentials in structured format
+        # Include credentials in structured format
         effective_prompt = (
             f"[Business ID: {business_id}]\n"
-            f"[Instagram User ID: {ig_user_id}]\n"
-            f"[Access Token: {access_token}]\n\n"
+            f"[Instagram ID: {instagram_id}]\n\n"
             f"{prompt}"
         )
 

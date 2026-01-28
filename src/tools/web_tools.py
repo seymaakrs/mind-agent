@@ -301,7 +301,8 @@ def _extract_keywords(soup: BeautifulSoup) -> list[str]:
 
 def get_web_tools() -> list:
     """Return list of web tools for the web agent."""
-    return [web_search, scrape_website, update_business_profile]
+    from src.tools.analysis_tools import save_custom_report, get_reports
+    return [web_search, scrape_website, update_business_profile, save_custom_report, get_reports]
 
 
 @function_tool(strict_mode=False)

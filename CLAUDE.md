@@ -26,7 +26,7 @@ OpenAI Agents SDK uzerine kurulu multi-agent orchestrator sistemi.
 - Analysis Agent: SWOT analizi ve stratejik raporlar
 - Orchestrator Agent: Alt agent'lari yoneten ana agent
 - Storage: Firebase Storage + Firestore
-- Instagram: CloudConvert + Instagram Graph API
+- Instagram: Late API (Graph API kaldirildi)
 
 ## Yapi
 
@@ -43,8 +43,8 @@ src/
 ├── infra/
 │   ├── firebase_client.py     - Firebase client
 │   ├── google_ai_client.py    - Google AI client
-│   ├── cloudconvert_client.py - Format donusumu
-│   ├── instagram_client.py    - Instagram API
+│   ├── late_client.py         - Late API client (Instagram posting)
+│   ├── instagram_client.py    - Instagram Graph API (arsiv, kullanilmiyor)
 │   └── task_logger.py         - Task logging
 ├── tools/
 │   ├── orchestrator_tools.py  - Firebase + Instagram tools
@@ -72,7 +72,7 @@ GCP_PROJECT_ID=...
 GCP_LOCATION=us-central1
 FIREBASE_CREDENTIALS_FILE=path/to/serviceAccount.json
 FIREBASE_STORAGE_BUCKET=bucket.appspot.com
-CLOUDCONVERT_API_KEY=...
+LATE_API_KEY=...              # Late API key (Instagram posting)
 ```
 
 ## Firebase Model Settings
@@ -88,10 +88,10 @@ settings = get_model_settings()
 ## Ana Tools
 
 ### Orchestrator Tools
-- `fetch_business(business_id)` - Isletme profili + Instagram credentials
+- `fetch_business(business_id)` - Isletme profili + instagram_id
 - `upload_file`, `list_files`, `delete_file` - Firebase Storage
 - `get_document`, `save_document`, `query_documents` - Firestore
-- `post_on_instagram`, `post_carousel_on_instagram` - Instagram posting
+- `post_on_instagram`, `post_carousel_on_instagram` - Instagram posting (Late API)
 
 ### Image/Video Tools
 - `generate_image(prompt_data, file_name, business_id, aspect_ratio)`
@@ -117,7 +117,7 @@ settings = get_model_settings()
 ```
 businesses/{business_id}/
 ├── name, colors, logo, profile
-├── instagram_account_id, instagram_access_token
+├── instagram_id              - Late API hesap ID'si (acc_xxxxx)
 ├── media/           - Uretilen medyalar
 ├── instagram_posts/ - Paylasilan postlar
 ├── content_calendar/- Haftalik planlar
@@ -150,10 +150,10 @@ POST /task
 - Sub-agent brief'lerine `Business ID: {id}` MUTLAKA eklenmeli
 - Bu olmadan media Firestore'a KAYDEDILMEZ
 
-### Instagram Posting
-1. `fetch_business` → credentials al
+### Instagram Posting (Late API)
+1. `fetch_business` → instagram_id al
 2. Icerik uret (image/video agent)
-3. `post_on_instagram` → CloudConvert + Graph API
+3. `post_on_instagram` → Late API (format donusumu Late tarafindan yapiliyor)
 
 ## Hizli Komutlar
 
@@ -167,8 +167,26 @@ start-dev.bat  # Docker
 
 1. **Video SDK Gecisi (ASKIDA)** - Veo 3 icin google-genai SDK'ya gecis dusunuluyor
 
+## Late API (Instagram Posting)
+
+Graph API yerine Late API kullaniliyor.
+
+**Endpoint:** `https://getlate.dev/api/v1`
+**Auth:** `Authorization: Bearer {LATE_API_KEY}`
+
+**Tool'lar:**
+- `post_on_instagram(file_url, caption, content_type, instagram_id)` - Tekli post
+- `post_carousel_on_instagram(media_items, caption, instagram_id)` - Carousel
+- `get_instagram_insights(instagram_id, date_from, date_to)` - Analytics
+
+**Firestore alanlari:**
+- `instagram_id` - Late hesap ID'si (acc_xxxxx)
+
+**Notlar:**
+- Eski `instagram_account_id` ve `instagram_access_token` alanlari KULLANILMIYOR
+- Late API format donusumunu kendi yapiyor
+
 ## Notlar
 
 - API response'lar camelCase: `inlineData`, `mimeType`
-- Instagram posting: PNG→JPG, video→MP4 x264/aac donusumu otomatik
 - Firebase Storage path → GCS URI: `gs://bucket/path`

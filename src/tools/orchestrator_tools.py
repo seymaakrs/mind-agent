@@ -5,8 +5,7 @@ from typing import Any, Literal
 from agents import FunctionTool, function_tool
 
 from src.infra.firebase_client import get_storage_client, get_document_client
-from src.infra.cloudconvert_client import get_cloudconvert_client
-from src.infra.instagram_client import InstagramClient
+from src.infra.late_client import get_late_client
 
 
 @function_tool(
@@ -170,11 +169,11 @@ async def query_documents(
 @function_tool(
     name_override="post_on_instagram",
     description_override=(
-        "Post content to Instagram. Automatically converts media format for Instagram compatibility. "
-        "Requires instagram_account_id and instagram_access_token from business profile. "
+        "Post content to Instagram via Late API. "
+        "Requires instagram_id from business profile. "
         "\n\n"
-        "IMPORTANT: You MUST provide instagram_account_id and instagram_access_token from the business profile. "
-        "These are found in the fetch_business result under 'instagram_account_id' and 'instagram_access_token' fields."
+        "IMPORTANT: You MUST provide instagram_id from the business profile. "
+        "This is found in the fetch_business result under 'instagram_id' field."
     ),
     strict_mode=False,
 )
@@ -182,50 +181,48 @@ async def post_on_instagram(
     file_url: str,
     caption: str,
     content_type: Literal["image", "video"],
-    instagram_account_id: str,
-    instagram_access_token: str,
+    instagram_id: str,
+    thumbnail_url: str | None = None,
+    first_comment: str | None = None,
 ) -> dict[str, Any]:
     """
-    Post content to Instagram.
-
-    Automatically converts:
-    - Images: PNG/WebP → JPG (via CloudConvert)
-    - Videos: Any → MP4 with x264/aac codec (via CloudConvert)
+    Post content to Instagram via Late API.
 
     Args:
-        file_url: Firebase Storage public URL of the file to post.
+        file_url: Public URL of the file to post.
         caption: Post caption.
         content_type: Type of content ("image" or "video").
-        instagram_account_id: Instagram Business Account ID from business profile.
-        instagram_access_token: Instagram Graph API access token from business profile.
+        instagram_id: Late account ID (acc_xxxxx) from business profile.
+        thumbnail_url: Custom thumbnail URL for Reels (optional).
+        first_comment: First comment to add after posting (optional).
 
     Returns:
         dict with success, post_id, and details.
     """
     try:
-        # Step 1: Convert media format via CloudConvert
-        cloudconvert = get_cloudconvert_client()
-
-        if content_type == "image":
-            converted_url = await cloudconvert.convert_image_to_jpg(file_url)
-        else:  # video
-            converted_url = await cloudconvert.convert_video_for_instagram(file_url)
-
-        # Step 2: Post to Instagram
-        instagram = InstagramClient(
-            account_id=instagram_account_id,
-            access_token=instagram_access_token,
+        late = get_late_client(instagram_id)
+        result = await late.post_media(
+            media_url=file_url,
+            caption=caption,
+            media_type=content_type,
+            thumbnail_url=thumbnail_url,
+            first_comment=first_comment,
         )
 
-        if content_type == "image":
-            result = await instagram.post_image(converted_url, caption)
-        else:  # video
-            result = await instagram.post_video_reel(converted_url, caption)
+        if not result.get("success"):
+            return {
+                "success": False,
+                "error": result.get("error", "Unknown error"),
+                "status_code": result.get("status_code"),
+                "file_url": file_url,
+                "content_type": content_type,
+            }
 
         return {
             "success": True,
-            "post_id": result.get("post_id"),
-            "creation_id": result.get("creation_id"),
+            "post_id": result.get("platform_post_id"),
+            "late_post_id": result.get("post_id"),
+            "post_url": result.get("platform_post_url"),
             "content_type": content_type,
             "message": f"Successfully posted {content_type} to Instagram",
         }
@@ -242,17 +239,15 @@ async def post_on_instagram(
 @function_tool(
     name_override="post_carousel_on_instagram",
     description_override=(
-        "Post a carousel (multiple images/videos) to Instagram. "
-        "Automatically converts media formats for Instagram compatibility.\n\n"
+        "Post a carousel (multiple images/videos) to Instagram via Late API.\n\n"
         "REQUIRED PARAMETERS:\n"
         "1. media_items: List of 2-10 media objects. EACH object MUST have:\n"
-        '   - "url": Full Firebase Storage URL (e.g., "https://storage.googleapis.com/...")\n'
+        '   - "url": Full public URL (e.g., "https://storage.googleapis.com/...")\n'
         '   - "type": Either "image" or "video"\n'
         '   Example: [{"url": "https://storage.googleapis.com/bucket/img1.png", "type": "image"}, '
         '{"url": "https://storage.googleapis.com/bucket/img2.png", "type": "image"}]\n'
         "2. caption: Post caption text\n"
-        "3. instagram_account_id: From business profile\n"
-        "4. instagram_access_token: From business profile\n\n"
+        "3. instagram_id: From business profile\n\n"
         "DO NOT include business_id - it is NOT a parameter of this tool."
     ),
     strict_mode=False,
@@ -260,22 +255,18 @@ async def post_on_instagram(
 async def post_carousel_on_instagram(
     media_items: list[dict],
     caption: str,
-    instagram_account_id: str,
-    instagram_access_token: str,
+    instagram_id: str,
+    first_comment: str | None = None,
 ) -> dict[str, Any]:
     """
-    Post a carousel to Instagram.
-
-    Automatically converts:
-    - Images: PNG/WebP → JPG (via CloudConvert)
-    - Videos: Any → MP4 with x264/aac codec (via CloudConvert)
+    Post a carousel to Instagram via Late API.
 
     Args:
         media_items: List of media items. Each item: {"url": str, "type": "image" | "video"}
                      Example: [{"url": "https://...", "type": "image"}, {"url": "https://...", "type": "video"}]
         caption: Post caption.
-        instagram_account_id: Instagram Business Account ID from business profile.
-        instagram_access_token: Instagram Graph API access token from business profile.
+        instagram_id: Late account ID (acc_xxxxx) from business profile.
+        first_comment: First comment to add after posting (optional).
 
     Returns:
         dict with success, post_id, and details.
@@ -287,8 +278,7 @@ async def post_carousel_on_instagram(
         if len(media_items) > 10:
             return {"success": False, "error": "Carousel cannot have more than 10 media items"}
 
-        # Validate media_items structure and URL accessibility
-        import httpx
+        # Validate media_items structure
         for i, item in enumerate(media_items):
             if not isinstance(item, dict):
                 return {"success": False, "error": f"media_items[{i}] must be a dict, got {type(item).__name__}"}
@@ -300,51 +290,27 @@ async def post_carousel_on_instagram(
             if item.get("type") not in ("image", "video", None):
                 return {"success": False, "error": f"media_items[{i}] has invalid type '{item.get('type')}'. Must be 'image' or 'video'"}
 
-        # Pre-check URL accessibility before CloudConvert
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            for i, item in enumerate(media_items):
-                url = item.get("url")
-                try:
-                    resp = await client.head(url)
-                    if resp.status_code == 403:
-                        return {"success": False, "error": f"media_items[{i}] URL returns 403 Forbidden. File may not be public. URL: {url[:100]}..."}
-                    if resp.status_code == 404:
-                        return {"success": False, "error": f"media_items[{i}] URL returns 404 Not Found. File does not exist. URL: {url[:100]}..."}
-                    if resp.status_code >= 400:
-                        return {"success": False, "error": f"media_items[{i}] URL returns {resp.status_code}. URL: {url[:100]}..."}
-                except Exception as e:
-                    return {"success": False, "error": f"media_items[{i}] URL is not accessible: {type(e).__name__}. URL: {url[:100]}..."}
-
-        # Step 1: Convert all media formats via CloudConvert
-        cloudconvert = get_cloudconvert_client()
-        converted_items = []
-
-        for item in media_items:
-            url = item.get("url")
-            media_type = item.get("type", "image")
-
-            if media_type == "image":
-                converted_url = await cloudconvert.convert_image_to_jpg(url)
-            else:  # video
-                converted_url = await cloudconvert.convert_video_for_instagram(url)
-
-            converted_items.append({
-                "url": converted_url,
-                "type": media_type,
-            })
-
-        # Step 2: Post carousel to Instagram
-        instagram = InstagramClient(
-            account_id=instagram_account_id,
-            access_token=instagram_access_token,
+        # Post carousel via Late API
+        late = get_late_client(instagram_id)
+        result = await late.post_carousel(
+            media_items=media_items,
+            caption=caption,
+            first_comment=first_comment,
         )
 
-        result = await instagram.post_carousel(converted_items, caption)
+        if not result.get("success"):
+            return {
+                "success": False,
+                "error": result.get("error", "Unknown error"),
+                "status_code": result.get("status_code"),
+                "item_count": len(media_items),
+            }
 
         return {
             "success": True,
-            "post_id": result.get("post_id"),
-            "creation_id": result.get("creation_id"),
+            "post_id": result.get("platform_post_id"),
+            "late_post_id": result.get("post_id"),
+            "post_url": result.get("platform_post_url"),
             "content_type": "carousel",
             "item_count": result.get("item_count"),
             "message": f"Successfully posted carousel with {result.get('item_count')} items to Instagram",
@@ -377,7 +343,7 @@ def get_orchestrator_tools() -> list[FunctionTool]:
     description_override=(
         "Fetches a business profile from Firestore by business_id. "
         "Returns business info including name, colors, logo URL, profile data, "
-        "and Instagram credentials (instagram_account_id, instagram_access_token) for posting."
+        "and instagram_id for Instagram posting via Late API."
     ),
 )
 async def fetch_business(business_id: str) -> dict[str, Any]:
@@ -388,7 +354,7 @@ async def fetch_business(business_id: str) -> dict[str, Any]:
         business_id: Firestore document ID in 'businesses' collection.
 
     Returns:
-        dict: Business data including name, colors, logo, profile, and Instagram credentials.
+        dict: Business data including name, colors, logo, profile, and instagram_id.
     """
     doc_client = get_document_client("businesses")
     doc = doc_client.get_document(business_id)
@@ -402,8 +368,7 @@ async def fetch_business(business_id: str) -> dict[str, Any]:
         "colors": doc.get("colors"),
         "logo": doc.get("logo"),  # Cloud Storage URL
         "profile": doc.get("profile"),  # Dynamic map
-        "instagram_account_id": doc.get("instagram_account_id"),  # Instagram Business Account ID
-        "instagram_access_token": doc.get("instagram_access_token"),  # Instagram API token
+        "instagram_id": doc.get("instagram_id"),  # Late API account ID (acc_xxxxx)
     }
 
 

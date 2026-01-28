@@ -211,6 +211,107 @@ async def save_instagram_report(
         return {"success": False, "error": str(e)}
 
 
+@function_tool(strict_mode=False)
+async def save_custom_report(
+    business_id: str,
+    title: str,
+    summary: str,
+    blocks: list[dict[str, Any]],
+    tags: list[str] | None = None,
+    sources: list[str] | None = None,
+) -> dict[str, Any]:
+    """
+    Save a custom report with flexible block-based content structure.
+
+    Use this for any report type that doesn't fit SWOT or Instagram formats.
+    Examples: AI trends, market research, competitor analysis, content audit, etc.
+
+    Args:
+        business_id: Business ID.
+        title: Report title (e.g., "Son 1 Haftada AI Gelişmeleri").
+        summary: Brief summary for list views (1-2 sentences).
+        blocks: List of content blocks. Each block has a 'type' and type-specific fields.
+
+            Supported block types:
+            - {"type": "text", "content": "Paragraph text..."}
+            - {"type": "heading", "content": "Section Title", "level": 1|2|3}
+            - {"type": "list", "items": ["Item 1", "Item 2"], "ordered": false}
+            - {"type": "table", "headers": ["Col1", "Col2"], "rows": [["a", "b"], ["c", "d"]]}
+            - {"type": "quote", "content": "Important quote or highlight"}
+            - {"type": "code", "content": "code here", "language": "python"}
+            - {"type": "divider"}
+
+        tags: Optional list of tags for filtering (e.g., ["ai", "weekly", "tech"]).
+        sources: Optional list of source URLs used for the report.
+
+    Returns:
+        dict with report_id and success status.
+    """
+    try:
+        # Validate blocks
+        if not blocks or len(blocks) < 1:
+            return {
+                "success": False,
+                "error": "blocks must have at least 1 item.",
+            }
+
+        valid_types = {"text", "heading", "list", "table", "quote", "code", "divider"}
+        for i, block in enumerate(blocks):
+            if not isinstance(block, dict) or "type" not in block:
+                return {
+                    "success": False,
+                    "error": f"Block {i} must be a dict with 'type' field.",
+                }
+            if block["type"] not in valid_types:
+                return {
+                    "success": False,
+                    "error": f"Block {i} has invalid type '{block['type']}'. Valid types: {valid_types}",
+                }
+            # Type-specific validation
+            block_type = block["type"]
+            if block_type == "text" and "content" not in block:
+                return {"success": False, "error": f"Block {i} (text) requires 'content' field."}
+            if block_type == "heading" and ("content" not in block or "level" not in block):
+                return {"success": False, "error": f"Block {i} (heading) requires 'content' and 'level' fields."}
+            if block_type == "list" and "items" not in block:
+                return {"success": False, "error": f"Block {i} (list) requires 'items' field."}
+            if block_type == "table" and ("headers" not in block or "rows" not in block):
+                return {"success": False, "error": f"Block {i} (table) requires 'headers' and 'rows' fields."}
+            if block_type == "quote" and "content" not in block:
+                return {"success": False, "error": f"Block {i} (quote) requires 'content' field."}
+            if block_type == "code" and "content" not in block:
+                return {"success": False, "error": f"Block {i} (code) requires 'content' field."}
+
+        doc_client = get_document_client(f"businesses/{business_id}/reports")
+
+        report_id = _generate_report_id("report")
+
+        report_data = {
+            "id": report_id,
+            "type": "custom",
+            "title": title,
+            "summary": summary,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_by": "agent",
+            "blocks": blocks,
+        }
+
+        if tags:
+            report_data["tags"] = tags
+        if sources:
+            report_data["sources"] = sources
+
+        doc_client.set_document(report_id, report_data)
+
+        return {
+            "success": True,
+            "report_id": report_id,
+            "message": f"Custom report saved: {report_id}",
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 @function_tool
 async def get_report(
     business_id: str,
@@ -248,7 +349,7 @@ async def get_report(
 
 
 def get_analysis_tools() -> list:
-    """Return list of analysis tools for the agent."""
+    """Return list of analysis tools for the agent (SWOT only)."""
     return [
         save_swot_report,
         get_reports,
@@ -267,6 +368,7 @@ def get_report_tools() -> list:
 
 __all__ = [
     "save_swot_report",
+    "save_custom_report",
     "save_instagram_report",
     "get_reports",
     "get_report",
