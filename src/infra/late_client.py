@@ -38,26 +38,29 @@ class LateClient:
         media_type: Literal["image", "video"],
         thumbnail_url: str | None = None,
         first_comment: str | None = None,
+        is_story: bool = False,
     ) -> dict[str, Any]:
         """
-        Post image or video (reel) to Instagram.
+        Post image or video (reel) to Instagram, or post a story.
 
         Args:
             media_url: Public URL of the media file.
-            caption: Post caption.
-            media_type: "image" or "video" (video = Reels).
+            caption: Post caption (ignored for stories).
+            media_type: "image" or "video" (video = Reels for feed, video story for stories).
             thumbnail_url: Custom thumbnail URL for Reels (optional).
-            first_comment: First comment to add after posting (optional).
+            first_comment: First comment to add after posting (optional, ignored for stories).
+            is_story: If True, post as Instagram Story instead of feed post.
 
         Returns:
             dict with post_id, platform_post_id, platform_post_url, status.
         """
+        # Both stories and feed posts need type
         media_item: dict[str, Any] = {
             "type": media_type,
             "url": media_url,
         }
 
-        if thumbnail_url and media_type == "video":
+        if thumbnail_url and media_type == "video" and not is_story:
             media_item["instagramThumbnail"] = thumbnail_url
 
         platform_data: dict[str, Any] = {
@@ -65,14 +68,22 @@ class LateClient:
             "accountId": self.account_id,
         }
 
-        if first_comment:
-            platform_data["platformSpecificData"] = {"firstComment": first_comment}
+        # Build platformSpecificData
+        platform_specific: dict[str, Any] = {}
+        if is_story:
+            platform_specific["contentType"] = "story"
+        if first_comment and not is_story:
+            platform_specific["firstComment"] = first_comment
 
-        payload = {
-            "content": caption,
+        if platform_specific:
+            platform_data["platformSpecificData"] = platform_specific
+
+        payload: dict[str, Any] = {
             "mediaItems": [media_item],
             "platforms": [platform_data],
             "publishNow": True,
+            # Late API requires content field - stories need placeholder (won't be displayed)
+            "content": "." if is_story else caption,
         }
 
         async with httpx.AsyncClient(timeout=self.TIMEOUT) as client:
@@ -100,7 +111,7 @@ class LateClient:
                 "platform_post_id": ig_platform.get("platformPostId"),
                 "platform_post_url": ig_platform.get("platformPostUrl"),
                 "status": ig_platform.get("status"),
-                "type": media_type,
+                "type": "story" if is_story else media_type,
             }
 
     async def post_carousel(

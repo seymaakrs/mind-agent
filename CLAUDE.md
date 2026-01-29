@@ -232,9 +232,24 @@ Graph API yerine Late API kullaniliyor.
 **Auth:** `Authorization: Bearer {LATE_API_KEY}`
 
 **Tool'lar:**
-- `post_on_instagram(file_url, caption, content_type, instagram_id)` - Tekli post
+- `post_on_instagram(file_url, caption, content_type, instagram_id, is_story=False)` - Feed post, Reel veya Story
 - `post_carousel_on_instagram(media_items, caption, instagram_id)` - Carousel
 - `get_instagram_insights(instagram_id, date_from, date_to)` - Analytics
+
+**Story Paylasimi:**
+```python
+# Story icin is_story=True kullan
+post_on_instagram(
+    file_url="https://...",
+    caption="",  # Story'lerde caption yok, bos gonder
+    content_type="image",  # veya "video"
+    instagram_id="acc_xxxxx",
+    is_story=True
+)
+```
+- Story'ler caption desteklemiyor (metin istiyorsan gorselin uzerine ekle)
+- Onerilen aspect ratio: 9:16 (1080x1920)
+- 24 saat sonra kaybolur
 
 **Firestore alanlari:**
 - `instagram_id` - Late hesap ID'si (acc_xxxxx)

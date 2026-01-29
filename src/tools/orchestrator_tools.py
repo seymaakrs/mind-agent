@@ -169,11 +169,17 @@ async def query_documents(
 @function_tool(
     name_override="post_on_instagram",
     description_override=(
-        "Post content to Instagram via Late API. "
+        "Post content to Instagram via Late API (feed post, reel, or story). "
         "Requires instagram_id from business profile. "
         "\n\n"
         "IMPORTANT: You MUST provide instagram_id from the business profile. "
         "This is found in the fetch_business result under 'instagram_id' field."
+        "\n\n"
+        "For STORIES:\n"
+        "- Set is_story=True\n"
+        "- Caption is ignored (Instagram Stories don't support captions)\n"
+        "- Recommended aspect ratio: 9:16 (1080x1920)\n"
+        "- Stories disappear after 24 hours"
     ),
     strict_mode=False,
 )
@@ -184,17 +190,19 @@ async def post_on_instagram(
     instagram_id: str,
     thumbnail_url: str | None = None,
     first_comment: str | None = None,
+    is_story: bool = False,
 ) -> dict[str, Any]:
     """
     Post content to Instagram via Late API.
 
     Args:
         file_url: Public URL of the file to post.
-        caption: Post caption.
+        caption: Post caption (ignored for stories).
         content_type: Type of content ("image" or "video").
         instagram_id: Late account ID (acc_xxxxx) from business profile.
-        thumbnail_url: Custom thumbnail URL for Reels (optional).
-        first_comment: First comment to add after posting (optional).
+        thumbnail_url: Custom thumbnail URL for Reels (optional, ignored for stories).
+        first_comment: First comment to add after posting (optional, ignored for stories).
+        is_story: If True, post as Instagram Story instead of feed post.
 
     Returns:
         dict with success, post_id, and details.
@@ -207,6 +215,7 @@ async def post_on_instagram(
             media_type=content_type,
             thumbnail_url=thumbnail_url,
             first_comment=first_comment,
+            is_story=is_story,
         )
 
         if not result.get("success"):
@@ -216,15 +225,18 @@ async def post_on_instagram(
                 "status_code": result.get("status_code"),
                 "file_url": file_url,
                 "content_type": content_type,
+                "is_story": is_story,
             }
 
+        post_type = "story" if is_story else content_type
         return {
             "success": True,
             "post_id": result.get("platform_post_id"),
             "late_post_id": result.get("post_id"),
             "post_url": result.get("platform_post_url"),
-            "content_type": content_type,
-            "message": f"Successfully posted {content_type} to Instagram",
+            "content_type": post_type,
+            "is_story": is_story,
+            "message": f"Successfully posted {post_type} to Instagram",
         }
 
     except Exception as exc:
@@ -233,6 +245,7 @@ async def post_on_instagram(
             "error": f"Instagram posting failed: {type(exc).__name__}: {exc}",
             "file_url": file_url,
             "content_type": content_type,
+            "is_story": is_story,
         }
 
 

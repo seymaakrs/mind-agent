@@ -30,7 +30,8 @@
       "Bash(docker push:*)",
       "Bash(docker exec:*)",
       "Bash(del \"d:\\\\agents-sdk\\\\src\\\\infra\\\\cloudconvert_client.py\")",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "WebFetch(domain:docs.getlate.dev)"
     ]
   }
 }
