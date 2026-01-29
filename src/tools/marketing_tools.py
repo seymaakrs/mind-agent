@@ -622,6 +622,144 @@ async def get_post_by_instagram_id(
 
 
 # =============================================================================
+# YouTube Video Tracking Tools
+# =============================================================================
+
+@function_tool(strict_mode=False)
+async def save_youtube_video(
+    business_id: str,
+    youtube_video_id: str,
+    title: str,
+    description: str,
+    our_media_path: str,
+    video_url: str | None = None,
+    visibility: str = "public",
+    tags: list[str] | None = None,
+    topic: str | None = None,
+    thumbnail_url: str | None = None,
+    published_at: str | None = None,
+) -> dict[str, Any]:
+    """
+    Save a record of a posted YouTube video.
+
+    Args:
+        business_id: Business ID.
+        youtube_video_id: YouTube video ID returned after posting.
+        title: Video title.
+        description: Video description.
+        our_media_path: Firebase Storage path of our generated video.
+        video_url: YouTube video URL (permalink).
+        visibility: Video visibility (public, unlisted, private).
+        tags: List of tags used.
+        topic: Content topic (optional).
+        thumbnail_url: Custom thumbnail URL if used.
+        published_at: When the video was published.
+
+    Returns:
+        dict with success status.
+    """
+    try:
+        doc_client = get_document_client(f"businesses/{business_id}/youtube_videos")
+
+        video_data = {
+            "posted_at": datetime.now().isoformat(),
+            "title": title,
+            "description": description,
+            "our_media_path": our_media_path,
+            "video_url": video_url,
+            "visibility": visibility,
+            "tags": tags or [],
+            "topic": topic,
+            "thumbnail_url": thumbnail_url,
+            "published_at": published_at,
+        }
+
+        # Use youtube_video_id as document ID
+        doc_client.set_document(youtube_video_id, video_data)
+
+        return {
+            "success": True,
+            "youtube_video_id": youtube_video_id,
+            "message": "YouTube video record saved",
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@function_tool
+async def get_youtube_videos(
+    business_id: str,
+    limit: int = 20,
+    topic_filter: str | None = None,
+) -> dict[str, Any]:
+    """
+    Get saved YouTube video records for a business.
+
+    Args:
+        business_id: Business ID.
+        limit: Maximum number of videos to return.
+        topic_filter: Filter by topic (optional).
+
+    Returns:
+        dict with video records.
+    """
+    try:
+        doc_client = get_document_client(f"businesses/{business_id}/youtube_videos")
+
+        videos = doc_client.list_documents(limit=limit)
+
+        if topic_filter:
+            videos = [v for v in videos if v.get("topic") == topic_filter]
+
+        # Sort by posted_at descending
+        videos.sort(key=lambda x: x.get("posted_at", ""), reverse=True)
+
+        return {
+            "success": True,
+            "videos": videos,
+            "count": len(videos),
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e), "videos": []}
+
+
+@function_tool
+async def get_youtube_video_by_id(
+    business_id: str,
+    youtube_video_id: str,
+) -> dict[str, Any]:
+    """
+    Get a specific YouTube video record by its video ID.
+
+    Args:
+        business_id: Business ID.
+        youtube_video_id: YouTube video ID.
+
+    Returns:
+        dict with video record or not found message.
+    """
+    try:
+        doc_client = get_document_client(f"businesses/{business_id}/youtube_videos")
+
+        video = doc_client.get_document(youtube_video_id)
+
+        if video:
+            return {
+                "success": True,
+                "found": True,
+                "video": video,
+            }
+        else:
+            return {
+                "success": True,
+                "found": False,
+                "message": f"No record found for YouTube video ID: {youtube_video_id}",
+            }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# =============================================================================
 # Agent Memory Tools
 # =============================================================================
 
@@ -1126,6 +1264,10 @@ def get_marketing_tools() -> list:
         save_instagram_post,
         get_instagram_posts,
         get_post_by_instagram_id,
+        # YouTube videos
+        save_youtube_video,
+        get_youtube_videos,
+        get_youtube_video_by_id,
         # Memory (agent can read and update, but not manage admin notes)
         get_marketing_memory,
         update_marketing_memory,
@@ -1159,6 +1301,10 @@ __all__ = [
     "save_instagram_post",
     "get_instagram_posts",
     "get_post_by_instagram_id",
+    # YouTube videos
+    "save_youtube_video",
+    "get_youtube_videos",
+    "get_youtube_video_by_id",
     # Memory
     "get_marketing_memory",
     "update_marketing_memory",

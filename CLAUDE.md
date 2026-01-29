@@ -138,10 +138,11 @@ settings = get_model_settings()
 ## Ana Tools
 
 ### Orchestrator Tools
-- `fetch_business(business_id)` - Isletme profili + instagram_id
+- `fetch_business(business_id)` - Isletme profili + instagram_id + youtube_id
 - `upload_file`, `list_files`, `delete_file` - Firebase Storage
 - `get_document`, `save_document`, `query_documents` - Firestore
 - `post_on_instagram`, `post_carousel_on_instagram` - Instagram posting (Late API)
+- `post_on_youtube` - YouTube video posting (Late API)
 - `report_error(...)` - Hata bildirimi (panel'de gosterilir)
 
 ### Image/Video Tools
@@ -152,6 +153,7 @@ settings = get_model_settings()
 - `create_weekly_plan`, `get_plans`, `get_todays_posts` - Content calendar
 - `save_instagram_post(..., permalink)` - Post kaydi (permalink = Late API'den platform_post_url)
 - `get_instagram_posts` - Post listele
+- `save_youtube_video`, `get_youtube_videos`, `get_youtube_video_by_id` - YouTube video kayitlari
 - `get_marketing_memory`, `update_marketing_memory` - Agent memory
 - `get_admin_notes`, `add_admin_note` - Zorunlu kurallar
 
@@ -178,9 +180,11 @@ errors/                      - Agent hata bildirimleri (root level)
 
 businesses/{business_id}/
 ├── name, colors, logo, profile
-├── instagram_id              - Late API hesap ID'si (acc_xxxxx)
+├── instagram_id              - Late API Instagram hesap ID'si (acc_xxxxx)
+├── youtube_id                - Late API YouTube hesap ID'si (acc_xxxxx)
 ├── media/           - Uretilen medyalar
-├── instagram_posts/ - Paylasilan postlar (permalink dahil)
+├── instagram_posts/ - Paylasilan Instagram postlari (permalink dahil)
+├── youtube_videos/  - Paylasilan YouTube videolari
 ├── content_calendar/- Haftalik planlar
 ├── reports/         - Analiz raporlari
 ├── agent_memory/    - Agent hafizasi
@@ -265,6 +269,61 @@ post_on_instagram(
 **Notlar:**
 - Eski `instagram_account_id` ve `instagram_access_token` alanlari KULLANILMIYOR
 - Late API format donusumunu kendi yapiyor
+
+## YouTube Posting (Late API)
+
+YouTube'a video yukleme icin Late API kullaniliyor. **Otomatik Firestore kaydı yapar.**
+
+**Tool'lar:**
+- `post_on_youtube(video_url, youtube_id, business_id, ...)` - Video yukle + otomatik Firestore kaydi
+- `get_youtube_videos(business_id)` - Videolari listele
+- `get_youtube_video_by_id(business_id, youtube_video_id)` - Tek video kaydi
+
+**Firestore alanlari:**
+- `youtube_id` - Late hesap ID'si (acc_xxxxx)
+
+**Firestore Path:** `businesses/{business_id}/youtube_videos/{video_id}`
+
+**Zorunlu parametreler:**
+- `video_url` - Video dosyasinin public URL'i
+- `youtube_id` - Late hesap ID'si
+- `business_id` - Firestore kaydi icin business ID
+
+**Opsiyonel parametreler:**
+- `title` - Video basligi (max 100 karakter)
+- `description` - Video aciklamasi (max 5000 karakter)
+- `visibility` - public, unlisted, private (default: public)
+- `made_for_kids` - COPPA uyumlulugu (default: false)
+- `tags` - Etiketler (toplam 500 karakter limiti)
+- `thumbnail_url` - Ozel kapak gorseli (sadece >3dk videolar)
+- `first_comment` - Sabitlenecek ilk yorum (max 10000 karakter)
+- `scheduled_for` - Zamanlanmis yayin (ISO datetime)
+- `our_media_path` - Kaynak video Firebase Storage path'i (tracking icin)
+
+**Video Tipleri:**
+| Sure | Tip | Thumbnail |
+|------|-----|-----------|
+| <= 3 dakika | YouTube Shorts | Desteklenmiyor |
+| > 3 dakika | Normal Video | Destekleniyor |
+
+**Ornek Kullanim:**
+```python
+# 1. Business'tan youtube_id al
+business = await fetch_business(business_id)
+youtube_id = business["youtube_id"]
+
+# 2. Video yukle (otomatik Firestore'a kaydeder)
+result = await post_on_youtube(
+    video_url="https://storage.googleapis.com/.../video.mp4",
+    youtube_id=youtube_id,
+    business_id=business_id,
+    title="Video Basligi",
+    description="Video aciklamasi...",
+    tags=["tag1", "tag2"],
+    our_media_path="videos/business123/video.mp4"
+)
+# Firestore'a otomatik kaydedildi: businesses/{business_id}/youtube_videos/{video_id}
+```
 
 ## Error Reporting (Agent Hata Bildirimi)
 

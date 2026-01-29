@@ -102,19 +102,30 @@ Call save_swot_report with:
 
 ## OUTPUT FORMAT
 
-After saving the report, provide:
-1. Confirmation that the report was saved (include report_id)
-2. A brief summary of key findings
+**ONLY after save_swot_report() succeeds**, provide:
+1. ✓ Confirmation: "Rapor kaydedildi. Report ID: {report_id}"
+2. Brief summary of key findings
 3. Top 2-3 recommendations
 
-## IMPORTANT RULES
+**If you haven't called save_swot_report() yet, DO IT NOW before responding.**
 
-1. NEVER skip the fetch_business step - you need business context!
-2. ALWAYS save the analysis using save_swot_report - don't just return text
-3. Track which data sources you used in the data_sources field
+## MANDATORY RULES - FAILURE TO FOLLOW = TASK FAILURE
+
+⚠️ **CRITICAL: YOU MUST CALL save_swot_report() BEFORE RESPONDING** ⚠️
+
+1. NEVER skip fetch_business - you need business context
+2. **MANDATORY: Call save_swot_report() to save analysis to Firebase**
+   - DO NOT just return text without saving
+   - The analysis is USELESS if not saved to Firebase
+   - Your task is INCOMPLETE until save_swot_report() returns success
+3. Track which data sources you used in data_sources field
 4. Be specific and actionable in recommendations
 5. Use business-specific insights, not generic advice
-6. If data is limited, note this in the summary and recommend gathering more info
+
+**WORKFLOW CHECKPOINT:**
+Before writing your final response, ask yourself:
+- Did I call save_swot_report()? → If NO, call it NOW
+- Did save_swot_report() return success? → If NO, report the error
 
 ## LANGUAGE
 
