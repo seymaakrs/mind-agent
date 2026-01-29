@@ -503,6 +503,7 @@ async def save_instagram_post(
     our_media_path: str,
     theme: str | None = None,
     hashtags: list[str] | None = None,
+    permalink: str | None = None,
 ) -> dict[str, Any]:
     """
     Save a record of a posted Instagram content.
@@ -516,6 +517,7 @@ async def save_instagram_post(
         our_media_path: Firebase Storage path of our generated media.
         theme: Optional theme/campaign.
         hashtags: List of hashtags used.
+        permalink: Instagram post URL (from Late API platform_post_url).
 
     Returns:
         dict with success status.
@@ -531,6 +533,7 @@ async def save_instagram_post(
             "caption": caption,
             "hashtags": hashtags or [],
             "our_media_path": our_media_path,
+            "permalink": permalink,
         }
 
         # Use instagram_media_id as document ID

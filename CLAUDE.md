@@ -142,6 +142,7 @@ settings = get_model_settings()
 - `upload_file`, `list_files`, `delete_file` - Firebase Storage
 - `get_document`, `save_document`, `query_documents` - Firestore
 - `post_on_instagram`, `post_carousel_on_instagram` - Instagram posting (Late API)
+- `report_error(...)` - Hata bildirimi (panel'de gosterilir)
 
 ### Image/Video Tools
 - `generate_image(prompt_data, file_name, business_id, aspect_ratio)`
@@ -149,7 +150,8 @@ settings = get_model_settings()
 
 ### Marketing Tools
 - `create_weekly_plan`, `get_plans`, `get_todays_posts` - Content calendar
-- `save_instagram_post`, `get_instagram_posts` - Post tracking
+- `save_instagram_post(..., permalink)` - Post kaydi (permalink = Late API'den platform_post_url)
+- `get_instagram_posts` - Post listele
 - `get_marketing_memory`, `update_marketing_memory` - Agent memory
 - `get_admin_notes`, `add_admin_note` - Zorunlu kurallar
 
@@ -168,11 +170,17 @@ settings = get_model_settings()
 ## Firestore Yapisi (Ozet)
 
 ```
+errors/                      - Agent hata bildirimleri (root level)
+├── {error_id}/
+│   ├── business_id, agent, task, error_message
+│   ├── error_type, severity, context
+│   ├── created_at, resolved, resolved_at, resolution_note
+
 businesses/{business_id}/
 ├── name, colors, logo, profile
 ├── instagram_id              - Late API hesap ID'si (acc_xxxxx)
 ├── media/           - Uretilen medyalar
-├── instagram_posts/ - Paylasilan postlar
+├── instagram_posts/ - Paylasilan postlar (permalink dahil)
 ├── content_calendar/- Haftalik planlar
 ├── reports/         - Analiz raporlari
 ├── agent_memory/    - Agent hafizasi
@@ -257,6 +265,40 @@ post_on_instagram(
 **Notlar:**
 - Eski `instagram_account_id` ve `instagram_access_token` alanlari KULLANILMIYOR
 - Late API format donusumunu kendi yapiyor
+
+## Error Reporting (Agent Hata Bildirimi)
+
+Agent'lar otonom calisirken hatalari Firebase'e kaydeder, panel'den takip edilir.
+
+**Firestore Path:** `errors/{auto_id}`
+
+**Tool:**
+```python
+report_error(
+    business_id="abc123",
+    agent="marketing_agent",      # Hangi agent
+    task="Instagram post paylasimi",  # Ne yapiyordu
+    error_message="Late API 429 hatasi",
+    error_type="rate_limit",      # api_error, validation_error, timeout, rate_limit, not_found, permission, unknown
+    severity="high",              # low, medium, high, critical
+    context={"file_url": "..."}   # Opsiyonel ek bilgi
+)
+```
+
+**Schema:**
+| Alan | Tip | Aciklama |
+|------|-----|----------|
+| business_id | string | Hangi isletme |
+| agent | string | Hangi agent (image_agent, marketing_agent, etc.) |
+| task | string | Ne yapmaya calisiyordu |
+| error_message | string | Hata mesaji |
+| error_type | string | Hata tipi |
+| severity | string | Ciddiyet seviyesi |
+| context | object | Ek bilgiler |
+| created_at | string | Tarih (ISO) |
+| resolved | boolean | Cozuldu mu (panel'den guncellenir) |
+| resolved_at | string | Cozulme tarihi |
+| resolution_note | string | Nasil cozuldu |
 
 ## Notlar
 

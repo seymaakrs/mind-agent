@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal
 
 from agents import FunctionTool, function_tool
 
 from src.infra.firebase_client import get_storage_client, get_document_client
 from src.infra.late_client import get_late_client
+
+
+# Error collection path (root level)
+ERRORS_COLLECTION = "errors"
 
 
 @function_tool(
@@ -348,7 +353,70 @@ def get_orchestrator_tools() -> list[FunctionTool]:
         query_documents,
         post_on_instagram,
         post_carousel_on_instagram,
+        report_error,
     ]
+
+
+@function_tool(
+    name_override="report_error",
+    description_override=(
+        "Report an error to Firebase for admin review. "
+        "Use this when you encounter an error that needs human attention. "
+        "Provide clear details about what you were trying to do and what went wrong."
+    ),
+    strict_mode=False,
+)
+async def report_error(
+    business_id: str,
+    agent: str,
+    task: str,
+    error_message: str,
+    error_type: Literal["api_error", "validation_error", "timeout", "rate_limit", "not_found", "permission", "unknown"] = "unknown",
+    severity: Literal["low", "medium", "high", "critical"] = "medium",
+    context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """
+    Report an error to Firebase for admin/panel review.
+
+    Args:
+        business_id: Business ID where error occurred.
+        agent: Which agent reported the error (e.g., "image_agent", "marketing_agent").
+        task: What the agent was trying to do.
+        error_message: The error message or description.
+        error_type: Type of error (api_error, validation_error, timeout, rate_limit, not_found, permission, unknown).
+        severity: Error severity (low, medium, high, critical).
+        context: Additional context data (optional).
+
+    Returns:
+        dict with success status and error_id.
+    """
+    try:
+        doc_client = get_document_client(ERRORS_COLLECTION)
+
+        error_data = {
+            "business_id": business_id,
+            "agent": agent,
+            "task": task,
+            "error_message": error_message,
+            "error_type": error_type,
+            "severity": severity,
+            "context": context,
+            "created_at": datetime.now().isoformat(),
+            "resolved": False,
+            "resolved_at": None,
+            "resolution_note": None,
+        }
+
+        result = doc_client.add_document(error_data)
+        error_id = result.get("documentId")
+
+        return {
+            "success": True,
+            "error_id": error_id,
+            "message": "Error reported successfully. Admin will review.",
+        }
+    except Exception as e:
+        return {"success": False, "error": f"Failed to report error: {e}"}
 
 
 @function_tool(
@@ -394,6 +462,7 @@ __all__ = [
     "query_documents",
     "post_on_instagram",
     "post_carousel_on_instagram",
+    "report_error",
     "get_orchestrator_tools",
     "fetch_business",
 ]
