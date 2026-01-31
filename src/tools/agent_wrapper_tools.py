@@ -166,58 +166,6 @@ def create_marketing_agent_wrapper_tool(
     return marketing_agent_wrapper
 
 
-def create_web_agent_wrapper_tool(hooks: Any = None) -> FunctionTool:
-    """
-    Creates a wrapper tool for the web agent that optionally accepts business_id.
-    """
-    from src.agents.web_agent import create_web_agent
-
-    @function_tool(
-        name_override="web_agent_tool",
-        description_override=(
-            "Web research and analysis agent. Use for web search and website scraping. "
-            "PARAMETERS: "
-            "- prompt: What you want the web agent to do (search query or URL to analyze). REQUIRED! "
-            "- business_id: Optional business ID if results should be associated with a business. "
-            "Use for: web search, competitor research, website analysis, finding social media profiles. "
-            "Keywords: ara, search, web, site analizi, rakip, competitor, website, incele, scrape"
-        ),
-        strict_mode=False,
-    )
-    async def web_agent_wrapper(
-        prompt: str,
-        business_id: str | None = None,
-    ) -> str:
-        """
-        Wrapper that runs web agent with optional business_id.
-
-        Args:
-            prompt: What the web agent should do (search or analyze).
-            business_id: Optional business ID for tracking.
-
-        Returns:
-            The web agent's response.
-        """
-        # Prepend business_id if provided
-        if business_id:
-            effective_prompt = f"[Business ID: {business_id}]\n\n{prompt}"
-        else:
-            effective_prompt = prompt
-
-        web_agent = create_web_agent()
-
-        result = await Runner.run(
-            starting_agent=web_agent,
-            input=effective_prompt,
-            max_turns=10,  # Increased for research + report workflows
-            hooks=hooks,
-        )
-
-        return result.final_output
-
-    return web_agent_wrapper
-
-
 def create_analysis_agent_wrapper_tool(
     analysis_agent: Agent,
     hooks: Any = None,
@@ -270,6 +218,5 @@ __all__ = [
     "create_image_agent_wrapper_tool",
     "create_video_agent_wrapper_tool",
     "create_marketing_agent_wrapper_tool",
-    "create_web_agent_wrapper_tool",
     "create_analysis_agent_wrapper_tool",
 ]

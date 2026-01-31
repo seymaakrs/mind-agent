@@ -22,11 +22,12 @@ OpenAI Agents SDK uzerine kurulu multi-agent orchestrator sistemi.
 - Image Agent: Google AI (Gemini) ile gorsel uretimi
 - Video Agent: Google AI (Veo 3.1) ile video uretimi
 - Marketing Agent: Instagram analiz, planlama ve paylasim
-- Web Agent: Web arama ve website scraping
-- Analysis Agent: SWOT analizi ve stratejik raporlar
+- Analysis Agent: SWOT + SEO analizi + Web arama/scraping (direkt erisim)
 - Orchestrator Agent: Alt agent'lari yoneten ana agent
 - Storage: Firebase Storage + Firestore
 - Instagram: Late API (Graph API kaldirildi)
+
+**NOT:** Web Agent kaldirildi. Analysis Agent artik web_search, scrape_for_seo ve scrape_competitors tool'larina direkt erisime sahip.
 
 ## Yapi
 
@@ -37,8 +38,7 @@ src/
 │   ├── image_agent.py         - Gorsel uretimi
 │   ├── video_agent.py         - Video uretimi
 │   ├── marketing_agent.py     - Sosyal medya yonetimi
-│   ├── web_agent.py           - Web arama/scraping
-│   ├── analysis_agent.py      - SWOT analizi
+│   ├── analysis_agent.py      - SWOT + SEO + Web (direkt tool erisimi)
 │   └── registry.py            - Agent registry
 ├── infra/
 │   ├── firebase_client.py     - Firebase client
@@ -52,8 +52,8 @@ src/
 │   ├── video_tools.py         - generate_video
 │   ├── instagram_tools.py     - get_instagram_insights
 │   ├── marketing_tools.py     - calendar, memory, posts
-│   ├── web_tools.py           - web_search, scrape_website
-│   ├── analysis_tools.py      - SWOT report tools
+│   ├── web_tools.py           - web_search, scrape_website, scrape_for_seo
+│   ├── analysis_tools.py      - SWOT + SEO report tools
 │   └── agent_wrapper_tools.py - Sub-agent wrappers
 ├── models/
 │   └── prompts.py             - ImagePrompt, VideoPrompt
@@ -129,8 +129,7 @@ settings = get_model_settings()
 | imageAgentModel | gpt-4o | Prompt uretimi icin |
 | videoAgentModel | gpt-4o | Prompt uretimi icin |
 | marketingModel | gpt-4o | Strateji ve planlama |
-| webAgentModel | gpt-4o | Web arama/scraping |
-| analysisAgentModel | gpt-4o | SWOT analizi |
+| analysisAgentModel | gpt-4o | SWOT + SEO analizi |
 | videoGenerationModel | veo-3.1-generate-preview | Video uretimi |
 
 **DIKKAT:** `gemini-3-pro-image-preview` modeli **~%90 daha pahali**. Kullanmayin!
@@ -138,7 +137,7 @@ settings = get_model_settings()
 ## Ana Tools
 
 ### Orchestrator Tools
-- `fetch_business(business_id)` - Isletme profili + instagram_id + youtube_id
+- `fetch_business(business_id)` - Isletme profili + website + instagram_id + youtube_id
 - `upload_file`, `list_files`, `delete_file` - Firebase Storage
 - `get_document`, `save_document`, `query_documents` - Firestore
 - `post_on_instagram`, `post_carousel_on_instagram` - Instagram posting (Late API)
@@ -157,15 +156,25 @@ settings = get_model_settings()
 - `get_marketing_memory`, `update_marketing_memory` - Agent memory
 - `get_admin_notes`, `add_admin_note` - Zorunlu kurallar
 
-### Web Tools
+### Web Tools (Analysis Agent icin)
 - `web_search(query, num_results, search_type)` - DuckDuckGo ile arama
   - search_type: "text" (default) veya "news" (son haberler)
-- `scrape_website(url)` - Website analizi
-- `save_custom_report(...)` - Esnek block-bazli rapor kaydetme
-- `update_business_profile(...)` - Website analizinden profil guncelleme
+- `scrape_website(url)` - Website analizi (genel kullanim)
+- `scrape_for_seo(url, include_subpages, max_subpages)` - Detayli SEO analizi
+  - Meta tags, headings (H1-H6), images (alt text), links, schema markup
+  - SEO skoru hesaplama (0-100)
+  - Alt sayfa analizi destegi
+- `scrape_competitors(urls, max_concurrent)` - **YENİ** Toplu rakip scraping
+  - Birden fazla URL'i tek seferde paralel scrape eder
+  - common_keywords, avg_seo_score, schema_types_used dondurur
+  - max 15 URL, max 10 concurrent
 
 ### Analysis Tools
-- `save_swot_report(...)` - SWOT raporu kaydet
+- `save_swot_report(...)` - SWOT raporu kaydet (reports/ altina)
+- `save_seo_report(...)` - SEO analiz raporu kaydet (reports/ altina, versiyonlu)
+- `save_seo_keywords(...)` - SEO anahtar kelimeleri kaydet (seo/keywords, tek doc, overwrite)
+- `save_seo_summary(...)` - SEO ozeti + agent memory guncelle (seo/summary, overwrite)
+- `get_seo_keywords(...)` - Kayitli anahtar kelimeleri getir
 - `get_reports(business_id)` - Raporlari listele
 - `save_instagram_report(...)` - Instagram metrik raporu
 
@@ -180,14 +189,18 @@ errors/                      - Agent hata bildirimleri (root level)
 
 businesses/{business_id}/
 ├── name, colors, logo, profile
+├── website                   - Isletme website URL'i (SEO analizi icin)
 ├── instagram_id              - Late API Instagram hesap ID'si (acc_xxxxx)
 ├── youtube_id                - Late API YouTube hesap ID'si (acc_xxxxx)
 ├── media/           - Uretilen medyalar
 ├── instagram_posts/ - Paylasilan Instagram postlari (permalink dahil)
 ├── youtube_videos/  - Paylasilan YouTube videolari
 ├── content_calendar/- Haftalik planlar
-├── reports/         - Analiz raporlari
-├── agent_memory/    - Agent hafizasi
+├── reports/         - Analiz raporlari (SWOT, SEO, Instagram, custom)
+├── seo/             - SEO verileri (tek versiyon, her analizde guncellenir)
+│   ├── summary      - SEO ozeti (hizli erisim, rapor referansi)
+│   └── keywords     - Anahtar kelimeler (array olarak tek doc)
+├── agent_memory/    - Agent hafizasi (seo bilgileri dahil)
 ├── tasks/           - Task tracking
 ├── logs/            - Task loglari
 └── dry_run_logs/    - Token analizi loglari (DRY_RUN=true)
@@ -323,6 +336,178 @@ result = await post_on_youtube(
     our_media_path="videos/business123/video.mp4"
 )
 # Firestore'a otomatik kaydedildi: businesses/{business_id}/youtube_videos/{video_id}
+```
+
+## SEO Analysis (Anahtar Kelime ve Rakip Analizi)
+
+Analysis agent DIREKT web tool'larina sahip. Baska agent cagirmaz.
+
+**Veri Yapisi:**
+- `seo/` collection: Guncel SEO durumu (tek versiyon, her analizde overwrite)
+- `reports/seo-xxx`: SEO raporlari (versiyonlu, tarihce icin)
+
+**SEO Workflow (7 adim):**
+1. `fetch_business` → website URL al
+2. `scrape_for_seo` → isletme sitesini analiz et
+3. `web_search` → rakipleri bul
+4. `scrape_competitors` → TUM rakipleri tek seferde scrape et
+5. `save_seo_keywords` → anahtar kelimeleri kaydet (seo/keywords overwrite)
+6. `save_seo_report` → raporu kaydet (reports/ altina, versiyonlu)
+7. `save_seo_summary` → ozet guncelle (seo/summary overwrite) + agent memory
+
+**Keyword Kategorileri:**
+| Kategori | Aciklama |
+|----------|----------|
+| primary | Yuksek hacim, cogu rakipte var |
+| secondary | Orta hacim, bazi rakiplerde |
+| long_tail | Spesifik, 3+ kelime, dusuk rekabet |
+| local | Lokasyon bazli (sehir, ilce) |
+
+**Search Intent:**
+- `informational` - Bilgi arayan (nasil, nedir, rehber)
+- `transactional` - Satin alma niyetli (satin al, fiyat, siparis)
+- `navigational` - Belirli siteye ulasma
+
+---
+
+### SEO Firestore Semalari
+
+**Path:** `businesses/{business_id}/seo/summary`
+```json
+{
+  "overall_score": 75,
+  "business_seo_score": 75,
+  "top_keywords": ["dijital ajans", "web tasarim", "istanbul"],
+  "main_issues": ["Missing H1", "No meta description"],
+  "competitor_count": 10,
+  "competitor_avg_score": 68,
+  "last_report_id": "seo-20260131-abc123",
+  "last_analysis_date": "2026-01-31T10:30:00Z",
+  "updated_at": "2026-01-31T10:30:00Z"
+}
+```
+| Alan | Tip | Aciklama |
+|------|-----|----------|
+| overall_score | number | Genel SEO skoru (0-100) |
+| business_seo_score | number | Isletme sitesinin SEO skoru |
+| top_keywords | string[] | En onemli 10 anahtar kelime |
+| main_issues | string[] | Duzeltilmesi gereken sorunlar (max 5) |
+| competitor_count | number | Analiz edilen rakip sayisi |
+| competitor_avg_score | number | Rakiplerin ortalama SEO skoru |
+| last_report_id | string | Son raporun ID'si (reports/ referansi) |
+| last_analysis_date | string | Son analiz tarihi (ISO) |
+| updated_at | string | Guncelleme tarihi (ISO) |
+
+---
+
+**Path:** `businesses/{business_id}/seo/keywords`
+```json
+{
+  "items": [
+    {
+      "keyword": "dijital ajans",
+      "category": "primary",
+      "search_intent": "transactional",
+      "priority": "high",
+      "competitor_usage": 8,
+      "notes": "8/10 rakip kullaniyor"
+    },
+    {
+      "keyword": "istanbul web tasarim",
+      "category": "local",
+      "search_intent": "transactional",
+      "priority": "high",
+      "competitor_usage": 6,
+      "notes": ""
+    }
+  ],
+  "total_count": 25,
+  "source": "seo_analysis",
+  "report_id": "seo-20260131-abc123",
+  "updated_at": "2026-01-31T10:30:00Z"
+}
+```
+| Alan | Tip | Aciklama |
+|------|-----|----------|
+| items | array | Anahtar kelime listesi |
+| items[].keyword | string | Anahtar kelime |
+| items[].category | string | primary, secondary, long_tail, local |
+| items[].search_intent | string | informational, transactional, navigational |
+| items[].priority | string | high, medium, low |
+| items[].competitor_usage | number | Kac rakip kullaniyor |
+| items[].notes | string | Ek notlar |
+| total_count | number | Toplam kelime sayisi |
+| source | string | Kaynak (seo_analysis) |
+| report_id | string | Iliskili rapor ID'si |
+| updated_at | string | Guncelleme tarihi (ISO) |
+
+---
+
+**Path:** `businesses/{business_id}/reports/seo-{date}-{hex}`
+```json
+{
+  "id": "seo-20260131-abc123",
+  "type": "seo",
+  "created_at": "2026-01-31T10:30:00Z",
+  "created_by": "agent",
+  "overall_score": 72,
+  "summary": "Genel SEO durumu iyi. H1 eksikligi ve meta description sorunlari var...",
+  "business_website_analysis": {
+    "url": "https://example.com",
+    "meta_tags": {
+      "title": "...",
+      "title_length": 55,
+      "description": "...",
+      "description_length": 150
+    },
+    "headings": {
+      "h1": ["..."],
+      "h1_count": 1,
+      "has_single_h1": true
+    },
+    "images": {
+      "total_images": 15,
+      "images_with_alt": 12,
+      "images_without_alt": 3
+    },
+    "seo_score": 75
+  },
+  "competitors": [
+    {
+      "domain": "rakip1.com",
+      "seo_score": 80,
+      "title": "...",
+      "description": "..."
+    }
+  ],
+  "competitor_urls": ["https://rakip1.com", "https://rakip2.com"],
+  "keyword_recommendations": [
+    {
+      "keyword": "dijital ajans",
+      "category": "primary",
+      "search_intent": "transactional",
+      "priority": "high",
+      "competitor_usage": 8,
+      "notes": "..."
+    }
+  ],
+  "technical_issues": [
+    {
+      "type": "warning",
+      "issue": "Multiple H1 tags",
+      "recommendation": "Use single H1 per page"
+    }
+  ],
+  "content_recommendations": [
+    "Ana sayfa metnini 800 kelimeye cikarin",
+    "Her hizmet icin ayri sayfa olusturun"
+  ],
+  "data_sources": {
+    "business_website": true,
+    "competitors": true,
+    "web_search": true
+  }
+}
 ```
 
 ## Error Reporting (Agent Hata Bildirimi)

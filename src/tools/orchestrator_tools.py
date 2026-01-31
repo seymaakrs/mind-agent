@@ -573,7 +573,7 @@ async def report_error(
     name_override="fetch_business",
     description_override=(
         "Fetches a business profile from Firestore by business_id. "
-        "Returns business info including name, colors, logo URL, profile data, "
+        "Returns business info including name, colors, logo URL, website URL, profile data, "
         "instagram_id for Instagram posting, and youtube_id for YouTube posting via Late API."
     ),
 )
@@ -585,7 +585,7 @@ async def fetch_business(business_id: str) -> dict[str, Any]:
         business_id: Firestore document ID in 'businesses' collection.
 
     Returns:
-        dict: Business data including name, colors, logo, profile, instagram_id, and youtube_id.
+        dict: Business data including name, colors, logo, website, profile, instagram_id, and youtube_id.
     """
     doc_client = get_document_client("businesses")
     doc = doc_client.get_document(business_id)
@@ -598,6 +598,7 @@ async def fetch_business(business_id: str) -> dict[str, Any]:
         "name": doc.get("name"),
         "colors": doc.get("colors"),
         "logo": doc.get("logo"),  # Cloud Storage URL
+        "website": doc.get("website"),  # Business website URL for SEO analysis
         "profile": doc.get("profile"),  # Dynamic map
         "instagram_id": doc.get("instagram_id"),  # Late API account ID (acc_xxxxx)
         "youtube_id": doc.get("youtube_id"),  # Late API YouTube account ID (acc_xxxxx)

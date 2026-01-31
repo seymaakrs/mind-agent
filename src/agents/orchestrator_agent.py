@@ -15,7 +15,6 @@ from src.tools.agent_wrapper_tools import (
     create_image_agent_wrapper_tool,
     create_video_agent_wrapper_tool,
     create_marketing_agent_wrapper_tool,
-    create_web_agent_wrapper_tool,
     create_analysis_agent_wrapper_tool,
 )
 
@@ -58,11 +57,8 @@ def create_orchestrator_agent(
         hooks=hooks,
     )
 
-    # Web agent wrapper tool
-    web_tool = create_web_agent_wrapper_tool(hooks=hooks)
-
-    # Analysis agent with web agent tool for enriched analysis
-    analysis_agent = create_analysis_agent(web_agent_tool=web_tool)
+    # Analysis agent (now has direct web tools, no need for web_agent)
+    analysis_agent = create_analysis_agent()
     analysis_tool = create_analysis_agent_wrapper_tool(
         analysis_agent=analysis_agent,
         hooks=hooks,
@@ -90,18 +86,16 @@ def create_orchestrator_agent(
             "- image_agent_tool: for IMAGE generation ONLY (gorsel, resim, fotograf, poster, banner) - use when user wants image WITHOUT posting "
             "- video_agent_tool: for VIDEO generation ONLY (video, klip, animasyon, reel) - use when user wants video WITHOUT posting "
             "- marketing_agent_tool: for INSTAGRAM POSTING + ANALYTICS + PLANNING - use when user wants to POST to Instagram! "
-            "- web_agent_tool: for WEB SEARCH, WEBSITE ANALYSIS, and TOPIC RESEARCH (arama, search, site analizi, araştır, research, haberler, gelişmeler, trendler) "
-            "- analysis_agent_tool: for BUSINESS ANALYSIS ONLY (SWOT analizi, stratejik analiz, güçlü/zayıf yönler, fırsatlar, tehditler) "
+            "- analysis_agent_tool: for BUSINESS ANALYSIS + SEO ANALYSIS + WEB RESEARCH (SWOT, SEO, stratejik analiz, anahtar kelime, rakip analizi, website analizi)"
             "\n\n"
             "CRITICAL - TOOL SELECTION DECISION: "
             "FIRST, determine what the user wants: "
             "- INSTAGRAM POSTING keywords (use marketing_agent_tool): paylaş, post, at, instagram, instagramda, yayınla, share "
             "- INSTAGRAM ANALYTICS/PLANNING keywords (use marketing_agent_tool): metrik, planlama, takvim, insight, içerik planı "
             "- CAROUSEL keywords (use marketing_agent_tool): carousel, çoklu görsel, multi-image, slide "
-            "- TOPIC RESEARCH keywords (use web_agent_tool): araştır, research, hakkında bilgi, gelişmeler, haberler, trendler, news "
-            "  Examples: 'LLM gelişmeleri', 'AI haberleri', 'market trends', 'son 1 haftada X' → web_agent_tool "
-            "- WEBSITE ANALYSIS keywords (use web_agent_tool): site analizi, websitesini incele, rakip sitesi "
             "- BUSINESS ANALYSIS keywords (use analysis_agent_tool): SWOT, swot analizi, güçlü yönler, zayıf yönler, fırsatlar, tehditler, stratejik analiz "
+            "- SEO ANALYSIS keywords (use analysis_agent_tool): SEO analizi, SEO, anahtar kelime analizi, keyword research, rakip SEO, website optimizasyonu "
+            "- WEBSITE ANALYSIS keywords (use analysis_agent_tool): site analizi, websitesini incele, rakip sitesi, website analizi "
             "- VIDEO ONLY keywords (use video_agent_tool): video oluştur, video üret (WITHOUT posting) "
             "- IMAGE ONLY keywords (use image_agent_tool): görsel oluştur, resim üret (WITHOUT posting) "
             "\n\r"
@@ -229,20 +223,24 @@ def create_orchestrator_agent(
             "   ) "
             "4) The marketing agent receives instagram_id as parameter - use EXACT value from business profile! "
             "\n\n"
-            "Web Agent Flow (Research + Website Analysis): "
-            "Use web_agent_tool for: "
-            "- Topic research: 'LLM gelişmelerini araştır', 'AI haberleri', 'market trends' "
-            "- Website analysis: 'websitesini analiz et', 'site incele' "
-            "\n"
-            "CRITICAL - When calling web_agent_tool for research: "
-            "1) Pass the EXACT topic from user request - do NOT change 'LLM' to 'bilim' or similar! "
-            "2) The web agent will search, compile findings, and save a custom report to Firebase. "
-            "3) Example: user says 'LLM gelişmeleri araştır' → call web_agent_tool(prompt='LLM gelişmelerini araştır ve rapor oluştur') "
+            "CRITICAL - REPORT SAVING RULE: "
+            "When user asks for a 'rapor' (report), the agent MUST SAVE it to Firestore, not just generate text! "
+            "- Instagram metrics report: marketing_agent MUST call save_instagram_report tool "
+            "- SEO analysis report: analysis_agent MUST call save_seo_report tool "
+            "- SWOT analysis report: analysis_agent MUST call save_swot_report tool "
+            "Keywords that trigger report saving: 'rapor hazirla', 'rapor olustur', 'rapor kaydet', 'analiz raporu', 'performans raporu' "
+            "When calling marketing_agent_tool for reports, EXPLICITLY state: "
+            "'Analyze metrics AND save the report using save_instagram_report tool' "
+            "When calling analysis_agent_tool, EXPLICITLY state: "
+            "'Perform analysis AND save the report using save_seo_report/save_swot_report tool' "
+            "This ensures reports are persisted to Firestore for later access from the panel. "
             "\n\n"
-            "Analysis Agent Flow (SWOT Analysis ONLY): "
-            "Use analysis_agent_tool ONLY for business-specific SWOT analysis: "
+            "Analysis Agent Flow (SWOT + SEO + Website Analysis): "
+            "Use analysis_agent_tool for ALL business analysis tasks: "
             "- SWOT analysis: 'SWOT analizi yap', 'güçlü/zayıf yönleri analiz et', 'stratejik analiz' "
-            "- Do NOT use for general research - use web_agent_tool instead! "
+            "- SEO analysis: 'SEO analizi yap', 'anahtar kelime analizi', 'rakip SEO analizi', 'website optimizasyonu' "
+            "- Website analysis: 'websitesini analiz et', 'site incele', 'rakip sitesi analiz et' "
+            "- The analysis agent has DIRECT access to web search and scraping tools. "
             "\n"
             "CRITICAL - When calling analysis_agent_tool: "
             "1) Extract business_id from [Business ID: xxx] at the start of your input. "
@@ -255,7 +253,7 @@ def create_orchestrator_agent(
             "When to use which agent: "
             "- ONLY image/video generation (no planning/posting): use image_agent_tool or video_agent_tool directly "
             "- Planning, posting, Instagram analytics: use marketing_agent_tool "
-            "- Business analysis (SWOT, strategic): use analysis_agent_tool "
+            "- Business analysis (SWOT, SEO, website): use analysis_agent_tool "
             "\n\n"
             "Other tools: "
             "You have tools for Firebase operations (upload_file, list_files, delete_file, get_document, save_document, query_documents). "
@@ -263,7 +261,7 @@ def create_orchestrator_agent(
             "\n\n"
             "Respond in the same language the user writes in."
         ),
-        tools=[image_tool, video_tool, marketing_tool, web_tool, analysis_tool, fetch_business, *orchestrator_tools],
+        tools=[image_tool, video_tool, marketing_tool, analysis_tool, fetch_business, *orchestrator_tools],
         tool_use_behavior="run_llm_again",
         output_type=str,
         model=model or model_settings.orchestrator_model or settings.openai_model,
