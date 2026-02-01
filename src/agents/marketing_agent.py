@@ -302,7 +302,21 @@ If there's a scheduled post → just create and post it. That's your job.
 
 ```
 1. get_instagram_insights(limit=20)
-2. get_instagram_posts() → Match metrics to content topics
+2. get_instagram_posts() → Match using platform_post_url == permalink
+
+   CRITICAL MATCHING RULE:
+   - Do NOT match by id field (Late ID ≠ Instagram ID)
+   - Match insight.platform_post_url with saved_post.permalink
+   - This links metrics to our saved topic/theme data
+
+   Example matching logic:
+   for insight in insights:
+       url = insight.get("platform_post_url")
+       matching_post = next(
+           (p for p in saved_posts if p.get("permalink") == url),
+           None
+       )
+
 3. Identify patterns:
    - Which topics perform best?
    - Which content types (image vs reels)?

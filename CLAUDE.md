@@ -50,7 +50,7 @@ src/
 │   ├── orchestrator_tools.py  - Firebase + Instagram tools
 │   ├── image_tools.py         - generate_image
 │   ├── video_tools.py         - generate_video
-│   ├── instagram_tools.py     - get_instagram_insights
+│   ├── instagram_tools.py     - get_instagram_insights, get_post_analytics
 │   ├── marketing_tools.py     - calendar, memory, posts
 │   ├── web_tools.py           - web_search, scrape_website, scrape_for_seo
 │   ├── analysis_tools.py      - SWOT + SEO report tools
@@ -259,7 +259,8 @@ Graph API yerine Late API kullaniliyor.
 **Tool'lar:**
 - `post_on_instagram(file_url, caption, content_type, instagram_id, is_story=False)` - Feed post, Reel veya Story
 - `post_carousel_on_instagram(media_items, caption, instagram_id)` - Carousel
-- `get_instagram_insights(instagram_id, date_from, date_to)` - Analytics
+- `get_instagram_insights(instagram_id, date_from, date_to, limit, page, sort_by, order)` - Analytics (pagination + sorting)
+- `get_post_analytics(instagram_id, post_id)` - Tekil post analitigi
 
 **Story Paylasimi:**
 ```python
@@ -282,6 +283,98 @@ post_on_instagram(
 **Notlar:**
 - Eski `instagram_account_id` ve `instagram_access_token` alanlari KULLANILMIYOR
 - Late API format donusumunu kendi yapiyor
+
+## Instagram Metrik Eslistirme
+
+**ONEMLI:** Late Analytics'ten gelen `id` (postId) Late'in internal ID'sidir, Instagram'in native ID'si DEGILDIR!
+
+| Kaynak | ID Alani | Icerik |
+|--------|----------|--------|
+| Late Analytics | `id` | Late Internal ID (MongoDB ObjectId) |
+| Late Analytics | `late_post_id` | Late Scheduled Post ID (opsiyonel) |
+| Late Analytics | `platform_post_url` | Instagram post URL'i ✓ |
+| Firestore `instagram_posts` | doc ID | Instagram Native ID |
+| Firestore `instagram_posts` | `permalink` | Instagram post URL'i ✓ |
+
+**Eslistirme icin `platform_post_url` ve `permalink` kullanin:**
+
+```python
+# Analytics'ten gelen insight'i Firestore post'una eslestir
+for insight in insights:
+    url = insight.get("platform_post_url")
+    matching_post = next(
+        (p for p in saved_posts if p.get("permalink") == url),
+        None
+    )
+    if matching_post:
+        # Artik insight'in metriklerini matching_post'un topic/theme'i ile iliskilendirebilirsin
+        topic = matching_post.get("topic")
+        reach = insight.get("metrics", {}).get("reach")
+```
+
+**Dikkat Edilecekler:**
+- Eski kayitlarda `permalink` bos olabilir (Late gecisinden once)
+- `is_external: true` postlar Firestore'da kayitli olmayabilir
+- URL karsilastirmasi yaparken trailing slash farki olabilir
+
+## Instagram Analytics Tools
+
+**Liste Analitigi:**
+```python
+get_instagram_insights(
+    instagram_id,           # Late account ID (acc_xxxxx)
+    date_from=None,         # YYYY-MM-DD format
+    date_to=None,           # YYYY-MM-DD format
+    limit=20,               # Posts per page (max 100)
+    page=1,                 # Page number
+    sort_by="date",         # "date" or "engagement"
+    order="desc"            # "asc" or "desc"
+)
+```
+- Returns: `media_items[]`, `pagination{}`, `summary{}`
+- Metrikler: impressions, reach, likes, comments, shares, saves, clicks, views, engagement_rate
+- **NOT:** Analytics verisi Late API tarafindan en fazla 60 dakikada bir guncellenir (cache)
+
+**Tekil Post Analitigi:**
+```python
+get_post_analytics(
+    instagram_id,           # Late account ID (acc_xxxxx)
+    post_id                 # Late ID veya External ID (otomatik resolve)
+)
+```
+- Returns: Detayli post objesi + `platform_analytics[]`
+- Metrikler: impressions, reach, likes, comments, shares, saves, clicks, views, engagement_rate, last_updated
+
+**Ornek Kullanim:**
+```python
+# Son 1 haftanin en iyi performans gosterenleri
+insights = await get_instagram_insights(
+    instagram_id="acc_xxx",
+    date_from="2026-01-25",
+    date_to="2026-01-31",
+    limit=10,
+    sort_by="engagement",
+    order="desc"
+)
+
+# Tekil post detayi
+post = await get_post_analytics(
+    instagram_id="acc_xxx",
+    post_id="65f1c0a9e2b5af..."
+)
+```
+
+**Pagination Response:**
+```json
+{
+  "pagination": {
+    "total": 47,
+    "page": 1,
+    "limit": 20,
+    "total_pages": 3
+  }
+}
+```
 
 ## YouTube Posting (Late API)
 

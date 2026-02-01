@@ -188,28 +188,50 @@ class LateClient:
 
     async def get_analytics(
         self,
+        post_id: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
+        limit: int = 50,
+        page: int = 1,
+        sort_by: Literal["date", "engagement"] = "date",
+        order: Literal["asc", "desc"] = "desc",
     ) -> dict[str, Any]:
         """
-        Get analytics for Instagram account.
+        Get analytics for Instagram account or a specific post.
 
         Args:
-            date_from: Start date (YYYY-MM-DD format, optional).
-            date_to: End date (YYYY-MM-DD format, optional).
+            post_id: Specific post ID (Late ID or External ID). If provided, returns single post.
+            date_from: Start date filter (YYYY-MM-DD format).
+            date_to: End date filter (YYYY-MM-DD format).
+            limit: Posts per page (default 50, range 1-100).
+            page: Page number (default 1).
+            sort_by: Sort field - "date" or "engagement" (default: "date").
+            order: Sort direction - "asc" or "desc" (default: "desc").
 
         Returns:
-            dict with posts list and their analytics.
+            List mode: {success, posts[], pagination{}}
+            Single mode: {success, post{}}
         """
-        params: dict[str, str] = {
-            "accountId": self.account_id,
+        params: dict[str, Any] = {
             "platform": "instagram",
         }
 
-        if date_from:
-            params["dateFrom"] = date_from
-        if date_to:
-            params["dateTo"] = date_to
+        if post_id:
+            # Tekil post modu - postId parametresi ile cagir
+            params["postId"] = post_id
+        else:
+            # Liste modu
+            # NOT: Late API docs "profileId" diyor ama gercekte "accountId" calisiyor
+            params["accountId"] = self.account_id
+            params["limit"] = max(1, min(limit, 100))  # Clamp 1-100
+            params["page"] = max(1, page)
+            params["sortBy"] = sort_by
+            params["order"] = order
+            # NOT: Late API docs "fromDate/toDate" diyor ama gercekte "dateFrom/dateTo" calisiyor
+            if date_from:
+                params["dateFrom"] = date_from
+            if date_to:
+                params["dateTo"] = date_to
 
         async with httpx.AsyncClient(timeout=self.TIMEOUT) as client:
             response = await client.get(
@@ -226,38 +248,41 @@ class LateClient:
                 }
 
             data = response.json()
+
+            # Tekil post response
+            if post_id:
+                return {
+                    "success": True,
+                    "post": data,
+                }
+
+            # Liste response - pagination bilgisi ekle
+            pagination = data.get("pagination", {})
             return {
                 "success": True,
                 "posts": data.get("posts", []),
+                "pagination": {
+                    "total": pagination.get("total", 0),
+                    "page": pagination.get("page", 1),
+                    "limit": pagination.get("limit", limit),
+                    "total_pages": pagination.get("totalPages", 1),
+                },
             }
 
     async def get_post_analytics(self, post_id: str) -> dict[str, Any]:
         """
+        DEPRECATED: Use get_analytics(post_id=...) instead.
+
         Get analytics for a specific post.
 
         Args:
-            post_id: Late post ID.
+            post_id: Late post ID or External Post ID.
 
         Returns:
             dict with post analytics.
         """
-        async with httpx.AsyncClient(timeout=self.TIMEOUT) as client:
-            response = await client.get(
-                f"{self.BASE_URL}/analytics/{post_id}",
-                headers=self._get_headers(),
-            )
-
-            if response.status_code >= 400:
-                return {
-                    "success": False,
-                    "error": response.text,
-                    "status_code": response.status_code,
-                }
-
-            return {
-                "success": True,
-                "post": response.json(),
-            }
+        # Delegate to unified get_analytics method
+        return await self.get_analytics(post_id=post_id)
 
     async def post_youtube_video(
         self,

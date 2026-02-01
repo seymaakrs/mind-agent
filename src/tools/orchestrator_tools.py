@@ -280,8 +280,18 @@ async def post_carousel_on_instagram(
     Post a carousel to Instagram via Late API.
 
     Args:
-        media_items: List of media items. Each item: {"url": str, "type": "image" | "video"}
-                     Example: [{"url": "https://...", "type": "image"}, {"url": "https://...", "type": "video"}]
+        media_items: List of media items. Each item must have:
+                     - url (required): Public URL of the media
+                     - type (required): "image" or "video"
+                     - aspect_ratio (recommended): e.g. "1:1", "4:5", "16:9"
+
+                     Example: [
+                         {"url": "https://...", "type": "image", "aspect_ratio": "1:1"},
+                         {"url": "https://...", "type": "video", "aspect_ratio": "1:1"}
+                     ]
+
+                     IMPORTANT: All items must have the same aspect ratio.
+                     The first item's ratio determines the carousel display.
         caption: Post caption.
         instagram_id: Late account ID (acc_xxxxx) from business profile.
         first_comment: First comment to add after posting (optional).
@@ -297,6 +307,7 @@ async def post_carousel_on_instagram(
             return {"success": False, "error": "Carousel cannot have more than 10 media items"}
 
         # Validate media_items structure
+        aspect_ratios_found = []
         for i, item in enumerate(media_items):
             if not isinstance(item, dict):
                 return {"success": False, "error": f"media_items[{i}] must be a dict, got {type(item).__name__}"}
@@ -307,6 +318,29 @@ async def post_carousel_on_instagram(
                 return {"success": False, "error": f"media_items[{i}] has invalid URL '{url}'. URL must start with http:// or https://"}
             if item.get("type") not in ("image", "video", None):
                 return {"success": False, "error": f"media_items[{i}] has invalid type '{item.get('type')}'. Must be 'image' or 'video'"}
+
+            # Collect aspect ratios for validation
+            if item.get("aspect_ratio"):
+                aspect_ratios_found.append(item["aspect_ratio"])
+
+        # Validate aspect ratio consistency
+        aspect_ratio_warning = None
+        if aspect_ratios_found:
+            if len(aspect_ratios_found) != len(media_items):
+                return {
+                    "success": False,
+                    "error": f"Aspect ratio must be specified for all items or none. Found {len(aspect_ratios_found)}/{len(media_items)} items with aspect_ratio."
+                }
+
+            first_ratio = aspect_ratios_found[0]
+            mismatched = [i for i, r in enumerate(aspect_ratios_found) if r != first_ratio]
+            if mismatched:
+                return {
+                    "success": False,
+                    "error": f"All carousel items must have the same aspect ratio. First item has '{first_ratio}', but item(s) {mismatched} have different ratios. Instagram requires uniform aspect ratios in carousels."
+                }
+        else:
+            aspect_ratio_warning = "WARNING: No aspect_ratio specified for carousel items. All items must have the same aspect ratio for proper display. First item's ratio determines the carousel."
 
         # Post carousel via Late API
         late = get_late_client(instagram_id)
@@ -324,7 +358,7 @@ async def post_carousel_on_instagram(
                 "item_count": len(media_items),
             }
 
-        return {
+        response = {
             "success": True,
             "post_id": result.get("platform_post_id"),
             "late_post_id": result.get("post_id"),
@@ -333,6 +367,11 @@ async def post_carousel_on_instagram(
             "item_count": result.get("item_count"),
             "message": f"Successfully posted carousel with {result.get('item_count')} items to Instagram",
         }
+
+        if aspect_ratio_warning:
+            response["warning"] = aspect_ratio_warning
+
+        return response
 
     except Exception as exc:
         return {
