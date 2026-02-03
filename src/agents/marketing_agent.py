@@ -8,7 +8,13 @@ from src.app.config import get_settings, get_model_settings
 from src.tools.instagram_tools import get_instagram_tools
 from src.tools.marketing_tools import get_marketing_tools
 from src.tools.analysis_tools import get_report_tools
-from src.tools.orchestrator_tools import post_on_instagram, post_carousel_on_instagram
+from src.tools.orchestrator_tools import (
+    post_on_instagram,
+    post_carousel_on_instagram,
+    get_document,
+    save_document,
+    query_documents,
+)
 
 
 MARKETING_AGENT_INSTRUCTIONS = """You are an expert social media marketing manager with full control over content planning, creation, and publishing.
@@ -83,9 +89,10 @@ You are the complete social media manager for businesses. You:
 - `video_agent_tool`: Generate videos/reels. Provide detailed brief, it will create the video.
 
 ### Instagram Operations
-- `get_instagram_insights`: Fetch performance metrics (reach, views, engagement, etc.)
-- `post_on_instagram`: Publish single image or video to Instagram
-- `post_carousel_on_instagram`: Publish carousel (2-10 images/videos) to Instagram
+- `get_instagram_insights(late_profile_id, ...)`: Fetch performance metrics. Use `late_profile_id` from business (NOT instagram_id!)
+- `get_post_analytics(late_profile_id, post_id)`: Fetch single post metrics. Use `late_profile_id` from business.
+- `post_on_instagram`: Publish single image or video to Instagram (uses instagram_id)
+- `post_carousel_on_instagram`: Publish carousel (2-10 images/videos) to Instagram (uses instagram_id)
 
 ### Content Calendar (Plan-Based)
 - `create_weekly_plan`: Create a weekly plan with multiple posts at once
@@ -113,6 +120,16 @@ You are the complete social media manager for businesses. You:
 - `save_instagram_report`: Save Instagram metrics analysis as a formal report (use when user says "rapor kaydet")
 - `get_reports`: List saved reports for a business
 - `get_report`: Get a specific report by ID
+
+### Firestore Operations (For Weekly Stats Analysis)
+- `get_document(document_path="businesses/{id}/instagram_stats/week-2026-05")`: Read a document using FULL PATH
+- `save_document(data={...}, document_path="businesses/{id}/instagram_stats/week-2026-05", merge=True)`:
+  CRITICAL: Always use merge=True to preserve existing metrics when adding summary!
+- `query_documents(collection="businesses/{id}/instagram_stats", field="week_id", operator=">=", value="week-2026-01", limit=4)`: List documents
+
+**IMPORTANT PATH FORMAT:**
+- Always use FULL document_path: `businesses/{business_id}/instagram_stats/week-YYYY-WW`
+- Example: `document_path="businesses/vPoHKXpvGqdMQzrjN4i4/instagram_stats/week-2026-05"`
 
 ### Job Scheduling (Retry on Errors)
 - `schedule_retry_job`: Schedule a retry job when you encounter rate limits or quota errors
@@ -350,6 +367,118 @@ CRITICAL: insights ve recommendations MUTLAKA TÜRKÇE yazılmalı!
 IMPORTANT: Only use save_instagram_report when user explicitly asks to "save as report" or "rapor kaydet".
 For regular analysis, just update_marketing_memory is sufficient.
 
+### 5. Haftalık Instagram Analizi (Cloud Function tarafından tetiklenir)
+
+**Tetikleyici keywords:** "haftalık metriklerini analiz et", "instagram_stats" path içeren görevler
+
+Bu workflow Cloud Function tarafından otomatik olarak tetiklenir. Cloud Function önceden metrikleri
+Firestore'a kaydetmiş olacak, senin görevin bu metrikleri analiz edip summary üretmek.
+
+```
+1. Görevden metrics path'ini çıkar (örn: "businesses/abc123/instagram_stats/week-2026-05")
+
+2. Metrikleri oku:
+   get_document(document_path="businesses/abc123/instagram_stats/week-2026-05")
+   → metrics alanını al
+
+3. Önceki haftaları bul (opsiyonel):
+   query_documents(
+       collection="businesses/abc123/instagram_stats",
+       field="week_id",
+       operator="<",
+       value="week-2026-05",
+       limit=4
+   )
+
+4. Önceki hafta varsa karşılaştırma için oku
+
+5. Analiz yap:
+   - Content type performansı (reels vs image vs carousel)
+   - Geçen haftaya göre değişim (reach, engagement)
+   - Trend yönü (positive/negative/stable)
+
+6. Summary oluştur (MUTLAKA TÜRKÇE ve STRICT SCHEMA!)
+
+7. AYNI DÖKÜMANA kaydet (CRITICAL: merge=True!):
+   → Aşağıdaki EXACT SCHEMA'yı kullan, başka alan EKLEME!
+```
+
+## ⚠️ STRICT SCHEMA - ZORUNLU ALAN YAPISI ⚠️
+
+save_document çağrısında SADECE bu alanları kullan. Başka alan adı YASAK!
+
+```python
+save_document(
+    data={
+        "summary": {
+            "insights": [str, str, str],        # SADECE "insights" - Türkçe bulgular (3-5 string)
+            "recommendations": [str, str],       # SADECE "recommendations" - Türkçe öneriler (2-3 string)
+            "week_over_week": {                  # SADECE "week_over_week" veya null
+                "reach_change": str,             # "+18%" veya "-5%" formatında
+                "engagement_change": str,        # "+12%" veya "-3%" formatında
+                "trend": str                     # "positive", "negative", veya "stable"
+            }
+        },
+        "analyzed_at": str,                      # ISO format: "2026-02-03T10:00:00Z"
+        "analyzed_by": "marketing_agent"         # Sabit değer
+    },
+    document_path="businesses/{business_id}/instagram_stats/week-YYYY-WW",
+    merge=True
+)
+```
+
+### ❌ YASAK ALAN ADLARI (KULLANMA!):
+- `genel_bakis` ❌ → `insights` kullan
+- `ana_metrikler` ❌ → kullanma, metrics zaten var
+- `oneriler` ❌ → `recommendations` kullan
+- `ozet` ❌ → `summary` kullan
+- `hafta_karsilastirmasi` ❌ → `week_over_week` kullan
+- `analiz_tarihi` ❌ → `analyzed_at` kullan
+- Türkçe alan adı ❌ → İngilizce kullan
+
+### ✅ DOĞRU ÖRNEK:
+```json
+{
+    "summary": {
+        "insights": [
+            "Bu hafta Reels içerikler toplam erişimin %72'sini sağladı",
+            "En iyi performans gösteren içerik 4.200 kişiye ulaştı",
+            "Kaydetme oranı ortalamanın üzerinde (%1.26)"
+        ],
+        "recommendations": [
+            "Reels paylaşım sıklığını koruyun",
+            "Carousel içerikleri artırmayı deneyin"
+        ],
+        "week_over_week": {
+            "reach_change": "+18%",
+            "engagement_change": "+5%",
+            "trend": "positive"
+        }
+    },
+    "analyzed_at": "2026-02-03T10:00:00Z",
+    "analyzed_by": "marketing_agent"
+}
+```
+
+### ❌ YANLIŞ ÖRNEK (YAPMA!):
+```json
+{
+    "summary": {
+        "genel_bakis": "...",        ❌ YANLIŞ!
+        "ana_metrikler": {...},       ❌ YANLIŞ!
+        "oneriler": [...]             ❌ YANLIŞ!
+    }
+}
+```
+
+**CRITICAL RULES:**
+- Alan adları İNGİLİZCE ama içerikler TÜRKÇE olmalı!
+- `analyzed_at` ISO 8601 formatında timestamp (şu anki zaman)
+- `analyzed_by` her zaman "marketing_agent" string değeri
+- merge=True ZORUNLU, aksi halde metrics silinir!
+- Önceki hafta yoksa `week_over_week` alanını `null` yap
+- İlk analiz ise sadece mevcut haftayı değerlendir
+
 ## CONTENT CREATION GUIDELINES
 
 When calling image_agent_tool or video_agent_tool:
@@ -416,7 +545,12 @@ When calling image_agent_tool or video_agent_tool:
 
 Credentials are provided at the START of your input:
 - [Business ID: xxx] → Use for all business-related tool calls
-- [Instagram ID: xxx] → Use as instagram_id for post_on_instagram, post_carousel_on_instagram, and get_instagram_insights
+- [Instagram ID: xxx] → Use as instagram_id for post_on_instagram, post_carousel_on_instagram (POSTING only!)
+- [Late Profile ID: xxx] → Use as late_profile_id for get_instagram_insights, get_post_analytics (ANALYTICS only!)
+
+**CRITICAL - DO NOT MIX THESE UP!**
+- Posting tools (post_on_instagram, post_carousel_on_instagram) → Use `instagram_id`
+- Analytics tools (get_instagram_insights, get_post_analytics) → Use `late_profile_id`
 
 ALWAYS use the EXACT values from these prefixes. NEVER guess or fabricate credentials.
 
@@ -445,11 +579,14 @@ def create_marketing_agent(
 
     # Combine all tools
     tools = [
-        *get_instagram_tools(),    # get_instagram_insights
+        *get_instagram_tools(),    # get_instagram_insights, get_post_analytics
         *get_marketing_tools(),    # calendar, memory, post tracking
         *get_report_tools(),       # save_instagram_report, get_reports, get_report
         post_on_instagram,         # Instagram single media posting
         post_carousel_on_instagram,  # Instagram carousel posting
+        get_document,              # Firestore doc okuma (instagram_stats için)
+        save_document,             # Firestore doc yazma (summary için)
+        query_documents,           # Firestore query (önceki haftalar için)
     ]
 
     # Add sub-agent tools if provided

@@ -125,6 +125,7 @@ def create_marketing_agent_wrapper_tool(
             "Complete social media manager. REQUIRED PARAMETERS: "
             "- business_id: The exact business ID from context (e.g., 'abc123') - REQUIRED! "
             "- instagram_id: Late API account ID from business profile (acc_xxxxx format) - REQUIRED for posting! "
+            "- late_profile_id: Late profile ID (raw ObjectId) from business profile - REQUIRED for analytics! "
             "- prompt: What you want the marketing agent to do (plan, post, analyze). "
             "Use for: content planning, creating AND posting content, analyzing Instagram metrics. "
             "Keywords: plan, planlama, takvim, icerik, post, paylas, metrik, analiz, strateji, haftalik"
@@ -135,6 +136,7 @@ def create_marketing_agent_wrapper_tool(
         business_id: str,
         instagram_id: str,
         prompt: str,
+        late_profile_id: str | None = None,
     ) -> str:
         """
         Wrapper that runs marketing agent with explicit credentials.
@@ -142,6 +144,7 @@ def create_marketing_agent_wrapper_tool(
         Args:
             business_id: The business ID from Firestore (REQUIRED).
             instagram_id: Late API account ID for Instagram posting (REQUIRED).
+            late_profile_id: Late profile ID for Instagram analytics (REQUIRED for analytics).
             prompt: What the marketing agent should do.
 
         Returns:
@@ -150,7 +153,8 @@ def create_marketing_agent_wrapper_tool(
         # Include credentials in structured format
         effective_prompt = (
             f"[Business ID: {business_id}]\n"
-            f"[Instagram ID: {instagram_id}]\n\n"
+            f"[Instagram ID: {instagram_id}]\n"
+            f"[Late Profile ID: {late_profile_id or 'NOT_PROVIDED'}]\n\n"
             f"{prompt}"
         )
 

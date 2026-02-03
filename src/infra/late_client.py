@@ -220,18 +220,16 @@ class LateClient:
             # Tekil post modu - postId parametresi ile cagir
             params["postId"] = post_id
         else:
-            # Liste modu
-            # NOT: Late API docs "profileId" diyor ama gercekte "accountId" calisiyor
-            params["accountId"] = self.account_id
+            # Liste modu - Late API profileId + fromDate/toDate kullanıyor
+            params["profileId"] = self.account_id
             params["limit"] = max(1, min(limit, 100))  # Clamp 1-100
             params["page"] = max(1, page)
             params["sortBy"] = sort_by
             params["order"] = order
-            # NOT: Late API docs "fromDate/toDate" diyor ama gercekte "dateFrom/dateTo" calisiyor
             if date_from:
-                params["dateFrom"] = date_from
+                params["fromDate"] = date_from
             if date_to:
-                params["dateTo"] = date_to
+                params["toDate"] = date_to
 
         async with httpx.AsyncClient(timeout=self.TIMEOUT) as client:
             response = await client.get(
@@ -421,12 +419,14 @@ class LateClient:
             }
 
 
-def get_late_client(account_id: str) -> LateClient:
+def get_late_client(account_id: str, strip_prefix: bool = True) -> LateClient:
     """
     Create LateClient instance with API key from config.
 
     Args:
-        account_id: Late account ID (acc_xxxxx or raw ObjectId).
+        account_id: Late account ID (acc_xxxxx for posting, raw ObjectId for analytics).
+        strip_prefix: If True, strips "acc_" prefix (for posting).
+                      If False, uses ID as-is (for analytics with late_profile_id).
 
     Returns:
         LateClient instance.
@@ -440,8 +440,9 @@ def get_late_client(account_id: str) -> LateClient:
     if not settings.late_api_key:
         raise ValueError("LATE_API_KEY is not configured")
 
-    # Strip "acc_" prefix if present - Late API expects raw MongoDB ObjectId
-    if account_id.startswith("acc_"):
+    # Strip "acc_" prefix only for posting operations (instagram_id)
+    # Analytics uses late_profile_id which is already raw ObjectId
+    if strip_prefix and account_id.startswith("acc_"):
         account_id = account_id[4:]
 
     return LateClient(settings.late_api_key, account_id)

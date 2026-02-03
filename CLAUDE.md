@@ -137,7 +137,7 @@ settings = get_model_settings()
 ## Ana Tools
 
 ### Orchestrator Tools
-- `fetch_business(business_id)` - Isletme profili + website + instagram_id + youtube_id
+- `fetch_business(business_id)` - Isletme profili + website + instagram_id + late_profile_id + youtube_id
 - `upload_file`, `list_files`, `delete_file` - Firebase Storage
 - `get_document`, `save_document`, `query_documents` - Firestore
 - `post_on_instagram`, `post_carousel_on_instagram` - Instagram posting (Late API)
@@ -190,7 +190,8 @@ errors/                      - Agent hata bildirimleri (root level)
 businesses/{business_id}/
 ├── name, colors, logo, profile
 ├── website                   - Isletme website URL'i (SEO analizi icin)
-├── instagram_id              - Late API Instagram hesap ID'si (acc_xxxxx)
+├── instagram_id              - Late API Instagram hesap ID'si (acc_xxxxx) - POSTING icin
+├── late_profile_id           - Late profile ID (raw ObjectId) - ANALYTICS icin
 ├── youtube_id                - Late API YouTube hesap ID'si (acc_xxxxx)
 ├── media/           - Uretilen medyalar
 ├── instagram_posts/ - Paylasilan Instagram postlari (permalink dahil)
@@ -201,6 +202,7 @@ businesses/{business_id}/
 │   ├── summary      - SEO ozeti (hizli erisim, rapor referansi)
 │   └── keywords     - Anahtar kelimeler (array olarak tek doc)
 ├── agent_memory/    - Agent hafizasi (seo bilgileri dahil)
+├── instagram_stats/ - Haftalik Instagram metrikleri + agent summary
 ├── tasks/           - Task tracking
 ├── logs/            - Task loglari
 └── dry_run_logs/    - Token analizi loglari (DRY_RUN=true)
@@ -242,6 +244,46 @@ uvicorn src.app.api:app --host 0.0.0.0 --port 8000
 start-dev.bat  # Docker
 ```
 
+## Docker Deployment (Cloud Run)
+
+**Guncel Versiyon:** `v1.3.3`
+
+**GCP Project ID:** `instagram-post-bot-471518`
+
+**Image URL (Cloud Run icin):**
+```
+gcr.io/instagram-post-bot-471518/agents-sdk-api:v1.3.3
+```
+
+### GCR'ye Push (Kullanici "gcr ye pushla" dediginde)
+
+```bash
+# 1. Build (proje root'unda)
+docker build -t agents-sdk-api:v1.3.1 .
+
+# 2. Tag (GCR icin)
+docker tag agents-sdk-api:v1.3.1 gcr.io/instagram-post-bot-471518/agents-sdk-api:v1.3.3
+
+# 3. Push
+docker push gcr.io/instagram-post-bot-471518/agents-sdk-api:v1.3.3
+```
+
+### Versiyon Yukseltme
+
+Yeni versiyon cikarirken:
+1. Bu dokumandaki "Guncel Versiyon" alanini guncelle
+2. Semantic versioning kullan: `vMAJOR.MINOR.PATCH`
+   - MAJOR: Breaking change
+   - MINOR: Yeni ozellik (backward compatible)
+   - PATCH: Bug fix
+3. Tag'de nokta hatasi yapma! `v1.2.0` ✓ / `v.1.2.0` ✗
+
+### Notlar
+
+- Docker Hub yerine GCR kullan (Cloud Run ile ayni altyapi, daha hizli)
+- `mirror.gcr.io` cache gecikmeleri sorun cikarabilir, GCR direkt erisim saglar
+- Cloud Run deploy icin: Console'dan veya `gcloud run deploy` ile
+
 ## Bekleyen Isler
 
 1. **Firebase Model Ayarlari Guncelleme** - `settings/app_settings` dokumaninda:
@@ -278,11 +320,13 @@ post_on_instagram(
 - 24 saat sonra kaybolur
 
 **Firestore alanlari:**
-- `instagram_id` - Late hesap ID'si (acc_xxxxx)
+- `instagram_id` - Late hesap ID'si (acc_xxxxx) - **POSTING icin**
+- `late_profile_id` - Late profile ID (raw ObjectId) - **ANALYTICS icin**
 
 **Notlar:**
 - Eski `instagram_account_id` ve `instagram_access_token` alanlari KULLANILMIYOR
 - Late API format donusumunu kendi yapiyor
+- Posting ve Analytics farkli ID'ler kullaniyor!
 
 ## Instagram Metrik Eslistirme
 
@@ -319,10 +363,14 @@ for insight in insights:
 
 ## Instagram Analytics Tools
 
+**ONEMLI:** Analytics ve Posting farkli ID'ler kullaniyor!
+- **Posting:** `instagram_id` (acc_xxxxx formati)
+- **Analytics:** `late_profile_id` (raw ObjectId formati: `6977991f7e7ed569a4f15eca`)
+
 **Liste Analitigi:**
 ```python
 get_instagram_insights(
-    instagram_id,           # Late account ID (acc_xxxxx)
+    late_profile_id,        # Late profile ID (raw ObjectId, business.late_profile_id)
     date_from=None,         # YYYY-MM-DD format
     date_to=None,           # YYYY-MM-DD format
     limit=20,               # Posts per page (max 100)
@@ -338,7 +386,7 @@ get_instagram_insights(
 **Tekil Post Analitigi:**
 ```python
 get_post_analytics(
-    instagram_id,           # Late account ID (acc_xxxxx)
+    late_profile_id,        # Late profile ID (raw ObjectId, business.late_profile_id)
     post_id                 # Late ID veya External ID (otomatik resolve)
 )
 ```
@@ -349,7 +397,7 @@ get_post_analytics(
 ```python
 # Son 1 haftanin en iyi performans gosterenleri
 insights = await get_instagram_insights(
-    instagram_id="acc_xxx",
+    late_profile_id="6977991f7e7ed569a4f15eca",
     date_from="2026-01-25",
     date_to="2026-01-31",
     limit=10,
@@ -359,7 +407,7 @@ insights = await get_instagram_insights(
 
 # Tekil post detayi
 post = await get_post_analytics(
-    instagram_id="acc_xxx",
+    late_profile_id="6977991f7e7ed569a4f15eca",
     post_id="65f1c0a9e2b5af..."
 )
 ```
@@ -602,6 +650,133 @@ Analysis agent DIREKT web tool'larina sahip. Baska agent cagirmaz.
   }
 }
 ```
+
+## Instagram Haftalık Analiz Sistemi
+
+Cloud Function tarafından tetiklenen otomatik haftalık Instagram analiz sistemi.
+
+**Akış:**
+```
+1. Cloud Function (Pazar 23:00)
+   └─> Late API'den son 7 günlük veriyi çek
+   └─> Firestore'a metrics yaz (instagram_stats/week-YYYY-WW)
+   └─> Backend /task endpoint'ine agent görevi at
+
+2. Marketing Agent
+   └─> Doc'u oku (get_document)
+   └─> Önceki haftaları listele (query_documents)
+   └─> Karşılaştırmalı analiz yap
+   └─> Summary üret (Türkçe)
+   └─> Aynı doc'a yaz (save_document, merge=True)
+```
+
+**Firestore Path:** `businesses/{business_id}/instagram_stats/week-{YYYY}-{WW}`
+
+**Week ID Format:** `week-2026-05` (yılın 5. haftası, ISO week number)
+
+### Schema
+
+```json
+{
+  "week_id": "week-2026-05",
+  "week_number": 5,
+  "year": 2026,
+  "date_range": {
+    "start": "2026-01-27",
+    "end": "2026-02-02"
+  },
+
+  "metrics": {
+    "total_posts": 8,
+    "total_reach": 12400,
+    "total_impressions": 18600,
+    "total_likes": 892,
+    "total_comments": 67,
+    "total_saves": 156,
+    "total_shares": 43,
+    "avg_engagement_rate": 4.2,
+    "by_content_type": {
+      "reels": { "count": 4, "reach": 8900, "likes": 620 },
+      "image": { "count": 3, "reach": 2800, "likes": 210 },
+      "carousel": { "count": 1, "reach": 700, "likes": 62 }
+    },
+    "top_posts": [
+      { "url": "https://instagram.com/p/xxx", "type": "reels", "reach": 4200 }
+    ]
+  },
+
+  "created_at": "2026-02-02T23:00:00Z",
+  "created_by": "cloud_function",
+
+  "summary": {
+    "insights": [
+      "Bu hafta Reels içerikler toplam erişimin %72'sini sağladı",
+      "Geçen haftaya göre erişim %18 arttı"
+    ],
+    "recommendations": [
+      "Reels paylaşım sıklığını koruyun",
+      "Carousel içerikleri artırmayı deneyin"
+    ],
+    "week_over_week": {
+      "reach_change": "+18%",
+      "engagement_change": "+5%",
+      "trend": "positive"
+    }
+  },
+  "analyzed_at": "2026-02-02T23:05:00Z",
+  "analyzed_by": "marketing_agent"
+}
+```
+
+| Alan | Tip | Aciklama |
+|------|-----|----------|
+| week_id | string | Hafta ID'si (week-YYYY-WW) |
+| week_number | number | Yılın kaçıncı haftası (ISO) |
+| year | number | Yıl |
+| date_range | object | Hafta başlangıç/bitiş tarihleri |
+| metrics | object | Cloud Function tarafından yazılan metrikler |
+| metrics.by_content_type | object | Reels/Image/Carousel breakdown |
+| summary | object | Marketing Agent tarafından yazılan analiz |
+| summary.insights | string[] | Türkçe bulgular (3-5 madde) |
+| summary.recommendations | string[] | Türkçe öneriler (2-3 madde) |
+| summary.week_over_week | object\|null | Önceki haftayla karşılaştırma (ilk hafta null) |
+| analyzed_at | string | Agent analiz tarihi (ISO 8601) |
+| analyzed_by | string | Sabit değer: "marketing_agent" |
+
+### ⚠️ STRICT SCHEMA - Alan Adları Sabit
+
+Agent'ın summary yazarken SADECE şu alan adlarını kullanması ZORUNLU:
+
+| Doğru Alan Adı | Yasak Alternatifler |
+|----------------|---------------------|
+| `insights` | ~~genel_bakis~~, ~~bulgular~~, ~~ozet~~ |
+| `recommendations` | ~~oneriler~~, ~~tavsiyeler~~ |
+| `week_over_week` | ~~hafta_karsilastirmasi~~, ~~karsilastirma~~ |
+| `analyzed_at` | ~~analiz_tarihi~~, ~~tarih~~ |
+| `analyzed_by` | ~~analist~~, ~~agent~~ |
+
+- Alan adları **İngilizce** ama içerikler **Türkçe** olmalı
+- `analyzed_at` ISO 8601 formatında: `"2026-02-03T10:00:00Z"`
+- `analyzed_by` her zaman `"marketing_agent"` string değeri
+- İlk hafta analizi ise `week_over_week` değeri `null` olabilir
+
+### Agent Görevi Örneği
+
+Cloud Function'ın `/task` endpoint'ine atacağı payload:
+
+```json
+{
+  "task": "Bu işletmenin Instagram haftalık metriklerini analiz et. Metriklerin yolu: businesses/abc123/instagram_stats/week-2026-05. Önceki haftalarla karşılaştır ve Türkçe bir özet hazırla. Özeti aynı dokümanın summary alanına kaydet.",
+  "business_id": "abc123"
+}
+```
+
+### Notlar
+
+- **Summary MUTLAKA Türkçe** olmalı
+- Agent `merge=True` kullanmalı (metrics silinmesin)
+- İlk hafta için `week_over_week` null olabilir
+- Panelde `summary` null ise "henüz analiz edilmedi" gösterilmeli
 
 ## Error Reporting (Agent Hata Bildirimi)
 

@@ -90,37 +90,61 @@ async def delete_file(file_path: str) -> dict[str, Any]:
 
 @function_tool(
     name_override="get_document",
-    description_override="Get a document from Firestore by ID. Returns document data.",
+    description_override=(
+        "Get a document from Firestore. "
+        "Use document_path for full path like 'businesses/abc/instagram_stats/week-2026-05'. "
+        "Or use collection + document_id separately."
+    ),
+    strict_mode=False,
 )
 async def get_document(
-    document_id: str,
+    document_path: str | None = None,
+    document_id: str | None = None,
     collection: str = "documents",
 ) -> dict[str, Any]:
     """
     Get a document from Firestore.
 
     Args:
-        document_id: ID of the document to fetch.
+        document_path: Full document path (e.g., 'businesses/abc/instagram_stats/week-2026-05').
+                       If provided, collection and document_id are ignored.
+        document_id: ID of the document to fetch (used with collection).
         collection: Collection name (default: "documents").
 
     Returns:
         dict with document data or error.
     """
+    # Parse full path if provided
+    if document_path:
+        parts = document_path.split("/")
+        if len(parts) < 2 or len(parts) % 2 != 0:
+            return {"success": False, "error": f"Invalid document path: {document_path}. Must have even number of segments."}
+        document_id = parts[-1]
+        collection = "/".join(parts[:-1])
+
+    if not document_id:
+        return {"success": False, "error": "Either document_path or document_id must be provided"}
+
     doc_client = get_document_client(collection)
     doc = doc_client.get_document(document_id)
     if doc is None:
-        return {"success": False, "error": "Document not found", "documentId": document_id}
-    return {"success": True, "data": doc}
+        return {"success": False, "error": "Document not found", "document_path": f"{collection}/{document_id}"}
+    return {"success": True, "data": doc, "document_path": f"{collection}/{document_id}"}
 
 
 @function_tool(
     name_override="save_document",
-    description_override="Save or update a document in Firestore.",
+    description_override=(
+        "Save or update a document in Firestore. "
+        "Use document_path for full path like 'businesses/abc/instagram_stats/week-2026-05'. "
+        "CRITICAL: Use merge=True to preserve existing data (e.g., metrics when adding summary)."
+    ),
     strict_mode=False,
 )
 async def save_document(
-    document_id: str,
     data: dict[str, Any],
+    document_path: str | None = None,
+    document_id: str | None = None,
     collection: str = "documents",
     merge: bool = True,
 ) -> dict[str, Any]:
@@ -128,17 +152,30 @@ async def save_document(
     Save or update a document in Firestore.
 
     Args:
-        document_id: ID of the document.
         data: Document data to save.
+        document_path: Full document path (e.g., 'businesses/abc/instagram_stats/week-2026-05').
+                       If provided, collection and document_id are ignored.
+        document_id: ID of the document (used with collection).
         collection: Collection name (default: "documents").
-        merge: If True, merge with existing data; if False, overwrite.
+        merge: If True, merge with existing data; if False, overwrite completely.
 
     Returns:
-        dict with documentId.
+        dict with document_path.
     """
+    # Parse full path if provided
+    if document_path:
+        parts = document_path.split("/")
+        if len(parts) < 2 or len(parts) % 2 != 0:
+            return {"success": False, "error": f"Invalid document path: {document_path}. Must have even number of segments."}
+        document_id = parts[-1]
+        collection = "/".join(parts[:-1])
+
+    if not document_id:
+        return {"success": False, "error": "Either document_path or document_id must be provided"}
+
     doc_client = get_document_client(collection)
     result = doc_client.set_document(document_id, data, merge=merge)
-    return {"success": True, **result}
+    return {"success": True, "document_path": f"{collection}/{document_id}", **result}
 
 
 @function_tool(
@@ -613,7 +650,8 @@ async def report_error(
     description_override=(
         "Fetches a business profile from Firestore by business_id. "
         "Returns business info including name, colors, logo URL, website URL, profile data, "
-        "instagram_id for Instagram posting, and youtube_id for YouTube posting via Late API."
+        "instagram_id for Instagram posting, late_profile_id for Instagram analytics, "
+        "and youtube_id for YouTube posting via Late API."
     ),
 )
 async def fetch_business(business_id: str) -> dict[str, Any]:
@@ -624,7 +662,8 @@ async def fetch_business(business_id: str) -> dict[str, Any]:
         business_id: Firestore document ID in 'businesses' collection.
 
     Returns:
-        dict: Business data including name, colors, logo, website, profile, instagram_id, and youtube_id.
+        dict: Business data including name, colors, logo, website, profile, instagram_id,
+              late_profile_id (for analytics), and youtube_id.
     """
     doc_client = get_document_client("businesses")
     doc = doc_client.get_document(business_id)
@@ -639,7 +678,8 @@ async def fetch_business(business_id: str) -> dict[str, Any]:
         "logo": doc.get("logo"),  # Cloud Storage URL
         "website": doc.get("website"),  # Business website URL for SEO analysis
         "profile": doc.get("profile"),  # Dynamic map
-        "instagram_id": doc.get("instagram_id"),  # Late API account ID (acc_xxxxx)
+        "instagram_id": doc.get("instagram_id"),  # Late API account ID (acc_xxxxx) - for POSTING
+        "late_profile_id": doc.get("late_profile_id"),  # Late profile ID (raw ObjectId) - for ANALYTICS
         "youtube_id": doc.get("youtube_id"),  # Late API YouTube account ID (acc_xxxxx)
     }
 

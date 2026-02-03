@@ -11,7 +11,7 @@ from src.infra.late_client import get_late_client
 
 @function_tool
 async def get_instagram_insights(
-    instagram_id: str,
+    late_profile_id: str,
     date_from: str | None = None,
     date_to: str | None = None,
     limit: int = 20,
@@ -28,7 +28,7 @@ async def get_instagram_insights(
     NOTE: Analytics data is cached and refreshed at most once per hour by Late API.
 
     Args:
-        instagram_id: Late account ID (acc_xxxxx) from business profile.
+        late_profile_id: Late profile ID (raw ObjectId like "6977991f7e7ed569a4f15eca") from business.late_profile_id.
         date_from: Start date filter (YYYY-MM-DD format, optional).
         date_to: End date filter (YYYY-MM-DD format, optional).
         limit: Posts per page (default 20, max 100).
@@ -44,7 +44,8 @@ async def get_instagram_insights(
         - summary: aggregated statistics (totals, averages, top performers)
     """
     try:
-        late = get_late_client(instagram_id)
+        # Analytics uses late_profile_id (raw ObjectId), not instagram_id (acc_xxxxx)
+        late = get_late_client(late_profile_id, strip_prefix=False)
 
         # Validate sort_by parameter
         valid_sort_by = sort_by if sort_by in ("date", "engagement") else "date"
@@ -190,7 +191,7 @@ def _calculate_summary(media_items: list[dict[str, Any]]) -> dict[str, Any]:
 
 @function_tool
 async def get_post_analytics(
-    instagram_id: str,
+    late_profile_id: str,
     post_id: str,
 ) -> dict[str, Any]:
     """
@@ -200,7 +201,7 @@ async def get_post_analytics(
     The API accepts both Late Post ID and External Post ID - it auto-resolves.
 
     Args:
-        instagram_id: Late account ID (acc_xxxxx) from business profile.
+        late_profile_id: Late profile ID (raw ObjectId like "6977991f7e7ed569a4f15eca") from business.late_profile_id.
         post_id: The post ID (Late ID like "65f1c0a9..." or External ID).
 
     Returns:
@@ -215,7 +216,8 @@ async def get_post_analytics(
         - platform_analytics: Per-platform breakdown (for cross-posted content)
     """
     try:
-        late = get_late_client(instagram_id)
+        # Analytics uses late_profile_id (raw ObjectId), not instagram_id (acc_xxxxx)
+        late = get_late_client(late_profile_id, strip_prefix=False)
         result = await late.get_analytics(post_id=post_id)
 
         if not result.get("success"):
