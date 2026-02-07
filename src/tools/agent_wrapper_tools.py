@@ -181,11 +181,14 @@ def create_analysis_agent_wrapper_tool(
     @function_tool(
         name_override="analysis_agent_tool",
         description_override=(
-            "Business analysis agent for SWOT analysis and strategic reports. REQUIRED PARAMETERS: "
+            "Business analysis and research agent. Handles SWOT analysis, SEO analysis, "
+            "AND general research/custom reports. REQUIRED PARAMETERS: "
             "- business_id: The exact business ID from context (e.g., 'abc123') - REQUIRED! "
-            "- prompt: What analysis you want (e.g., 'SWOT analizi yap', 'stratejik analiz'). "
-            "Use for: SWOT analysis, strategic analysis, business reports. "
-            "Keywords: analiz, swot, rapor, analysis, report, strateji, strategy, güçlü yönler, zayıf yönler"
+            "- prompt: What you want (analysis, research, report). "
+            "IMPORTANT: For general research or custom reports (NOT SWOT/SEO), "
+            "explicitly say 'özel rapor' or 'custom report' in the prompt so the agent uses save_custom_report. "
+            "Use for: SWOT analysis, SEO analysis, web research, trend reports, technology research, custom reports. "
+            "Keywords: analiz, swot, seo, rapor, araştır, araştırma, research, report, trend, haber, inceleme"
         ),
         strict_mode=False,
     )

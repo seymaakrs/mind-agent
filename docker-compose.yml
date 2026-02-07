@@ -15,6 +15,8 @@ services:
       FIREBASE_STORAGE_BUCKET: ${FIREBASE_STORAGE_BUCKET}
       # Late API (Instagram posting)
       LATE_API_KEY: ${LATE_API_KEY}
+      # fal.ai (MMAudio - video audio generation)
+      FAL_KEY: ${FAL_KEY}
       # Dry-run mode
       DRY_RUN: ${DRY_RUN:-false}
     ports:

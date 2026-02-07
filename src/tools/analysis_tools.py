@@ -394,6 +394,12 @@ async def save_seo_report(
     overall_score: int,
     competitor_urls: list[str] | None = None,
     data_sources: dict[str, bool] | None = None,
+    score_breakdown: dict[str, Any] | None = None,
+    technical_seo: dict[str, Any] | None = None,
+    mobile_analysis: dict[str, Any] | None = None,
+    content_quality: dict[str, Any] | None = None,
+    serp_positions: list[dict[str, Any]] | None = None,
+    serp_visibility_score: int | None = None,
 ) -> dict[str, Any]:
     """
     Save a comprehensive SEO analysis report for a business.
@@ -418,6 +424,12 @@ async def save_seo_report(
         competitor_urls: List of competitor URLs that were analyzed.
         data_sources: Which data sources were used.
             Example: {"business_website": true, "competitors": true, "web_search": true}
+        score_breakdown: v2 scoring breakdown with 6-category detail (optional).
+        technical_seo: Technical SEO check results - robots.txt, sitemap, SSL, TTFB (optional).
+        mobile_analysis: Mobile-friendliness check results (optional).
+        content_quality: Content quality analysis - depth, readability, keyword placement (optional).
+        serp_positions: Per-keyword SERP position data from check_serp_position (optional).
+        serp_visibility_score: Overall SERP visibility score 0-100 (optional).
 
     Returns:
         dict with report_id and success status.
@@ -459,7 +471,7 @@ async def save_seo_report(
 
         report_id = _generate_report_id("seo")
 
-        report_data = {
+        report_data: dict[str, Any] = {
             "id": report_id,
             "type": "seo",
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -478,6 +490,20 @@ async def save_seo_report(
                 "web_search": True,
             },
         }
+
+        # v2 optional fields — only include when provided
+        if score_breakdown is not None:
+            report_data["score_breakdown"] = score_breakdown
+        if technical_seo is not None:
+            report_data["technical_seo"] = technical_seo
+        if mobile_analysis is not None:
+            report_data["mobile_analysis"] = mobile_analysis
+        if content_quality is not None:
+            report_data["content_quality"] = content_quality
+        if serp_positions is not None:
+            report_data["serp_positions"] = serp_positions
+        if serp_visibility_score is not None:
+            report_data["serp_visibility_score"] = serp_visibility_score
 
         doc_client.set_document(report_id, report_data)
 
@@ -667,6 +693,8 @@ async def save_seo_summary(
     competitor_avg_score: int,
     business_seo_score: int | None = None,
     last_report_id: str | None = None,
+    serp_visibility_score: int | None = None,
+    score_breakdown: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Save SEO summary to both seo/summary document and agent memory.
@@ -684,6 +712,8 @@ async def save_seo_summary(
         competitor_avg_score: Average SEO score of competitors.
         business_seo_score: Business website's own SEO score (optional, defaults to overall_score).
         last_report_id: ID of the latest SEO report (in reports/ collection).
+        serp_visibility_score: Real search visibility score 0-100 from check_serp_position (optional).
+        score_breakdown: v2 scoring breakdown summary with category scores (optional).
 
     Returns:
         dict with success status.
@@ -694,7 +724,7 @@ async def save_seo_summary(
         # 1. Save to seo/summary document (OVERWRITE, not merge)
         seo_doc_client = get_document_client(f"businesses/{business_id}/seo")
 
-        summary_data = {
+        summary_data: dict[str, Any] = {
             "overall_score": overall_score,
             "business_seo_score": business_seo_score or overall_score,
             "top_keywords": top_keywords[:10],  # Limit to 10
@@ -706,6 +736,12 @@ async def save_seo_summary(
             "updated_at": timestamp,
         }
 
+        # v2 optional fields
+        if serp_visibility_score is not None:
+            summary_data["serp_visibility_score"] = serp_visibility_score
+        if score_breakdown is not None:
+            summary_data["score_breakdown"] = score_breakdown
+
         # Overwrite the summary document (not merge - always fresh)
         seo_doc_client.set_document("summary", summary_data, merge=False)
 
@@ -716,13 +752,17 @@ async def save_seo_summary(
         existing_memory = memory_client.get_document("marketing") or {}
 
         # Add/update SEO section
-        seo_memory = {
+        seo_memory: dict[str, Any] = {
             "seo_score": overall_score,
             "seo_vs_competitors": f"{overall_score} vs rakip ort. {competitor_avg_score}",
             "top_seo_keywords": ", ".join(top_keywords[:5]),
             "seo_issues": "; ".join(main_issues[:3]) if main_issues else "Yok",
             "last_seo_analysis": timestamp[:10],  # Just date
         }
+
+        # Add SERP visibility to agent memory if available
+        if serp_visibility_score is not None:
+            seo_memory["serp_visibility"] = serp_visibility_score
 
         # Merge with existing memory (keep other memory fields)
         updated_memory = {**existing_memory, **seo_memory}
@@ -737,13 +777,14 @@ async def save_seo_summary(
 
 
 def get_analysis_tools() -> list:
-    """Return list of analysis tools for the agent (SWOT + SEO)."""
+    """Return list of analysis tools for the agent (SWOT + SEO + Custom)."""
     return [
         save_swot_report,
         save_seo_report,
         save_seo_keywords,
         save_seo_summary,
         get_seo_keywords,
+        save_custom_report,
         get_reports,
         get_report,
     ]

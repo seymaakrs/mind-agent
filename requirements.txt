@@ -25,3 +25,6 @@ ddgs>=7.0
 
 # Token counting (for dry-run mode cost analysis)
 tiktoken>=0.5
+
+# fal.ai (MMAudio - video audio generation)
+fal-client>=0.13

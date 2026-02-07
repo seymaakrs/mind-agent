@@ -1,0 +1,31 @@
+- [x] Define the audit scope.
+- [x] SAST Recon on `src\agents\marketing_agent.py`
+- [x] SAST Recon on `src\tools\orchestrator_tools.py`
+  - [x] Investigate `get_document` and `save_document` for IDOR/Broken Access Control (unrestricted collection access).
+- [x] SAST Recon on `src\infra\firebase_client.py`
+- [x] SAST Recon on `src\infra\late_client.py`
+- [x] SAST Recon on `src\agents\orchestrator_agent.py`
+- [x] SAST Recon on `src\tools\agent_wrapper_tools.py`
+- [x] SAST Recon on `src\tools\instagram_tools.py`
+- [x] SAST Recon on `src\agents\analysis_agent.py`
+- [x] SAST Recon on `src\agents\image_agent.py`
+- [x] SAST Recon on `src\agents\registry.py`
+- [x] SAST Recon on `src\agents\video_agent.py`
+- [x] SAST Recon on `src\app\api.py`
+- [x] SAST Recon on `src\app\config.py`
+- [x] SAST Recon on `src\app\logging_hooks.py`
+- [x] SAST Recon on `src\app\main.py`
+- [x] SAST Recon on `src\app\orchestrator_runner.py`
+- [x] SAST Recon on `src\infra\task_logger.py`
+- [x] SAST Recon on `src\models\base.py`
+- [x] SAST Recon on `src\models\prompts.py`
+- [x] SAST Recon on `src\models\tool_io.py`
+- [x] SAST Recon on `src\tools\analysis_tools.py`
+- [x] SAST Recon on `src\tools\image_tools.py`
+  - [x] Investigate `generate_image` in `src/tools/image_tools.py` for potential Path Traversal or SSRF via `source_file_path`.
+- [x] SAST Recon on `src\tools\marketing_tools.py`
+- [x] SAST Recon on `src\tools\video_tools.py`
+  - [x] Investigate `generate_video` in `src/tools/video_tools.py` for potential Path Traversal or SSRF via `source_file_path`.
+- [x] SAST Recon on `src\tools\web_tools.py`
+  - [x] Investigate `scrape_for_seo` and `scrape_competitors` for SSRF.
+- [ ] Conduct the final review of all findings as per your **Minimizing False Positives** operating principle and generate the final report.

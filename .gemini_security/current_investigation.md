@@ -1,0 +1,4 @@
+- [ ] Investigate `get_document` and `save_document` for IDOR/Broken Access Control (unrestricted collection access).
+- [ ] Investigate `scrape_for_seo` and `scrape_competitors` in `src/tools/web_tools.py` for SSRF.
+- [ ] Investigate `generate_image` in `src/tools/image_tools.py` for Path Traversal/SSRF via `source_file_path`.
+- [ ] Investigate `generate_video` in `src/tools/video_tools.py` for Path Traversal/SSRF via `source_file_path`.

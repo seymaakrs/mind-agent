@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from src.infra.firebase_client import get_document_client
+
+logger = logging.getLogger(__name__)
 
 
 class TaskLogger:
@@ -35,6 +38,8 @@ class TaskLogger:
         self._started_at: datetime | None = None
         self._task: str | None = None  # Store task text for tasks collection
         self._doc_client = get_document_client("businesses")
+        self._active_tasks_client = get_document_client("active_tasks")
+        self._active_task_id: str | None = None
 
     def start(self, task: str) -> str | None:
         """
@@ -70,6 +75,28 @@ class TaskLogger:
         )
         self.log_id = result["documentId"]
 
+        # Create active_tasks entry for production monitoring
+        try:
+            active_task_data = {
+                "business_id": self.business_id,
+                "task": task[:500] if len(task) > 500 else task,
+                "task_id": self.task_id,
+                "log_id": self.log_id,
+                "status": "running",
+                "started_at": self._started_at.isoformat(),
+                "completed_at": None,
+                "duration_ms": None,
+                "error": None,
+                "current_step": None,
+                "last_activity_at": None,
+                "expires_at": None,
+            }
+            at_result = self._active_tasks_client.add_document(active_task_data)
+            self._active_task_id = at_result["documentId"]
+            logger.info(f"[active_tasks] Created: {self._active_task_id}")
+        except Exception as e:
+            logger.error(f"[active_tasks] Failed to create: {e}", exc_info=True)
+
         # Update tasks subcollection if task_id provided
         if self.task_id:
             self._doc_client.update_subcollection_doc(
@@ -85,6 +112,27 @@ class TaskLogger:
             )
 
         return self.log_id
+
+    def update_step(self, tool_name: str) -> None:
+        """
+        Aktif task'in current_step alanini gunceller (fire-and-forget).
+
+        Bu method logging_hooks'tan asyncio.run_in_executor ile
+        cagirilir, boylece agent'i bloklamaz.
+        """
+        if not self._active_task_id:
+            return
+        try:
+            self._active_tasks_client.set_document(
+                self._active_task_id,
+                {
+                    "current_step": tool_name,
+                    "last_activity_at": datetime.now(timezone.utc).isoformat(),
+                },
+                merge=True,
+            )
+        except Exception as e:
+            logger.warning(f"[active_tasks] Failed to update step: {e}")
 
     def log_action(
         self,
@@ -167,6 +215,31 @@ class TaskLogger:
             data=update_data,
             merge=True,
         )
+
+        # Update active_tasks entry
+        if self._active_task_id:
+            try:
+                duration_ms = None
+                if self._started_at:
+                    duration_ms = int((completed_at - self._started_at).total_seconds() * 1000)
+
+                # expires_at: datetime object (Firestore TTL icin Timestamp type olmali)
+                expires_at = completed_at + timedelta(hours=24)
+
+                self._active_tasks_client.set_document(
+                    self._active_task_id,
+                    {
+                        "status": "success" if not error else "failed",
+                        "completed_at": completed_at.isoformat(),
+                        "duration_ms": duration_ms,
+                        "error": error,
+                        "current_step": None,
+                        "expires_at": expires_at,
+                    },
+                    merge=True,
+                )
+            except Exception as e:
+                logger.error(f"[active_tasks] Failed to complete: {e}", exc_info=True)
 
         # Update tasks subcollection if task_id provided
         if self.task_id:

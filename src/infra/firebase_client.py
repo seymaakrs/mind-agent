@@ -452,7 +452,7 @@ def get_storage_client() -> FirebaseStorageClient:
     return FirebaseStorageClient()
 
 
-@lru_cache(maxsize=1)
+@lru_cache(maxsize=8)
 def get_document_client(collection_name: str = "documents") -> FirestoreDocumentClient:
     """FirestoreDocumentClient instance dondurur (cached)."""
     return FirestoreDocumentClient(collection_name=collection_name)

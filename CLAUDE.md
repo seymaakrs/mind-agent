@@ -49,7 +49,7 @@ src/
 ├── tools/
 │   ├── orchestrator_tools.py  - Firebase + Instagram tools
 │   ├── image_tools.py         - generate_image
-│   ├── video_tools.py         - generate_video
+│   ├── video_tools.py         - generate_video, add_audio_to_video
 │   ├── instagram_tools.py     - get_instagram_insights, get_post_analytics
 │   ├── marketing_tools.py     - calendar, memory, posts
 │   ├── web_tools.py           - web_search, scrape_website, scrape_for_seo
@@ -73,6 +73,7 @@ GCP_LOCATION=us-central1
 FIREBASE_CREDENTIALS_FILE=path/to/serviceAccount.json
 FIREBASE_STORAGE_BUCKET=bucket.appspot.com
 LATE_API_KEY=...              # Late API key (Instagram posting)
+FAL_KEY=...                   # fal.ai API key (MMAudio ses ekleme)
 DRY_RUN=false                 # true: API cagirmadan prompt logla
 ```
 
@@ -147,6 +148,7 @@ settings = get_model_settings()
 ### Image/Video Tools
 - `generate_image(prompt_data, file_name, business_id, aspect_ratio)`
 - `generate_video(prompt_data, file_name, business_id)`
+- `add_audio_to_video(video_url, prompt, business_id, file_name, ...)` - fal.ai MMAudio V2
 
 ### Marketing Tools
 - `create_weekly_plan`, `get_plans`, `get_todays_posts` - Content calendar
@@ -160,20 +162,30 @@ settings = get_model_settings()
 - `web_search(query, num_results, search_type)` - DuckDuckGo ile arama
   - search_type: "text" (default) veya "news" (son haberler)
 - `scrape_website(url)` - Website analizi (genel kullanim)
-- `scrape_for_seo(url, include_subpages, max_subpages)` - Detayli SEO analizi
+- `scrape_for_seo(url, include_subpages, max_subpages)` - Detayli SEO analizi (v2)
   - Meta tags, headings (H1-H6), images (alt text), links, schema markup
-  - SEO skoru hesaplama (0-100)
+  - **v2:** Technical SEO (robots.txt, sitemap, SSL, redirect, TTFB, security headers)
+  - **v2:** Mobile-friendliness (viewport, responsive, media queries, touch icon)
+  - **v2:** Content quality (readability, keyword placement, stuffing detection)
+  - **v2:** 6-kategorili SEO skoru (0-100, daha gercekci)
   - Alt sayfa analizi destegi
-- `scrape_competitors(urls, max_concurrent)` - **YENİ** Toplu rakip scraping
+- `scrape_competitors(urls, max_concurrent)` - Toplu rakip scraping
   - Birden fazla URL'i tek seferde paralel scrape eder
   - common_keywords, avg_seo_score, schema_types_used dondurur
+  - **v2:** mobile_viewport, content_depth (thin/normal/comprehensive)
   - max 15 URL, max 10 concurrent
+- `check_serp_position(domain, keywords, num_results)` - **YENİ** Gercek arama gorununurlugu
+  - DuckDuckGo'da her keyword icin arar, domain'in sonuclarda olup olmadigini kontrol eder
+  - visibility_score (0-100), pozisyon (1-10 veya bulunamadi)
+  - Max 10 keyword, aramalar arasi 1sn bekleme
 
 ### Analysis Tools
 - `save_swot_report(...)` - SWOT raporu kaydet (reports/ altina)
 - `save_seo_report(...)` - SEO analiz raporu kaydet (reports/ altina, versiyonlu)
+  - **v2:** score_breakdown, technical_seo, mobile_analysis, content_quality, serp_positions, serp_visibility_score
 - `save_seo_keywords(...)` - SEO anahtar kelimeleri kaydet (seo/keywords, tek doc, overwrite)
 - `save_seo_summary(...)` - SEO ozeti + agent memory guncelle (seo/summary, overwrite)
+  - **v2:** serp_visibility_score, score_breakdown
 - `get_seo_keywords(...)` - Kayitli anahtar kelimeleri getir
 - `get_reports(business_id)` - Raporlari listele
 - `save_instagram_report(...)` - Instagram metrik raporu
@@ -181,6 +193,14 @@ settings = get_model_settings()
 ## Firestore Yapisi (Ozet)
 
 ```
+active_tasks/                - Aktif task monitoring (root level, TTL 24h)
+├── {auto_id}/
+│   ├── business_id, task, task_id, log_id
+│   ├── status (running/success/failed)
+│   ├── started_at, completed_at, duration_ms
+│   ├── current_step, last_activity_at  (fire-and-forget, her tool call'da guncellenir)
+│   ├── error, expires_at (Firestore TTL - completed_at + 24h)
+
 errors/                      - Agent hata bildirimleri (root level)
 ├── {error_id}/
 │   ├── business_id, agent, task, error_message
@@ -246,26 +266,26 @@ start-dev.bat  # Docker
 
 ## Docker Deployment (Cloud Run)
 
-**Guncel Versiyon:** `v1.3.3`
+**Guncel Versiyon:** `v1.7.1`
 
 **GCP Project ID:** `instagram-post-bot-471518`
 
 **Image URL (Cloud Run icin):**
 ```
-gcr.io/instagram-post-bot-471518/agents-sdk-api:v1.3.3
+gcr.io/instagram-post-bot-471518/agents-sdk-api:v1.7.2
 ```
 
 ### GCR'ye Push (Kullanici "gcr ye pushla" dediginde)
 
 ```bash
 # 1. Build (proje root'unda)
-docker build -t agents-sdk-api:v1.3.1 .
+docker build -t agents-sdk-api:v1.7.2 .
 
 # 2. Tag (GCR icin)
-docker tag agents-sdk-api:v1.3.1 gcr.io/instagram-post-bot-471518/agents-sdk-api:v1.3.3
+docker tag agents-sdk-api:v1.7.2 gcr.io/instagram-post-bot-471518/agents-sdk-api:v1.7.2
 
 # 3. Push
-docker push gcr.io/instagram-post-bot-471518/agents-sdk-api:v1.3.3
+docker push gcr.io/instagram-post-bot-471518/agents-sdk-api:v1.7.2
 ```
 
 ### Versiyon Yukseltme
@@ -290,6 +310,39 @@ Yeni versiyon cikarirken:
    - `imageGenerationModel`: gemini-3-pro-image-preview → gemini-2.0-flash-image-generation
    - Agent modelleri: gpt-5/gpt-4.1 → gpt-4o (maliyet optimizasyonu)
 2. **Video SDK Gecisi (ASKIDA)** - Veo 3 icin google-genai SDK'ya gecis dusunuluyor
+
+## Video Audio Generation (fal.ai MMAudio V2)
+
+Video'lara AI ile ses/muzik ekleme. fal-client kutuphanesi kullanilarak.
+
+**API:** `fal-ai/mmaudio-v2` (fal.ai)
+**Auth:** `FAL_KEY` env var (fal-client otomatik okur, config'den direkt okunur)
+**Kutuphane:** `fal-client>=0.13`
+
+**Tool:**
+```python
+add_audio_to_video(
+    video_url="https://...",      # Public video URL (ZORUNLU)
+    prompt="gentle piano music",   # Ses aciklamasi (ZORUNLU)
+    business_id="abc123",          # Firebase kaydi icin
+    file_name="video_audio.mp4",   # Firebase dosya adi
+    negative_prompt="no speech",   # Istenmeyen sesler
+    num_steps=25,                  # Kalite (4-50, default 25)
+    duration=8,                    # Ses suresi saniye (1-30, default 8)
+    cfg_strength=4.5               # Prompt sadakati (0-20, default 4.5)
+)
+```
+
+**Tipik Akis:**
+1. `generate_video` → video olustur, public_url al
+2. `add_audio_to_video` → public_url ile ses ekle, Firebase'e kaydet
+3. `post_on_instagram` veya `post_on_youtube` → sesli videoyu paylas
+
+**Notlar:**
+- `duration` video suresi ile eslestirilmeli
+- `cfg_strength` yuksek = prompt'a sadik, dusuk = video icerigine sadik
+- fal.ai CDN URL'leri gecici → business_id + file_name ile Firebase'e kaydet!
+- DRY_RUN modunda fal.ai API cagirilmaz
 
 ## Late API (Instagram Posting)
 
@@ -479,7 +532,7 @@ result = await post_on_youtube(
 # Firestore'a otomatik kaydedildi: businesses/{business_id}/youtube_videos/{video_id}
 ```
 
-## SEO Analysis (Anahtar Kelime ve Rakip Analizi)
+## SEO Analysis v2 (Anahtar Kelime, Rakip ve SERP Analizi)
 
 Analysis agent DIREKT web tool'larina sahip. Baska agent cagirmaz.
 
@@ -487,14 +540,29 @@ Analysis agent DIREKT web tool'larina sahip. Baska agent cagirmaz.
 - `seo/` collection: Guncel SEO durumu (tek versiyon, her analizde overwrite)
 - `reports/seo-xxx`: SEO raporlari (versiyonlu, tarihce icin)
 
-**SEO Workflow (7 adim):**
+**SEO Workflow (8 adim):**
 1. `fetch_business` → website URL al
-2. `scrape_for_seo` → isletme sitesini analiz et
+2. `scrape_for_seo` → isletme sitesini analiz et (v2: technical SEO, mobile, content quality, 6-kategorili skor)
 3. `web_search` → rakipleri bul
 4. `scrape_competitors` → TUM rakipleri tek seferde scrape et
-5. `save_seo_keywords` → anahtar kelimeleri kaydet (seo/keywords overwrite)
-6. `save_seo_report` → raporu kaydet (reports/ altina, versiyonlu)
-7. `save_seo_summary` → ozet guncelle (seo/summary overwrite) + agent memory
+5. `check_serp_position` → **YENİ** top 5-7 keyword ile gercek arama gorununurlugunu dogrula
+6. `save_seo_keywords` → anahtar kelimeleri kaydet (seo/keywords overwrite)
+7. `save_seo_report` → raporu kaydet (reports/ altina, versiyonlu, v2 alanlari dahil)
+8. `save_seo_summary` → ozet guncelle (seo/summary overwrite) + agent memory + SERP visibility
+
+**v2 SEO Skor Algoritmasi (6 Kategori, 100 Puan):**
+| Kategori | Maks Puan | Kontrol Edilen |
+|----------|-----------|----------------|
+| Teknik SEO | 25 | robots.txt, sitemap, SSL+guvenlik, redirect, TTFB, canonical |
+| On-Page SEO | 25 | title, meta desc, H1, heading hierarchy, image alt, URL |
+| Icerik Kalitesi | 20 | kelime sayisi, okunabilirlik, keyword title'da, keyword H1'de, stuffing yok |
+| Mobil & Performans | 15 | viewport, responsive, touch icon, mobil TTFB |
+| Schema & Yapisal Veri | 10 | JSON-LD, schema tipleri, OG tags |
+| Otorite Sinyalleri | 5 | dis linkler, ic linkler, sosyal linkler |
+
+**Cezalar:** Title yok (-15), H1 yok (-10), HTTPS degil (-10), Birden fazla H1 (-5), Keyword stuffing (-5), Sitemap yok (-3), SSL 30 gun icinde bitiyor (-3), 3+ redirect (-2)
+
+**ONEMLI:** v2 skorlari v1'den DAHA DUSUK olacak. Tipik kucuk isletme sitesi 50-65 arasi skor alir. 75+ sadece iyi optimize edilmis siteler icin.
 
 **Keyword Kategorileri:**
 | Kategori | Aciklama |
@@ -516,20 +584,29 @@ Analysis agent DIREKT web tool'larina sahip. Baska agent cagirmaz.
 **Path:** `businesses/{business_id}/seo/summary`
 ```json
 {
-  "overall_score": 75,
-  "business_seo_score": 75,
+  "overall_score": 55,
+  "business_seo_score": 55,
   "top_keywords": ["dijital ajans", "web tasarim", "istanbul"],
-  "main_issues": ["Missing H1", "No meta description"],
+  "main_issues": ["No sitemap.xml", "SERP visibility 0%", "Missing H1"],
   "competitor_count": 10,
-  "competitor_avg_score": 68,
-  "last_report_id": "seo-20260131-abc123",
-  "last_analysis_date": "2026-01-31T10:30:00Z",
-  "updated_at": "2026-01-31T10:30:00Z"
+  "competitor_avg_score": 48,
+  "last_report_id": "seo-20260205-abc123",
+  "last_analysis_date": "2026-02-05T10:30:00Z",
+  "updated_at": "2026-02-05T10:30:00Z",
+  "serp_visibility_score": 25,
+  "score_breakdown": {
+    "technical_seo": {"score": 18, "max": 25},
+    "on_page_seo": {"score": 15, "max": 25},
+    "content_quality": {"score": 10, "max": 20},
+    "mobile_performance": {"score": 8, "max": 15},
+    "schema_structured_data": {"score": 2, "max": 10},
+    "authority_signals": {"score": 2, "max": 5}
+  }
 }
 ```
 | Alan | Tip | Aciklama |
 |------|-----|----------|
-| overall_score | number | Genel SEO skoru (0-100) |
+| overall_score | number | Genel SEO skoru (0-100, v2) |
 | business_seo_score | number | Isletme sitesinin SEO skoru |
 | top_keywords | string[] | En onemli 10 anahtar kelime |
 | main_issues | string[] | Duzeltilmesi gereken sorunlar (max 5) |
@@ -538,6 +615,8 @@ Analysis agent DIREKT web tool'larina sahip. Baska agent cagirmaz.
 | last_report_id | string | Son raporun ID'si (reports/ referansi) |
 | last_analysis_date | string | Son analiz tarihi (ISO) |
 | updated_at | string | Guncelleme tarihi (ISO) |
+| serp_visibility_score | number\|null | **v2** Gercek arama gorununurlugu (0-100) |
+| score_breakdown | object\|null | **v2** 6-kategorili skor detayi |
 
 ---
 
@@ -587,67 +666,56 @@ Analysis agent DIREKT web tool'larina sahip. Baska agent cagirmaz.
 **Path:** `businesses/{business_id}/reports/seo-{date}-{hex}`
 ```json
 {
-  "id": "seo-20260131-abc123",
+  "id": "seo-20260205-abc123",
   "type": "seo",
-  "created_at": "2026-01-31T10:30:00Z",
+  "created_at": "2026-02-05T10:30:00Z",
   "created_by": "agent",
-  "overall_score": 72,
-  "summary": "Genel SEO durumu iyi. H1 eksikligi ve meta description sorunlari var...",
+  "overall_score": 55,
+  "summary": "SEO skoru 55/100. Teknik altyapi orta (robots.txt yok, sitemap eksik). SERP gorununurlugu dusuk...",
   "business_website_analysis": {
     "url": "https://example.com",
-    "meta_tags": {
-      "title": "...",
-      "title_length": 55,
-      "description": "...",
-      "description_length": 150
-    },
-    "headings": {
-      "h1": ["..."],
-      "h1_count": 1,
-      "has_single_h1": true
-    },
-    "images": {
-      "total_images": 15,
-      "images_with_alt": 12,
-      "images_without_alt": 3
-    },
-    "seo_score": 75
+    "meta_tags": { "title": "...", "title_length": 55, "description": "...", "description_length": 150 },
+    "headings": { "h1": ["..."], "h1_count": 1, "has_single_h1": true },
+    "images": { "total_images": 15, "images_with_alt": 12, "images_without_alt": 3 },
+    "seo_score": 55
   },
   "competitors": [
-    {
-      "domain": "rakip1.com",
-      "seo_score": 80,
-      "title": "...",
-      "description": "..."
-    }
+    { "domain": "rakip1.com", "seo_score": 62, "title": "...", "description": "...", "mobile_viewport": true, "content_depth": "comprehensive" }
   ],
   "competitor_urls": ["https://rakip1.com", "https://rakip2.com"],
   "keyword_recommendations": [
-    {
-      "keyword": "dijital ajans",
-      "category": "primary",
-      "search_intent": "transactional",
-      "priority": "high",
-      "competitor_usage": 8,
-      "notes": "..."
-    }
+    { "keyword": "dijital ajans", "category": "primary", "search_intent": "transactional", "priority": "high", "competitor_usage": 8, "notes": "..." }
   ],
   "technical_issues": [
-    {
-      "type": "warning",
-      "issue": "Multiple H1 tags",
-      "recommendation": "Use single H1 per page"
+    { "type": "warning", "issue": "No sitemap.xml", "recommendation": "Create sitemap.xml with all page URLs" },
+    { "type": "error", "issue": "SERP visibility 0%", "recommendation": "Submit sitemap to Google Search Console" }
+  ],
+  "content_recommendations": ["Ana sayfa metnini 800 kelimeye cikarin", "Her hizmet icin ayri sayfa olusturun"],
+  "data_sources": { "business_website": true, "competitors": true, "web_search": true },
+  "score_breakdown": {
+    "total_score": 55, "raw_score": 58, "penalty_total": -3,
+    "breakdown": {
+      "technical_seo": {"score": 18, "max": 25},
+      "on_page_seo": {"score": 15, "max": 25},
+      "content_quality": {"score": 10, "max": 20},
+      "mobile_performance": {"score": 8, "max": 15},
+      "schema_structured_data": {"score": 5, "max": 10},
+      "authority_signals": {"score": 2, "max": 5}
     }
+  },
+  "technical_seo": {
+    "robots_txt": {"has_robots_txt": false, "allows_crawling": true},
+    "sitemap": {"has_sitemap": false},
+    "ssl": {"ssl_valid": true, "cert_expiry_days": 180},
+    "ttfb_ms": 850, "redirect_count": 1
+  },
+  "mobile_analysis": {"has_viewport": true, "has_responsive_meta": true, "has_media_queries": true, "score": 11},
+  "content_quality": {"word_count": 520, "content_depth": "normal", "readability_score": 8.2, "keyword_stuffing": false},
+  "serp_positions": [
+    {"keyword": "dijital ajans istanbul", "position": null, "found": false},
+    {"keyword": "web tasarim", "position": 7, "found": true}
   ],
-  "content_recommendations": [
-    "Ana sayfa metnini 800 kelimeye cikarin",
-    "Her hizmet icin ayri sayfa olusturun"
-  ],
-  "data_sources": {
-    "business_website": true,
-    "competitors": true,
-    "web_search": true
-  }
+  "serp_visibility_score": 25
 }
 ```
 

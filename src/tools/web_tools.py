@@ -4,12 +4,21 @@ Web tools for web search and website scraping.
 Tools:
 - web_search: Search the web using DuckDuckGo
 - scrape_website: Scrape a website for business analysis
+- scrape_for_seo: Detailed SEO analysis of a single website
+- scrape_competitors: Batch scraping of multiple competitor websites
+- check_serp_position: Check real search engine visibility for keywords
 """
 from __future__ import annotations
 
+import asyncio
 import re
+import ssl
+import socket
+import time
+from datetime import datetime, timezone
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
+from urllib.robotparser import RobotFileParser
 
 import httpx
 from bs4 import BeautifulSoup
@@ -19,6 +28,768 @@ try:
     from ddgs import DDGS
 except ImportError:
     DDGS = None
+
+
+# ---------------------------------------------------------------------------
+# Phase 1: Enhanced page fetcher + Flesch-Kincaid readability
+# ---------------------------------------------------------------------------
+
+_DESKTOP_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
+_MOBILE_UA = (
+    "Mozilla/5.0 (Linux; Android 13; Pixel 7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+)
+
+
+async def _fetch_page_enhanced(url: str, *, mobile: bool = False) -> dict[str, Any]:
+    """Fetch a page capturing TTFB, redirect chain, and response headers.
+
+    Returns a dict with:
+      html, final_url, status_code, ttfb_ms, redirect_chain,
+      redirect_count, response_headers, success, error
+    """
+    ua = _MOBILE_UA if mobile else _DESKTOP_UA
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            t0 = time.monotonic()
+            response = await client.get(
+                url,
+                follow_redirects=True,
+                headers={
+                    "User-Agent": ua,
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+                },
+            )
+            ttfb_ms = round((time.monotonic() - t0) * 1000)
+
+            redirect_chain = [str(r.url) for r in response.history]
+
+            # Grab a few useful headers
+            headers_of_interest = {}
+            for h in (
+                "server", "x-powered-by", "content-encoding",
+                "cache-control", "strict-transport-security",
+                "x-frame-options", "x-content-type-options",
+                "content-security-policy", "referrer-policy",
+                "permissions-policy",
+            ):
+                val = response.headers.get(h)
+                if val:
+                    headers_of_interest[h] = val
+
+            return {
+                "html": response.text if response.status_code == 200 else None,
+                "final_url": str(response.url),
+                "status_code": response.status_code,
+                "ttfb_ms": ttfb_ms,
+                "redirect_chain": redirect_chain,
+                "redirect_count": len(redirect_chain),
+                "response_headers": headers_of_interest,
+                "success": response.status_code == 200,
+                "error": None if response.status_code == 200 else f"HTTP {response.status_code}",
+            }
+    except httpx.TimeoutException:
+        return {
+            "html": None, "final_url": url, "status_code": 0,
+            "ttfb_ms": 0, "redirect_chain": [], "redirect_count": 0,
+            "response_headers": {}, "success": False,
+            "error": "Request timeout",
+        }
+    except Exception as exc:
+        return {
+            "html": None, "final_url": url, "status_code": 0,
+            "ttfb_ms": 0, "redirect_chain": [], "redirect_count": 0,
+            "response_headers": {}, "success": False,
+            "error": str(exc),
+        }
+
+
+def _count_syllables(word: str) -> int:
+    """Approximate syllable count for English/Turkish text (heuristic)."""
+    word = word.lower().strip()
+    if not word:
+        return 0
+    vowels = set("aeıioöuüâîûAEIOU")
+    count = 0
+    prev_vowel = False
+    for ch in word:
+        is_vowel = ch in vowels
+        if is_vowel and not prev_vowel:
+            count += 1
+        prev_vowel = is_vowel
+    return max(count, 1)
+
+
+def _flesch_kincaid_score(text: str) -> float:
+    """Calculate Flesch-Kincaid readability grade level (pure Python).
+
+    Lower = easier to read.  Typical web content: 7-10.
+    """
+    sentences = re.split(r'[.!?]+', text)
+    sentences = [s.strip() for s in sentences if s.strip()]
+    if not sentences:
+        return 0.0
+
+    words = re.findall(r'\b\w+\b', text)
+    if not words:
+        return 0.0
+
+    total_syllables = sum(_count_syllables(w) for w in words)
+    num_words = len(words)
+    num_sentences = len(sentences)
+
+    # Flesch-Kincaid Grade Level formula
+    grade = 0.39 * (num_words / num_sentences) + 11.8 * (total_syllables / num_words) - 15.59
+    return round(max(0, grade), 1)
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: New SEO check functions
+# ---------------------------------------------------------------------------
+
+async def _check_robots_txt(url: str) -> dict[str, Any]:
+    """Check /robots.txt for crawl permissions and sitemaps."""
+    parsed = urlparse(url)
+    robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
+    result: dict[str, Any] = {
+        "has_robots_txt": False,
+        "allows_crawling": True,
+        "sitemap_urls": [],
+        "blocked_paths": [],
+        "issues": [],
+    }
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            resp = await client.get(robots_url, follow_redirects=True,
+                                    headers={"User-Agent": _DESKTOP_UA})
+        if resp.status_code != 200:
+            result["issues"].append("robots.txt not found")
+            return result
+
+        result["has_robots_txt"] = True
+        body = resp.text
+
+        rp = RobotFileParser()
+        rp.parse(body.splitlines())
+
+        if not rp.can_fetch("Googlebot", "/"):
+            result["allows_crawling"] = False
+            result["issues"].append("Googlebot is blocked from crawling /")
+
+        # Extract sitemap directives
+        for line in body.splitlines():
+            stripped = line.strip()
+            if stripped.lower().startswith("sitemap:"):
+                sitemap_url = stripped.split(":", 1)[1].strip()
+                result["sitemap_urls"].append(sitemap_url)
+            # Track disallow for Googlebot / *
+            if stripped.lower().startswith("disallow:"):
+                path = stripped.split(":", 1)[1].strip()
+                if path and path != "/":
+                    result["blocked_paths"].append(path)
+
+        if result["blocked_paths"]:
+            critical = [p for p in result["blocked_paths"] if p in ("/", "/blog", "/products", "/services")]
+            if critical:
+                result["issues"].append(f"Important paths blocked: {', '.join(critical)}")
+
+    except Exception:
+        result["issues"].append("Could not fetch robots.txt")
+    return result
+
+
+async def _check_sitemap(base_url: str, declared_sitemaps: list[str] | None = None) -> dict[str, Any]:
+    """Check sitemap.xml availability and basic stats."""
+    result: dict[str, Any] = {
+        "has_sitemap": False,
+        "url_count": 0,
+        "has_lastmod": False,
+        "is_index": False,
+        "issues": [],
+    }
+
+    # Try declared sitemaps first, then fall back to /sitemap.xml
+    urls_to_try = list(declared_sitemaps or [])
+    parsed = urlparse(base_url)
+    default_sitemap = f"{parsed.scheme}://{parsed.netloc}/sitemap.xml"
+    if default_sitemap not in urls_to_try:
+        urls_to_try.append(default_sitemap)
+
+    for sitemap_url in urls_to_try[:3]:  # Try at most 3
+        try:
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                resp = await client.get(sitemap_url, follow_redirects=True,
+                                        headers={"User-Agent": _DESKTOP_UA})
+            if resp.status_code != 200:
+                continue
+
+            body = resp.text
+            result["has_sitemap"] = True
+
+            # Check if sitemap index
+            if "<sitemapindex" in body.lower():
+                result["is_index"] = True
+                sitemap_count = body.lower().count("<sitemap>")
+                result["url_count"] = sitemap_count
+            else:
+                url_count = body.lower().count("<url>")
+                result["url_count"] = url_count if url_count > 0 else body.lower().count("<loc>")
+
+            result["has_lastmod"] = "<lastmod>" in body.lower()
+            break  # Found a working sitemap
+
+        except Exception:
+            continue
+
+    if not result["has_sitemap"]:
+        result["issues"].append("No sitemap.xml found")
+    elif result["url_count"] == 0:
+        result["issues"].append("Sitemap is empty")
+    elif not result["has_lastmod"]:
+        result["issues"].append("Sitemap lacks <lastmod> dates")
+
+    return result
+
+
+async def _check_ssl_security(url: str) -> dict[str, Any]:
+    """Check SSL certificate and security headers (via asyncio.to_thread)."""
+    result: dict[str, Any] = {
+        "ssl_valid": False,
+        "cert_expiry_days": None,
+        "tls_version": None,
+        "security_headers": {},
+        "issues": [],
+    }
+
+    parsed = urlparse(url)
+    hostname = parsed.netloc.split(":")[0]
+
+    def _ssl_check() -> dict[str, Any]:
+        inner: dict[str, Any] = {"ssl_valid": False, "cert_expiry_days": None, "tls_version": None}
+        try:
+            ctx = ssl.create_default_context()
+            with socket.create_connection((hostname, 443), timeout=5) as sock:
+                with ctx.wrap_socket(sock, server_hostname=hostname) as ssock:
+                    inner["tls_version"] = ssock.version()
+                    cert = ssock.getpeercert()
+                    if cert:
+                        inner["ssl_valid"] = True
+                        not_after = cert.get("notAfter", "")
+                        if not_after:
+                            # Format: 'Sep  9 00:00:00 2025 GMT'
+                            from email.utils import parsedate_to_datetime
+                            try:
+                                expiry = parsedate_to_datetime(not_after)
+                                days = (expiry - datetime.now(timezone.utc)).days
+                                inner["cert_expiry_days"] = days
+                            except Exception:
+                                pass
+        except Exception:
+            pass
+        return inner
+
+    try:
+        ssl_info = await asyncio.to_thread(_ssl_check)
+        result.update(ssl_info)
+    except Exception:
+        pass
+
+    if not result["ssl_valid"]:
+        result["issues"].append("SSL certificate is invalid or missing")
+    elif result["cert_expiry_days"] is not None and result["cert_expiry_days"] < 30:
+        result["issues"].append(f"SSL certificate expires in {result['cert_expiry_days']} days")
+
+    # Security headers are checked from _fetch_page_enhanced headers
+    # They'll be injected by the caller
+    return result
+
+
+def _check_mobile_friendliness(soup: BeautifulSoup, html: str) -> dict[str, Any]:
+    """Check mobile-friendliness signals from HTML."""
+    result: dict[str, Any] = {
+        "has_viewport": False,
+        "has_responsive_meta": False,
+        "has_media_queries": False,
+        "touch_icon": False,
+        "score": 0,
+        "issues": [],
+    }
+
+    # Viewport meta tag
+    viewport = soup.find("meta", attrs={"name": "viewport"})
+    if viewport:
+        content = (viewport.get("content") or "").lower()
+        result["has_viewport"] = True
+        if "width=device-width" in content:
+            result["has_responsive_meta"] = True
+
+    # Media queries in inline styles
+    style_tags = soup.find_all("style")
+    all_styles = " ".join(tag.string or "" for tag in style_tags)
+    if "@media" in all_styles:
+        result["has_media_queries"] = True
+
+    # Also check in HTML (some templates inline media queries)
+    if "@media" in html and not result["has_media_queries"]:
+        result["has_media_queries"] = True
+
+    # Apple touch icon
+    touch_icon = soup.find("link", attrs={"rel": lambda v: v and "apple-touch-icon" in str(v).lower()})
+    if touch_icon:
+        result["touch_icon"] = True
+
+    # Calculate score (0-15 matching the mobile category max)
+    score = 0
+    if result["has_viewport"]:
+        score += 5
+    if result["has_responsive_meta"]:
+        score += 3
+    if result["has_media_queries"]:
+        score += 3
+    if result["touch_icon"]:
+        score += 3
+    result["score"] = score
+
+    # Issues
+    if not result["has_viewport"]:
+        result["issues"].append("Missing viewport meta tag")
+    elif not result["has_responsive_meta"]:
+        result["issues"].append("Viewport missing width=device-width")
+    if not result["has_media_queries"]:
+        result["issues"].append("No responsive CSS media queries detected")
+
+    return result
+
+
+def _analyze_content_quality(
+    text: str,
+    title: str | None,
+    h1s: list[str],
+    keyword_density: dict[str, float],
+) -> dict[str, Any]:
+    """Analyze content quality: depth, readability, keyword placement."""
+    result: dict[str, Any] = {
+        "word_count": 0,
+        "content_depth": "thin",
+        "readability_score": 0.0,
+        "keyword_in_title": False,
+        "keyword_in_h1": False,
+        "keyword_in_first_paragraph": False,
+        "keyword_stuffing": False,
+        "stuffed_keywords": [],
+        "issues": [],
+    }
+
+    words = text.split()
+    result["word_count"] = len(words)
+
+    # Content depth
+    wc = len(words)
+    if wc < 300:
+        result["content_depth"] = "thin"
+        result["issues"].append(f"Thin content ({wc} words, recommend 800+)")
+    elif wc < 1000:
+        result["content_depth"] = "normal"
+    else:
+        result["content_depth"] = "comprehensive"
+
+    # Readability
+    result["readability_score"] = _flesch_kincaid_score(text)
+
+    # Top keyword (highest density)
+    if keyword_density:
+        top_kw = max(keyword_density, key=keyword_density.get)  # type: ignore[arg-type]
+        top_density = keyword_density[top_kw]
+
+        if title and top_kw.lower() in title.lower():
+            result["keyword_in_title"] = True
+        if h1s and any(top_kw.lower() in h.lower() for h in h1s):
+            result["keyword_in_h1"] = True
+
+        # Check first ~200 words
+        first_para = " ".join(words[:200]).lower()
+        if top_kw.lower() in first_para:
+            result["keyword_in_first_paragraph"] = True
+
+        # Keyword stuffing check (>3% density)
+        stuffed = [kw for kw, d in keyword_density.items() if d > 3.0]
+        if stuffed:
+            result["keyword_stuffing"] = True
+            result["stuffed_keywords"] = stuffed[:5]
+            result["issues"].append(f"Keyword stuffing detected: {', '.join(stuffed[:3])}")
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: New scoring algorithm (v2)
+# ---------------------------------------------------------------------------
+
+def _calculate_seo_score_v2(analysis: dict[str, Any]) -> dict[str, Any]:
+    """Calculate SEO score using 6-category system (100 points max).
+
+    Returns dict with total_score and per-category breakdown.
+    """
+    meta = analysis.get("meta_tags", {})
+    headings = analysis.get("headings", {})
+    images = analysis.get("images", {})
+    links = analysis.get("links", {})
+    schema = analysis.get("schema_markup", {})
+    url_analysis = analysis.get("url_analysis", {})
+    robots = analysis.get("robots_txt", {})
+    sitemap = analysis.get("sitemap", {})
+    ssl_info = analysis.get("ssl_security", {})
+    mobile = analysis.get("mobile_analysis", {})
+    content = analysis.get("content_quality", {})
+    ttfb_ms = analysis.get("ttfb_ms", 0)
+
+    breakdown: dict[str, Any] = {}
+    penalties: list[dict[str, Any]] = []
+
+    # --- Category 1: Technical SEO (25 max) ---
+    tech = 0
+    tech_details = {}
+    # robots.txt (5)
+    if robots.get("has_robots_txt"):
+        tech += 3
+        if robots.get("allows_crawling"):
+            tech += 2
+        tech_details["robots_txt"] = min(5, tech)
+    else:
+        tech_details["robots_txt"] = 0
+
+    # sitemap (5)
+    sm = 0
+    if sitemap.get("has_sitemap"):
+        sm += 3
+        if sitemap.get("url_count", 0) > 0:
+            sm += 1
+        if sitemap.get("has_lastmod"):
+            sm += 1
+    tech_details["sitemap"] = sm
+    tech += sm
+
+    # SSL + security headers (5)
+    sec = 0
+    if ssl_info.get("ssl_valid"):
+        sec += 2
+    if url_analysis.get("is_https"):
+        sec += 1
+    # Security headers: HSTS, X-Frame-Options, CSP, X-Content-Type-Options
+    sec_headers = analysis.get("response_headers", {})
+    header_count = sum(1 for h in ("strict-transport-security", "x-frame-options",
+                                    "content-security-policy", "x-content-type-options")
+                       if sec_headers.get(h))
+    sec += min(2, header_count)  # Max 2 points for headers
+    tech_details["ssl_security"] = min(5, sec)
+    tech += min(5, sec)
+
+    # Redirect chain (3) - fewer is better
+    redirect_count = analysis.get("redirect_count", 0)
+    if redirect_count == 0:
+        redir_score = 3
+    elif redirect_count == 1:
+        redir_score = 2
+    elif redirect_count == 2:
+        redir_score = 1
+    else:
+        redir_score = 0
+    tech_details["redirects"] = redir_score
+    tech += redir_score
+
+    # TTFB (4) - lower is better
+    if ttfb_ms > 0:
+        if ttfb_ms < 500:
+            ttfb_score = 4
+        elif ttfb_ms < 1000:
+            ttfb_score = 3
+        elif ttfb_ms < 2000:
+            ttfb_score = 2
+        elif ttfb_ms < 3000:
+            ttfb_score = 1
+        else:
+            ttfb_score = 0
+    else:
+        ttfb_score = 0
+    tech_details["ttfb"] = ttfb_score
+    tech += ttfb_score
+
+    # Canonical (3)
+    canonical_score = 3 if meta.get("canonical") else 0
+    tech_details["canonical"] = canonical_score
+    tech += canonical_score
+
+    tech = min(25, tech)
+    breakdown["technical_seo"] = {"score": tech, "max": 25, "details": tech_details}
+
+    # --- Category 2: On-Page SEO (25 max) ---
+    onpage = 0
+    onpage_details = {}
+
+    # Title (5)
+    title_len = meta.get("title_length", 0)
+    if meta.get("title") and 30 <= title_len <= 60:
+        t_score = 5
+    elif meta.get("title") and title_len > 0:
+        t_score = 2
+    else:
+        t_score = 0
+    onpage_details["title"] = t_score
+    onpage += t_score
+
+    # Meta description (5)
+    desc_len = meta.get("description_length", 0)
+    if meta.get("description") and 120 <= desc_len <= 160:
+        d_score = 5
+    elif meta.get("description") and desc_len > 0:
+        d_score = 2
+    else:
+        d_score = 0
+    onpage_details["meta_description"] = d_score
+    onpage += d_score
+
+    # H1 (5)
+    h1_count = headings.get("h1_count", 0)
+    if h1_count == 1:
+        h1_score = 5
+    elif h1_count > 1:
+        h1_score = 2
+    else:
+        h1_score = 0
+    onpage_details["h1"] = h1_score
+    onpage += h1_score
+
+    # Heading hierarchy (3)
+    hier_score = 0
+    if headings.get("h2"):
+        hier_score += 2
+    if headings.get("h3"):
+        hier_score += 1
+    onpage_details["heading_hierarchy"] = hier_score
+    onpage += hier_score
+
+    # Image alt (4)
+    total_images = images.get("total_images", 0)
+    if total_images > 0:
+        alt_ratio = images.get("images_with_alt", 0) / total_images
+        img_score = round(alt_ratio * 4)
+    else:
+        img_score = 2  # No images is neutral
+    onpage_details["image_alt"] = img_score
+    onpage += img_score
+
+    # URL structure (3)
+    url_score = 0
+    if url_analysis.get("is_seo_friendly"):
+        url_score += 2
+    if url_analysis.get("has_keywords"):
+        url_score += 1
+    onpage_details["url_structure"] = url_score
+    onpage += url_score
+
+    onpage = min(25, onpage)
+    breakdown["on_page_seo"] = {"score": onpage, "max": 25, "details": onpage_details}
+
+    # --- Category 3: Content Quality (20 max) ---
+    cq = 0
+    cq_details = {}
+
+    # Word count (5)
+    wc = content.get("word_count", analysis.get("word_count", 0))
+    if wc >= 1000:
+        wc_score = 5
+    elif wc >= 600:
+        wc_score = 4
+    elif wc >= 300:
+        wc_score = 3
+    elif wc >= 100:
+        wc_score = 1
+    else:
+        wc_score = 0
+    cq_details["word_count"] = wc_score
+    cq += wc_score
+
+    # Readability (3)
+    readability = content.get("readability_score", 0)
+    if 5 <= readability <= 12:
+        r_score = 3  # Good range
+    elif 3 <= readability < 5 or 12 < readability <= 16:
+        r_score = 2  # Acceptable
+    elif readability > 0:
+        r_score = 1
+    else:
+        r_score = 0
+    cq_details["readability"] = r_score
+    cq += r_score
+
+    # Keyword in title (3)
+    kw_title = 3 if content.get("keyword_in_title") else 0
+    cq_details["keyword_in_title"] = kw_title
+    cq += kw_title
+
+    # Keyword in H1 (3)
+    kw_h1 = 3 if content.get("keyword_in_h1") else 0
+    cq_details["keyword_in_h1"] = kw_h1
+    cq += kw_h1
+
+    # Keyword in first paragraph (2)
+    kw_fp = 2 if content.get("keyword_in_first_paragraph") else 0
+    cq_details["keyword_in_first_para"] = kw_fp
+    cq += kw_fp
+
+    # No stuffing (4) — awarded when clean
+    stuff_score = 0 if content.get("keyword_stuffing") else 4
+    cq_details["no_stuffing"] = stuff_score
+    cq += stuff_score
+
+    cq = min(20, cq)
+    breakdown["content_quality"] = {"score": cq, "max": 20, "details": cq_details}
+
+    # --- Category 4: Mobile & Performance (15 max) ---
+    mob = 0
+    mob_details = {}
+
+    # Viewport (5)
+    vp_score = 5 if mobile.get("has_viewport") else 0
+    mob_details["viewport"] = vp_score
+    mob += vp_score
+
+    # Responsive (3)
+    resp_score = 0
+    if mobile.get("has_responsive_meta"):
+        resp_score += 2
+    if mobile.get("has_media_queries"):
+        resp_score += 1
+    mob_details["responsive"] = resp_score
+    mob += resp_score
+
+    # Touch icon (3)
+    ti_score = 3 if mobile.get("touch_icon") else 0
+    mob_details["touch_icon"] = ti_score
+    mob += ti_score
+
+    # Mobile TTFB (4) — uses ttfb from mobile fetch if available
+    mobile_ttfb = analysis.get("mobile_ttfb_ms", 0)
+    if mobile_ttfb > 0:
+        if mobile_ttfb < 600:
+            mt_score = 4
+        elif mobile_ttfb < 1200:
+            mt_score = 3
+        elif mobile_ttfb < 2500:
+            mt_score = 2
+        elif mobile_ttfb < 4000:
+            mt_score = 1
+        else:
+            mt_score = 0
+    else:
+        # Fall back to desktop TTFB with slight penalty
+        mt_score = max(0, ttfb_score - 1)
+    mob_details["mobile_ttfb"] = mt_score
+    mob += mt_score
+
+    mob = min(15, mob)
+    breakdown["mobile_performance"] = {"score": mob, "max": 15, "details": mob_details}
+
+    # --- Category 5: Schema & Structured Data (10 max) ---
+    sd = 0
+    sd_details = {}
+
+    # JSON-LD (5)
+    if schema.get("has_schema"):
+        sd += 5
+        sd_details["json_ld"] = 5
+    else:
+        sd_details["json_ld"] = 0
+
+    # Schema types (3) — more types = better
+    num_types = len(schema.get("schema_types", []))
+    st_score = min(3, num_types)
+    sd_details["schema_types"] = st_score
+    sd += st_score
+
+    # OG tags (2)
+    og_score = 0
+    if meta.get("og_title"):
+        og_score += 1
+    if meta.get("og_description"):
+        og_score += 1
+    sd_details["og_tags"] = og_score
+    sd += og_score
+
+    sd = min(10, sd)
+    breakdown["schema_structured_data"] = {"score": sd, "max": 10, "details": sd_details}
+
+    # --- Category 6: Authority Signals (5 max) ---
+    auth = 0
+    auth_details = {}
+
+    # External links (2)
+    ext_score = min(2, links.get("external_links", 0))
+    auth_details["external_links"] = ext_score
+    auth += ext_score
+
+    # Internal links (2) — good internal linking
+    int_links = links.get("internal_links", 0)
+    if int_links >= 10:
+        il_score = 2
+    elif int_links >= 3:
+        il_score = 1
+    else:
+        il_score = 0
+    auth_details["internal_links"] = il_score
+    auth += il_score
+
+    # Social links (1) — presence of social media links
+    social_domains = {"instagram.com", "facebook.com", "twitter.com", "x.com",
+                      "linkedin.com", "youtube.com", "tiktok.com"}
+    ext_domains = set(d.lower() for d in links.get("external_link_domains", []))
+    has_social = bool(ext_domains & social_domains)
+    soc_score = 1 if has_social else 0
+    auth_details["social_links"] = soc_score
+    auth += soc_score
+
+    auth = min(5, auth)
+    breakdown["authority_signals"] = {"score": auth, "max": 5, "details": auth_details}
+
+    # --- Penalties ---
+    raw_total = tech + onpage + cq + mob + sd + auth
+
+    if not meta.get("title"):
+        penalties.append({"reason": "Missing title tag", "points": -15})
+    if headings.get("h1_count", 0) == 0:
+        penalties.append({"reason": "Missing H1 heading", "points": -10})
+    if not url_analysis.get("is_https"):
+        penalties.append({"reason": "Not using HTTPS", "points": -10})
+    if headings.get("h1_count", 0) > 1:
+        penalties.append({"reason": "Multiple H1 tags", "points": -5})
+    if content.get("keyword_stuffing"):
+        penalties.append({"reason": "Keyword stuffing detected", "points": -5})
+    if robots.get("blocked_paths"):
+        critical_blocked = [p for p in robots.get("blocked_paths", [])
+                           if p in ("/", "/blog", "/products", "/services")]
+        if critical_blocked:
+            penalties.append({"reason": f"robots.txt blocks important paths: {', '.join(critical_blocked)}", "points": -5})
+    if not sitemap.get("has_sitemap"):
+        penalties.append({"reason": "No sitemap.xml found", "points": -3})
+    if ssl_info.get("cert_expiry_days") is not None and 0 < ssl_info["cert_expiry_days"] < 30:
+        penalties.append({"reason": f"SSL expires in {ssl_info['cert_expiry_days']} days", "points": -3})
+    if analysis.get("redirect_count", 0) >= 3:
+        penalties.append({"reason": f"Redirect chain ({analysis['redirect_count']} hops)", "points": -2})
+
+    penalty_total = sum(p["points"] for p in penalties)
+    final_score = max(0, min(100, raw_total + penalty_total))
+
+    return {
+        "total_score": final_score,
+        "raw_score": raw_total,
+        "penalty_total": penalty_total,
+        "breakdown": breakdown,
+        "penalties": penalties,
+    }
 
 
 @function_tool
@@ -595,27 +1366,32 @@ def _calculate_seo_score(analysis: dict[str, Any]) -> int:
 
 
 async def _fetch_page(url: str) -> tuple[str | None, str | None]:
-    """Fetch a single page and return (html_content, final_url)."""
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.get(
-                url,
-                follow_redirects=True,
-                headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                    "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
-                }
-            )
-            if response.status_code == 200:
-                return response.text, str(response.url)
-    except Exception:
-        pass
+    """Fetch a single page and return (html_content, final_url).
+
+    Thin wrapper around _fetch_page_enhanced for backward compatibility.
+    """
+    result = await _fetch_page_enhanced(url)
+    if result["success"]:
+        return result["html"], result["final_url"]
     return None, None
 
 
-def _analyze_single_page_seo(html: str, url: str) -> dict[str, Any]:
-    """Analyze a single page for SEO factors."""
+def _analyze_single_page_seo(
+    html: str,
+    url: str,
+    *,
+    enhanced_data: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Analyze a single page for SEO factors.
+
+    Args:
+        html: Raw HTML string.
+        url: Page URL.
+        enhanced_data: Optional dict from _fetch_page_enhanced and async checks
+            (robots_txt, sitemap, ssl_security, ttfb_ms, redirect_count,
+             response_headers, mobile_ttfb_ms).  When provided, the new
+             v2 scoring algorithm is used.
+    """
     soup = BeautifulSoup(html, "html.parser")
 
     # Extract meta tags
@@ -631,7 +1407,7 @@ def _analyze_single_page_seo(html: str, url: str) -> dict[str, Any]:
         keywords = [k.strip() for k in meta_keywords["content"].split(",")][:15]
 
     meta_robots = soup.find("meta", attrs={"name": "robots"})
-    robots = meta_robots.get("content") if meta_robots else None
+    robots_meta = meta_robots.get("content") if meta_robots else None
 
     canonical_tag = soup.find("link", attrs={"rel": "canonical"})
     canonical = canonical_tag.get("href") if canonical_tag else None
@@ -646,7 +1422,7 @@ def _analyze_single_page_seo(html: str, url: str) -> dict[str, Any]:
         "description": description,
         "description_length": len(description) if description else 0,
         "keywords": keywords,
-        "robots": robots,
+        "robots": robots_meta,
         "canonical": canonical,
         "og_title": og_title.get("content") if og_title else None,
         "og_description": og_description.get("content") if og_description else None,
@@ -660,16 +1436,17 @@ def _analyze_single_page_seo(html: str, url: str) -> dict[str, Any]:
     schema = _extract_schema_markup(soup)
     url_analysis = _analyze_url_seo(url)
 
-    # Extract content for analysis
-    for element in soup(["script", "style", "nav", "header", "footer", "aside"]):
+    # Extract content for analysis (clone soup to avoid mutating for mobile check)
+    content_soup = BeautifulSoup(html, "html.parser")
+    for element in content_soup(["script", "style", "nav", "header", "footer", "aside"]):
         element.decompose()
-    main_text = soup.get_text(separator=" ", strip=True)
+    main_text = content_soup.get_text(separator=" ", strip=True)
     main_text = re.sub(r'\s+', ' ', main_text)
 
     word_count = len(main_text.split())
     keyword_density = _calculate_keyword_density(main_text)
 
-    analysis = {
+    analysis: dict[str, Any] = {
         "url": url,
         "meta_tags": meta_tags,
         "headings": headings,
@@ -682,7 +1459,40 @@ def _analyze_single_page_seo(html: str, url: str) -> dict[str, Any]:
         "keyword_density": keyword_density,
     }
 
-    analysis["seo_score"] = _calculate_seo_score(analysis)
+    if enhanced_data:
+        # Merge in data from async checks
+        analysis["robots_txt"] = enhanced_data.get("robots_txt", {})
+        analysis["sitemap"] = enhanced_data.get("sitemap", {})
+        analysis["ssl_security"] = enhanced_data.get("ssl_security", {})
+        analysis["response_headers"] = enhanced_data.get("response_headers", {})
+        analysis["ttfb_ms"] = enhanced_data.get("ttfb_ms", 0)
+        analysis["redirect_count"] = enhanced_data.get("redirect_count", 0)
+        analysis["redirect_chain"] = enhanced_data.get("redirect_chain", [])
+
+        # Synchronous checks on parsed HTML
+        mobile_result = _check_mobile_friendliness(soup, html)
+        analysis["mobile_analysis"] = mobile_result
+
+        content_quality = _analyze_content_quality(
+            main_text, title, headings.get("h1", []), keyword_density,
+        )
+        analysis["content_quality"] = content_quality
+
+        # Mobile TTFB (if provided)
+        analysis["mobile_ttfb_ms"] = enhanced_data.get("mobile_ttfb_ms", 0)
+
+        # Inject response headers for SSL scoring
+        ssl_data = enhanced_data.get("ssl_security", {})
+        ssl_data["security_headers"] = enhanced_data.get("response_headers", {})
+        analysis["ssl_security"] = ssl_data
+
+        # Use v2 scoring
+        score_result = _calculate_seo_score_v2(analysis)
+        analysis["seo_score"] = score_result["total_score"]
+        analysis["score_breakdown"] = score_result
+    else:
+        # Fallback: legacy v1 scoring for competitor scraping etc.
+        analysis["seo_score"] = _calculate_seo_score(analysis)
 
     return analysis
 
@@ -696,9 +1506,9 @@ async def scrape_for_seo(
     """
     Scrape a website for comprehensive SEO analysis.
 
-    Extracts detailed SEO factors including meta tags, heading hierarchy,
-    image alt texts, internal/external links, schema markup, and calculates
-    an overall SEO score.
+    Performs enhanced analysis including technical SEO checks (robots.txt,
+    sitemap, SSL, redirect chains, TTFB), mobile-friendliness, content
+    quality, and calculates a rigorous 6-category SEO score (v2).
 
     Args:
         url: The URL to scrape.
@@ -714,7 +1524,11 @@ async def scrape_for_seo(
         - schema_markup: JSON-LD structured data
         - url_analysis: SEO-friendliness score
         - content_metrics: word count, keyword density
-        - seo_score: Overall score (0-100)
+        - technical_seo: robots.txt, sitemap, SSL, redirect, TTFB results
+        - mobile_analysis: viewport, responsive, media queries
+        - content_quality: depth, readability, keyword placement
+        - score_breakdown: 6-category scoring with per-category details
+        - seo_score: Overall score (0-100, v2 algorithm)
         - subpages: Analysis of subpages (if include_subpages=True)
     """
     try:
@@ -731,25 +1545,66 @@ async def scrape_for_seo(
                 "url": url,
             }
 
-        # Fetch main page
-        html, final_url = await _fetch_page(url)
+        # 1. Enhanced fetch (TTFB + redirect + headers)
+        fetch_result = await _fetch_page_enhanced(url)
 
-        if not html:
+        if not fetch_result["success"] or not fetch_result["html"]:
             return {
                 "success": False,
-                "error": "Failed to fetch page",
+                "error": fetch_result.get("error", "Failed to fetch page"),
                 "url": url,
             }
 
-        # Analyze main page
-        main_analysis = _analyze_single_page_seo(html, final_url or url)
+        html = fetch_result["html"]
+        final_url = fetch_result["final_url"] or url
 
-        result = {
-            "success": True,
-            **main_analysis,
+        # 2. Run async technical checks in parallel
+        robots_task = _check_robots_txt(url)
+        ssl_task = _check_ssl_security(url)
+
+        robots_result, ssl_result = await asyncio.gather(robots_task, ssl_task)
+
+        # Sitemap depends on robots.txt sitemaps
+        sitemap_result = await _check_sitemap(url, robots_result.get("sitemap_urls"))
+
+        # 3. Optional: mobile TTFB
+        mobile_fetch = await _fetch_page_enhanced(url, mobile=True)
+        mobile_ttfb = mobile_fetch.get("ttfb_ms", 0)
+
+        # 4. Build enhanced_data for _analyze_single_page_seo
+        enhanced_data = {
+            "robots_txt": robots_result,
+            "sitemap": sitemap_result,
+            "ssl_security": ssl_result,
+            "response_headers": fetch_result["response_headers"],
+            "ttfb_ms": fetch_result["ttfb_ms"],
+            "redirect_count": fetch_result["redirect_count"],
+            "redirect_chain": fetch_result["redirect_chain"],
+            "mobile_ttfb_ms": mobile_ttfb,
         }
 
-        # Analyze subpages if requested
+        # 5. Analyze main page with enhanced data (v2 scoring)
+        main_analysis = _analyze_single_page_seo(
+            html, final_url, enhanced_data=enhanced_data,
+        )
+
+        # 6. Build result with new top-level fields for easy access
+        result: dict[str, Any] = {
+            "success": True,
+            **main_analysis,
+            # Expose technical data at top level for agent convenience
+            "technical_seo": {
+                "robots_txt": robots_result,
+                "sitemap": sitemap_result,
+                "ssl": ssl_result,
+                "ttfb_ms": fetch_result["ttfb_ms"],
+                "redirect_count": fetch_result["redirect_count"],
+                "redirect_chain": fetch_result["redirect_chain"],
+                "response_headers": fetch_result["response_headers"],
+            },
+        }
+
+        # 7. Analyze subpages if requested
         if include_subpages and max_subpages > 0:
             internal_links = main_analysis.get("links", {}).get("internal_link_urls", [])
 
@@ -762,7 +1617,6 @@ async def scrape_for_seo(
                 link_parsed = urlparse(link)
                 if link_parsed.netloc.lower() == base_domain:
                     path = link_parsed.path
-                    # Skip anchors, assets, common non-content pages
                     if (path not in seen_paths and
                         not any(path.endswith(ext) for ext in ['.jpg', '.png', '.gif', '.pdf', '.css', '.js']) and
                         not any(skip in path.lower() for skip in ['/wp-admin', '/login', '/cart', '/checkout', '/tag/', '/page/'])):
@@ -771,7 +1625,6 @@ async def scrape_for_seo(
                         if len(subpage_urls) >= max_subpages:
                             break
 
-            # Analyze subpages
             subpages = []
             for subpage_url in subpage_urls:
                 sub_html, sub_final_url = await _fetch_page(subpage_url)
@@ -792,7 +1645,6 @@ async def scrape_for_seo(
             result["subpages"] = subpages
             result["subpages_analyzed"] = len(subpages)
 
-            # Calculate average score including subpages
             if subpages:
                 all_scores = [main_analysis["seo_score"]] + [sp["seo_score"] for sp in subpages]
                 result["average_seo_score"] = round(sum(all_scores) / len(all_scores))
@@ -864,6 +1716,20 @@ async def scrape_competitors(
                 return {"url": url, "success": False, "error": "Failed to fetch"}
 
             analysis = _analyze_single_page_seo(html, final_url or url)
+
+            # Lightweight mobile/content checks for competitors
+            comp_soup = BeautifulSoup(html, "html.parser")
+            viewport_tag = comp_soup.find("meta", attrs={"name": "viewport"})
+            mobile_viewport = viewport_tag is not None
+
+            wc = analysis.get("word_count", 0)
+            if wc < 300:
+                content_depth = "thin"
+            elif wc < 1000:
+                content_depth = "normal"
+            else:
+                content_depth = "comprehensive"
+
             return {
                 "url": final_url or url,
                 "success": True,
@@ -876,6 +1742,8 @@ async def scrape_competitors(
                 "keyword_density": analysis.get("keyword_density", {}),
                 "schema_types": analysis.get("schema_markup", {}).get("schema_types", []),
                 "has_schema": analysis.get("schema_markup", {}).get("has_schema", False),
+                "mobile_viewport": mobile_viewport,
+                "content_depth": content_depth,
             }
         except Exception as e:
             return {"url": url, "success": False, "error": str(e)}
@@ -928,9 +1796,133 @@ async def scrape_competitors(
     }
 
 
+@function_tool(strict_mode=False)
+async def check_serp_position(
+    domain: str,
+    keywords: list[str] | None = None,
+    num_results: int = 10,
+) -> dict[str, Any]:
+    """
+    Check real search engine visibility for a domain across keywords.
+
+    Searches DuckDuckGo for each keyword and checks if the domain appears
+    in the top results.  This is the ultimate validation of SEO effectiveness:
+    a site can have perfect on-page SEO but still be invisible in search.
+
+    IMPORTANT: The 'keywords' parameter is REQUIRED. Provide 5-10 keywords.
+
+    Args:
+        domain: The domain to check (e.g., "example.com"). Do NOT include protocol.
+        keywords: REQUIRED - List of keywords to check (max 10).
+            Example: keywords=["istanbul pastane", "butik pasta", "doğum günü pastası"]
+        num_results: Number of search results to check per keyword (default 10, max 20).
+
+    Returns:
+        Dictionary with:
+        - results: Per-keyword position data
+        - visibility_score: 0-100 overall search visibility
+        - found_count: How many keywords the domain was found for
+        - not_found_keywords: Keywords where domain was NOT in results
+    """
+    if DDGS is None:
+        return {
+            "success": False,
+            "error": "ddgs not installed. Run: pip install ddgs",
+        }
+
+    if not keywords or not isinstance(keywords, list) or len(keywords) < 1:
+        return {
+            "success": False,
+            "error": "REQUIRED PARAMETER MISSING: 'keywords' must be a list with at least 1 keyword. "
+                     "Example: keywords=[\"istanbul pastane\", \"butik pasta\"]",
+        }
+
+    # Normalize domain
+    domain = domain.lower().replace("https://", "").replace("http://", "").strip("/")
+    keywords = keywords[:10]
+    num_results = min(max(5, num_results), 20)
+
+    results = []
+    found_count = 0
+    not_found_keywords = []
+
+    for i, keyword in enumerate(keywords):
+        # Rate limit: 1 second between searches
+        if i > 0:
+            await asyncio.sleep(1.0)
+
+        kw_result: dict[str, Any] = {
+            "keyword": keyword,
+            "position": None,
+            "found": False,
+            "found_url": None,
+            "top_results": [],
+        }
+
+        try:
+            with DDGS() as ddgs:
+                search_results = ddgs.text(keyword, max_results=num_results)
+
+                for pos, r in enumerate(search_results, 1):
+                    result_url = r.get("href", "")
+                    result_domain = urlparse(result_url).netloc.lower()
+
+                    kw_result["top_results"].append({
+                        "position": pos,
+                        "domain": result_domain,
+                        "title": r.get("title", ""),
+                    })
+
+                    # Check if our domain matches
+                    if not kw_result["found"] and (
+                        domain in result_domain or result_domain.endswith("." + domain)
+                    ):
+                        kw_result["position"] = pos
+                        kw_result["found"] = True
+                        kw_result["found_url"] = result_url
+                        found_count += 1
+
+        except Exception as e:
+            kw_result["error"] = str(e)
+
+        if not kw_result["found"]:
+            not_found_keywords.append(keyword)
+
+        # Only keep top 5 results to reduce response size
+        kw_result["top_results"] = kw_result["top_results"][:5]
+        results.append(kw_result)
+
+    # Calculate visibility score (0-100)
+    # Position 1 = 100 points, position 2 = 90, ... position 10 = 10, not found = 0
+    total_points = 0
+    max_points = len(keywords) * 100
+    for r in results:
+        if r["found"] and r["position"]:
+            pos = r["position"]
+            # Scoring: pos 1 → 100, pos 2 → 90, ..., pos 10 → 10
+            points = max(0, (num_results + 1 - pos) * (100 // num_results))
+            total_points += points
+
+    visibility_score = round(total_points / max_points * 100) if max_points > 0 else 0
+
+    return {
+        "success": True,
+        "domain": domain,
+        "keywords_checked": len(keywords),
+        "found_count": found_count,
+        "not_found_count": len(not_found_keywords),
+        "not_found_keywords": not_found_keywords,
+        "visibility_score": visibility_score,
+        "results": results,
+    }
+
+
 def get_seo_tools() -> list:
     """Return SEO-related tools for the Analysis Agent."""
-    return [web_search, scrape_for_seo, scrape_competitors]
+    return [web_search, scrape_for_seo, scrape_competitors, check_serp_position]
 
 
-__all__ = ["web_search", "scrape_website", "scrape_for_seo", "scrape_competitors", "get_seo_tools"]
+__all__ = [
+    "web_search", "scrape_website", "scrape_for_seo",
+    "scrape_competitors", "check_serp_position", "get_seo_tools",
+]

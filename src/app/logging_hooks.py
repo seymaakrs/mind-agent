@@ -181,6 +181,14 @@ class CliLoggingHooks(RunHooksBase):
         # Send progress
         self._send_progress("tool_start", f"🔧 {tool.name} çalıştırılıyor...", {"tool": tool.name})
 
+        # Fire-and-forget: update active task current_step
+        if self.task_logger:
+            try:
+                loop = asyncio.get_running_loop()
+                loop.run_in_executor(None, self.task_logger.update_step, tool.name)
+            except Exception:
+                pass
+
     async def on_tool_end(self, context, agent, tool, result) -> None:
         # Get input from pending calls
         input_data = None

@@ -158,8 +158,8 @@ class VideoGenerationClient:
 
     BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
     VERTEX_BASE_URL = "https://{region}-aiplatform.googleapis.com/v1"
-    DEFAULT_MODEL = "veo-3.1-generate-preview"
-    DEFAULT_VERTEX_MODEL = "veo-2.0-generate-001"
+    DEFAULT_MODEL = "veo-3.1-fast-generate-preview"
+    DEFAULT_VERTEX_MODEL = "veo-3.1-fast-generate-preview"
     POLL_INTERVAL = 10  # seconds
     MAX_POLL_ATTEMPTS = 60  # 10 minutes max wait
     VERTEX_SCOPES = ["https://www.googleapis.com/auth/cloud-platform"]

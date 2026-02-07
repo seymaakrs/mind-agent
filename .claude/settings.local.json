@@ -1,4 +1,7 @@
 {
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
   "permissions": {
     "allow": [
       "Bash(cd:*)",
@@ -31,7 +34,15 @@
       "Bash(docker exec:*)",
       "Bash(del \"d:\\\\agents-sdk\\\\src\\\\infra\\\\cloudconvert_client.py\")",
       "Bash(pip install:*)",
-      "WebFetch(domain:docs.getlate.dev)"
+      "WebFetch(domain:docs.getlate.dev)",
+      "Bash(docker manifest inspect:*)",
+      "Bash(docker build:*)",
+      "WebFetch(domain:fal.ai)",
+      "WebFetch(domain:pypi.org)",
+      "Bash(docker ps:*)",
+      "Bash(findstr:*)",
+      "WebFetch(domain:openai.github.io)"
     ]
-  }
+  },
+  "outputStyle": "Explanatory"
 }
