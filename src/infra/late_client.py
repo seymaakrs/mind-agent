@@ -186,6 +186,355 @@ class LateClient:
                 "item_count": len(media_items),
             }
 
+    async def post_tiktok_carousel(
+        self,
+        media_items: list[dict[str, str]],
+        content: str,
+        privacy_level: str,
+        allow_comment: bool = True,
+        description: str | None = None,
+        photo_cover_index: int | None = None,
+        auto_add_music: bool | None = None,
+        video_made_with_ai: bool | None = None,
+        draft: bool | None = None,
+        commercial_content_type: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Post a carousel (photo slideshow) to TikTok via Late API.
+
+        Args:
+            media_items: List of image items [{"type": "image", "url": "..."}, ...] (max 35).
+            content: Carousel title (max 90 chars, hashtags/URLs auto-cleaned by TikTok).
+            privacy_level: Creator's allowed privacy value (e.g. "PUBLIC_TO_EVERYONE").
+            allow_comment: Allow comments (default True).
+            description: Long caption (max 4000 chars). content is title, this is the real caption.
+            photo_cover_index: Which photo is cover (0-indexed).
+            auto_add_music: Let TikTok auto-add music.
+            video_made_with_ai: AI disclosure flag.
+            draft: Send to Creator Inbox instead of publishing.
+            commercial_content_type: Commercial content disclosure.
+
+        Returns:
+            dict with post_id, platform_post_id, platform_post_url, status, item_count.
+        """
+        formatted_items = [
+            {"type": item.get("type", "image"), "url": item["url"]}
+            for item in media_items
+        ]
+
+        # Build tiktokSettings - required fields
+        tiktok_settings: dict[str, Any] = {
+            "privacy_level": privacy_level,
+            "allow_comment": allow_comment,
+            "media_type": "photo",
+            "content_preview_confirmed": True,
+            "express_consent_given": True,
+        }
+
+        # Optional fields
+        if description is not None:
+            tiktok_settings["description"] = description
+        if photo_cover_index is not None:
+            tiktok_settings["photo_cover_index"] = photo_cover_index
+        if auto_add_music is not None:
+            tiktok_settings["auto_add_music"] = auto_add_music
+        if video_made_with_ai is not None:
+            tiktok_settings["video_made_with_ai"] = video_made_with_ai
+        if draft is not None:
+            tiktok_settings["draft"] = draft
+        if commercial_content_type is not None:
+            tiktok_settings["commercialContentType"] = commercial_content_type
+
+        payload: dict[str, Any] = {
+            "content": content,
+            "mediaItems": formatted_items,
+            "platforms": [
+                {"platform": "tiktok", "accountId": self.account_id}
+            ],
+            "tiktokSettings": tiktok_settings,
+            "publishNow": True,
+        }
+
+        async with httpx.AsyncClient(timeout=self.TIMEOUT) as client:
+            response = await client.post(
+                f"{self.BASE_URL}/posts",
+                headers=self._get_headers(),
+                json=payload,
+            )
+
+            if response.status_code >= 400:
+                return {
+                    "success": False,
+                    "error": response.text,
+                    "status_code": response.status_code,
+                }
+
+            data = response.json()
+            post = data.get("post", {})
+            platforms = post.get("platforms", [])
+            tt_platform = platforms[0] if platforms else {}
+
+            return {
+                "success": True,
+                "post_id": post.get("_id"),
+                "platform_post_id": tt_platform.get("platformPostId"),
+                "platform_post_url": tt_platform.get("platformPostUrl"),
+                "status": tt_platform.get("status"),
+                "type": "carousel",
+                "item_count": len(media_items),
+            }
+
+    async def post_tiktok_video(
+        self,
+        video_url: str,
+        content: str,
+        privacy_level: str,
+        allow_comment: bool = True,
+        allow_duet: bool = True,
+        allow_stitch: bool = True,
+        video_cover_timestamp_ms: int | None = None,
+        video_made_with_ai: bool | None = None,
+        draft: bool | None = None,
+        commercial_content_type: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Post a video to TikTok via Late API.
+
+        Args:
+            video_url: Public URL of the video file (MP4/MOV/WebM, max 4GB, 3s-10min).
+            content: Video caption (max 2200 chars).
+            privacy_level: Creator's allowed privacy value.
+            allow_comment: Allow comments (default True).
+            allow_duet: Allow duet (default True). Required for video.
+            allow_stitch: Allow stitch (default True). Required for video.
+            video_cover_timestamp_ms: Cover frame timestamp in ms (default: 1000).
+            video_made_with_ai: AI disclosure flag.
+            draft: Send to Creator Inbox instead of publishing.
+            commercial_content_type: Commercial content disclosure.
+
+        Returns:
+            dict with post_id, platform_post_id, platform_post_url, status.
+        """
+        tiktok_settings: dict[str, Any] = {
+            "privacy_level": privacy_level,
+            "allow_comment": allow_comment,
+            "allow_duet": allow_duet,
+            "allow_stitch": allow_stitch,
+            "content_preview_confirmed": True,
+            "express_consent_given": True,
+        }
+
+        if video_cover_timestamp_ms is not None:
+            tiktok_settings["video_cover_timestamp_ms"] = video_cover_timestamp_ms
+        if video_made_with_ai is not None:
+            tiktok_settings["video_made_with_ai"] = video_made_with_ai
+        if draft is not None:
+            tiktok_settings["draft"] = draft
+        if commercial_content_type is not None:
+            tiktok_settings["commercialContentType"] = commercial_content_type
+
+        payload: dict[str, Any] = {
+            "content": content,
+            "mediaItems": [{"type": "video", "url": video_url}],
+            "platforms": [
+                {"platform": "tiktok", "accountId": self.account_id}
+            ],
+            "tiktokSettings": tiktok_settings,
+            "publishNow": True,
+        }
+
+        async with httpx.AsyncClient(timeout=self.TIMEOUT) as client:
+            response = await client.post(
+                f"{self.BASE_URL}/posts",
+                headers=self._get_headers(),
+                json=payload,
+            )
+
+            if response.status_code >= 400:
+                return {
+                    "success": False,
+                    "error": response.text,
+                    "status_code": response.status_code,
+                }
+
+            data = response.json()
+            post = data.get("post", {})
+            platforms = post.get("platforms", [])
+            tt_platform = platforms[0] if platforms else {}
+
+            return {
+                "success": True,
+                "post_id": post.get("_id"),
+                "platform_post_id": tt_platform.get("platformPostId"),
+                "platform_post_url": tt_platform.get("platformPostUrl"),
+                "status": tt_platform.get("status"),
+                "type": "video",
+            }
+
+    def _build_linkedin_platform_data(
+        self,
+        first_comment: str | None = None,
+        disable_link_preview: bool | None = None,
+        organization_urn: str | None = None,
+    ) -> dict[str, Any]:
+        """Build LinkedIn platform entry with optional platformSpecificData."""
+        platform_data: dict[str, Any] = {
+            "platform": "linkedin",
+            "accountId": self.account_id,
+        }
+
+        psd: dict[str, Any] = {}
+        if first_comment is not None:
+            psd["firstComment"] = first_comment
+        if disable_link_preview is not None:
+            psd["disableLinkPreview"] = disable_link_preview
+        if organization_urn is not None:
+            psd["organizationUrn"] = organization_urn
+
+        if psd:
+            platform_data["platformSpecificData"] = psd
+
+        return platform_data
+
+    async def post_linkedin(
+        self,
+        content: str | None = None,
+        media_url: str | None = None,
+        media_type: str | None = None,
+        first_comment: str | None = None,
+        disable_link_preview: bool | None = None,
+        organization_urn: str | None = None,
+        scheduled_for: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Post to LinkedIn (text-only, single image, or video).
+
+        Args:
+            content: Post text (max 3000 chars). Optional if media attached.
+            media_url: Public URL of image or video (optional).
+            media_type: "image" or "video" (required if media_url provided).
+            first_comment: Auto-posted first comment (good for links).
+            disable_link_preview: Suppress URL preview card.
+            organization_urn: Post as company page (urn:li:organization:XXXXX).
+            scheduled_for: ISO datetime for scheduled post.
+
+        Returns:
+            dict with post_id, platform_post_id, platform_post_url, status.
+        """
+        payload: dict[str, Any] = {
+            "platforms": [self._build_linkedin_platform_data(
+                first_comment=first_comment,
+                disable_link_preview=disable_link_preview,
+                organization_urn=organization_urn,
+            )],
+            "publishNow": scheduled_for is None,
+        }
+
+        if content:
+            payload["content"] = content
+        if media_url and media_type:
+            payload["mediaItems"] = [{"type": media_type, "url": media_url}]
+        if scheduled_for:
+            payload["scheduledFor"] = scheduled_for
+
+        async with httpx.AsyncClient(timeout=self.TIMEOUT) as client:
+            response = await client.post(
+                f"{self.BASE_URL}/posts",
+                headers=self._get_headers(),
+                json=payload,
+            )
+
+            if response.status_code >= 400:
+                return {
+                    "success": False,
+                    "error": response.text,
+                    "status_code": response.status_code,
+                }
+
+            data = response.json()
+            post = data.get("post", {})
+            platforms = post.get("platforms", [])
+            li_platform = platforms[0] if platforms else {}
+
+            return {
+                "success": True,
+                "post_id": post.get("_id"),
+                "platform_post_id": li_platform.get("platformPostId"),
+                "platform_post_url": li_platform.get("platformPostUrl"),
+                "status": li_platform.get("status"),
+            }
+
+    async def post_linkedin_carousel(
+        self,
+        media_items: list[dict[str, str]],
+        content: str | None = None,
+        first_comment: str | None = None,
+        disable_link_preview: bool | None = None,
+        organization_urn: str | None = None,
+        scheduled_for: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Post multi-image carousel to LinkedIn (2-20 images).
+
+        Args:
+            media_items: List of image items [{"type": "image", "url": "..."}, ...].
+            content: Post text (max 3000 chars, optional).
+            first_comment: Auto-posted first comment.
+            disable_link_preview: Suppress URL preview card.
+            organization_urn: Post as company page.
+            scheduled_for: ISO datetime for scheduled post.
+
+        Returns:
+            dict with post_id, platform_post_id, platform_post_url, status, item_count.
+        """
+        formatted_items = [
+            {"type": item.get("type", "image"), "url": item["url"]}
+            for item in media_items
+        ]
+
+        payload: dict[str, Any] = {
+            "mediaItems": formatted_items,
+            "platforms": [self._build_linkedin_platform_data(
+                first_comment=first_comment,
+                disable_link_preview=disable_link_preview,
+                organization_urn=organization_urn,
+            )],
+            "publishNow": scheduled_for is None,
+        }
+
+        if content:
+            payload["content"] = content
+        if scheduled_for:
+            payload["scheduledFor"] = scheduled_for
+
+        async with httpx.AsyncClient(timeout=self.TIMEOUT) as client:
+            response = await client.post(
+                f"{self.BASE_URL}/posts",
+                headers=self._get_headers(),
+                json=payload,
+            )
+
+            if response.status_code >= 400:
+                return {
+                    "success": False,
+                    "error": response.text,
+                    "status_code": response.status_code,
+                }
+
+            data = response.json()
+            post = data.get("post", {})
+            platforms = post.get("platforms", [])
+            li_platform = platforms[0] if platforms else {}
+
+            return {
+                "success": True,
+                "post_id": post.get("_id"),
+                "platform_post_id": li_platform.get("platformPostId"),
+                "platform_post_url": li_platform.get("platformPostUrl"),
+                "status": li_platform.get("status"),
+                "item_count": len(media_items),
+            }
+
     async def get_analytics(
         self,
         post_id: str | None = None,

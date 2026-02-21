@@ -40,6 +40,9 @@ class Settings(BaseModel):
     # fal.ai (MMAudio - video audio generation)
     fal_key: str | None = Field(default=None, alias="FAL_KEY")
 
+    # Serper.dev (Google SERP API for SEO analysis)
+    serper_api_key: str | None = Field(default=None, alias="SERPER_API_KEY")
+
     # Dry-run mode - Google API'lerine gercek cagri yapmadan prompt'lari loglar
     dry_run: bool = Field(default=False, alias="DRY_RUN")
 
@@ -57,6 +60,7 @@ class Settings(BaseModel):
                 "firebase_storage_bucket": os.getenv("FIREBASE_STORAGE_BUCKET"),
                 "late_api_key": os.getenv("LATE_API_KEY"),
                 "fal_key": os.getenv("FAL_KEY"),
+                "serper_api_key": os.getenv("SERPER_API_KEY"),
                 "dry_run": os.getenv("DRY_RUN", "").lower() in ("true", "1", "yes"),
             }
         )

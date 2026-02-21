@@ -510,6 +510,7 @@ When calling image_agent_tool or video_agent_tool:
    - Include call-to-action when appropriate
    - Use effective hashtags (from memory)
    - Keep it authentic to the brand
+   - **SEO/GEO Keywords**: If the business profile contains `seo_keywords` (from fetch_business → profile.seo_keywords), naturally sprinkle 2-3 of these keywords into the caption text and hashtags. Do NOT force them - weave them in naturally so the caption reads organically. For location-based businesses, include geo keywords (city/district names) when relevant. This helps Instagram discovery and aligns with the business's SEO strategy.
 
 ## MEMORY MANAGEMENT
 

@@ -17,6 +17,8 @@ services:
       LATE_API_KEY: ${LATE_API_KEY}
       # fal.ai (MMAudio - video audio generation)
       FAL_KEY: ${FAL_KEY}
+      # Serper.dev (Google SERP API)
+      SERPER_API_KEY: ${SERPER_API_KEY}
       # Dry-run mode
       DRY_RUN: ${DRY_RUN:-false}
     ports:

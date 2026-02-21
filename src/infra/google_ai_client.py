@@ -46,7 +46,7 @@ class ImageGenerationClient:
     async def generate_image(
         self,
         prompt: str,
-        aspect_ratio: str = "1:1",
+        aspect_ratio: str = "3:4",
     ) -> list[bytes]:
         """
         Text'ten gorsel uretir (text-to-image).
@@ -66,6 +66,7 @@ class ImageGenerationClient:
             ],
             "generationConfig": {
                 "responseModalities": ["image", "text"],
+                "imageConfig": {"aspectRatio": aspect_ratio},
             },
         }
 
@@ -86,7 +87,7 @@ class ImageGenerationClient:
         self,
         prompt: str,
         source_image: bytes,
-        aspect_ratio: str = "1:1",
+        aspect_ratio: str = "3:4",
     ) -> list[bytes]:
         """
         Mevcut bir gorseli duzenler (image editing).
@@ -118,6 +119,7 @@ class ImageGenerationClient:
             ],
             "generationConfig": {
                 "responseModalities": ["image", "text"],
+                "imageConfig": {"aspectRatio": aspect_ratio},
             },
         }
 

@@ -47,7 +47,7 @@ def _count_tokens(text: str) -> int:
         "WHEN TO LEAVE source_file_path EMPTY: "
         "If creating a completely NEW image from scratch without referencing existing images."
         "\n\n"
-        "aspect_ratio: Image aspect ratio. Options: '1:1' (square), '16:9' (widescreen), '9:16' (portrait), '4:3', '3:4'. Default: '1:1'."
+        "aspect_ratio: Image aspect ratio. Options: '3:4' (Instagram portrait), '1:1' (square), '16:9' (widescreen), '9:16' (portrait/story), '4:3'. Default: '3:4'."
     ),
     strict_mode=False,
 )
@@ -56,7 +56,7 @@ async def generate_image(
     file_name: str,
     business_id: str | None = None,
     source_file_path: str | None = None,
-    aspect_ratio: str = "1:1",
+    aspect_ratio: str = "3:4",
 ) -> dict[str, str | bool]:
     """
     Generate a new image or edit/combine with an existing image.

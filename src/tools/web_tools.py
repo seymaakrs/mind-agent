@@ -2,15 +2,16 @@
 Web tools for web search and website scraping.
 
 Tools:
-- web_search: Search the web using DuckDuckGo
+- web_search: Search the web using Google (via Serper.dev API)
 - scrape_website: Scrape a website for business analysis
 - scrape_for_seo: Detailed SEO analysis of a single website
 - scrape_competitors: Batch scraping of multiple competitor websites
-- check_serp_position: Check real search engine visibility for keywords
+- check_serp_position: Check real Google search visibility for keywords
 """
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import ssl
 import socket
@@ -24,10 +25,7 @@ import httpx
 from bs4 import BeautifulSoup
 from agents import function_tool
 
-try:
-    from ddgs import DDGS
-except ImportError:
-    DDGS = None
+from src.app.config import get_settings
 
 
 # ---------------------------------------------------------------------------
@@ -42,6 +40,13 @@ _MOBILE_UA = (
     "Mozilla/5.0 (Linux; Android 13; Pixel 7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
 )
+
+# AI search engine bots to check in robots.txt for GEO analysis
+_AI_BOTS = [
+    "GPTBot", "ChatGPT-User", "ClaudeBot", "Claude-SearchBot",
+    "PerplexityBot", "Perplexity-User", "Google-Extended",
+    "Applebot-Extended", "YouBot",
+]
 
 
 async def _fetch_page_enhanced(url: str, *, mobile: bool = False) -> dict[str, Any]:
@@ -197,8 +202,63 @@ async def _check_robots_txt(url: str) -> dict[str, Any]:
             if critical:
                 result["issues"].append(f"Important paths blocked: {', '.join(critical)}")
 
+        # GEO: Check AI bot access
+        bots_allowed = []
+        bots_blocked = []
+        bots_not_mentioned = []
+        body_lower = body.lower()
+        for bot in _AI_BOTS:
+            # Check if bot is explicitly mentioned in robots.txt
+            if f"user-agent: {bot.lower()}" in body_lower:
+                if rp.can_fetch(bot, "/"):
+                    bots_allowed.append(bot)
+                else:
+                    bots_blocked.append(bot)
+            else:
+                # Not mentioned = default allow (no specific rule)
+                bots_not_mentioned.append(bot)
+
+        result["ai_bots_access"] = {
+            "bots_allowed": bots_allowed,
+            "bots_blocked": bots_blocked,
+            "bots_not_mentioned": bots_not_mentioned,
+        }
+
     except Exception:
         result["issues"].append("Could not fetch robots.txt")
+    return result
+
+
+async def _check_llms_txt(url: str) -> dict[str, Any]:
+    """Check for /llms.txt file (AI content optimization standard).
+
+    llms.txt is a proposed standard that helps AI models understand site content.
+    Its presence signals GEO awareness.
+    """
+    parsed = urlparse(url)
+    llms_url = f"{parsed.scheme}://{parsed.netloc}/llms.txt"
+    result: dict[str, Any] = {
+        "has_llms_txt": False,
+        "sections": [],
+        "has_llms_full": False,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(llms_url, follow_redirects=True,
+                                    headers={"User-Agent": _DESKTOP_UA})
+        if resp.status_code == 200:
+            body = resp.text
+            result["has_llms_txt"] = True
+            # Extract section headers (lines starting with #)
+            for line in body.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("#"):
+                    result["sections"].append(stripped[:100])
+            # Check for llms-full.txt reference
+            if "llms-full.txt" in body.lower():
+                result["has_llms_full"] = True
+    except Exception:
+        pass
     return result
 
 
@@ -423,6 +483,315 @@ def _analyze_content_quality(
             result["issues"].append(f"Keyword stuffing detected: {', '.join(stuffed[:3])}")
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Phase 2b: GEO (Generative Engine Optimization) readiness analysis
+# ---------------------------------------------------------------------------
+
+def _analyze_geo_readiness(
+    soup: BeautifulSoup,
+    main_text: str,
+    robots_result: dict[str, Any],
+    llms_result: dict[str, Any],
+    schema_data: dict[str, Any],
+    content_quality: dict[str, Any],
+    links: dict[str, Any],
+    response_headers: dict[str, Any],
+) -> dict[str, Any]:
+    """Analyze GEO (Generative Engine Optimization) readiness.
+
+    Evaluates how well a page is optimized for AI-powered search engines
+    (ChatGPT, Perplexity, Google AI Overviews).  Uses already-parsed data —
+    no additional HTTP requests.
+
+    Scoring: 4 categories, 100 points total.
+    """
+    word_count = content_quality.get("word_count", len(main_text.split()))
+
+    # ── (i) AI Crawler Access (0-25) ──────────────────────────────────
+    ai_access = robots_result.get("ai_bots_access", {})
+    bots_allowed = ai_access.get("bots_allowed", [])
+    bots_blocked = ai_access.get("bots_blocked", [])
+    bots_not_mentioned = ai_access.get("bots_not_mentioned", [])
+
+    if not robots_result.get("has_robots_txt"):
+        # No robots.txt = no restrictions = all bots allowed
+        ai_crawler_score = 25
+        bots_not_mentioned = list(_AI_BOTS)
+        bots_allowed = []
+        bots_blocked = []
+    else:
+        # allowed + not_mentioned = effectively accessible
+        accessible_count = len(bots_allowed) + len(bots_not_mentioned)
+        ai_crawler_score = round(25 * accessible_count / len(_AI_BOTS))
+
+    ai_crawler_detail = {
+        "score": ai_crawler_score,
+        "max": 25,
+        "bots_allowed": bots_allowed,
+        "bots_blocked": bots_blocked,
+        "bots_not_mentioned": bots_not_mentioned,
+    }
+
+    # ── (ii) Content Structure (0-25) ─────────────────────────────────
+    cs_score = 0
+
+    # FAQ detection (10p max)
+    faq_schema = any(
+        t.lower() in ("faqpage", "faq") for t in schema_data.get("schema_types", [])
+    )
+    has_details_summary = bool(soup.find("details"))
+    faq_heading_pattern = re.compile(r'\b(FAQ|SSS|Sıkça\s+Sorulan|Sık\s+Sorulan|Frequently\s+Asked)\b', re.I)
+    has_faq_heading = bool(soup.find(re.compile(r'^h[1-6]$'), string=faq_heading_pattern))
+
+    if faq_schema:
+        cs_score += 5
+    if has_details_summary:
+        cs_score += 3
+    if has_faq_heading:
+        cs_score += 2
+
+    # Tables & lists (8p max)
+    tables_count = len(soup.find_all("table"))
+    ul_count = len(soup.find_all("ul"))
+    ol_count = len(soup.find_all("ol"))
+
+    if tables_count > 0:
+        cs_score += 3
+    if ul_count >= 2:
+        cs_score += 2
+    if ol_count > 0:
+        cs_score += 3
+
+    # Question headings (7p max)
+    question_headings_count = 0
+    for tag in soup.find_all(re.compile(r'^h[23]$')):
+        text = tag.get_text(strip=True)
+        if "?" in text:
+            question_headings_count += 1
+    cs_score += min(7, question_headings_count * 2)
+
+    cs_score = min(25, cs_score)
+
+    content_structure_detail = {
+        "score": cs_score,
+        "max": 25,
+        "has_faq_section": faq_schema or has_details_summary or has_faq_heading,
+        "faq_schema": faq_schema,
+        "tables_count": tables_count,
+        "lists_count": ul_count + ol_count,
+        "question_headings_count": question_headings_count,
+    }
+
+    # ── (iii) Citation & Data Density (0-25) ──────────────────────────
+    cd_score = 0
+
+    # External citation density (13p)
+    ext_links_count = links.get("external_links", 0)
+    words_per_1k = word_count / 1000 if word_count > 0 else 1
+    citation_density = ext_links_count / words_per_1k if words_per_1k > 0 else 0
+
+    if citation_density >= 3:
+        cd_score += 13
+    elif citation_density >= 2:
+        cd_score += 10
+    elif citation_density >= 1:
+        cd_score += 7
+    elif citation_density >= 0.5:
+        cd_score += 4
+
+    # Statistics/numerical data density (12p)
+    # Match: percentages, years, currency, units
+    stat_pattern = re.compile(
+        r'(?:'
+        r'\d+[.,]?\d*\s*%'           # percentages
+        r'|(?:19|20)\d{2}'           # years
+        r'|\$\d+|\€\d+|₺\d+'        # currency
+        r'|\d+\s*(?:kg|m²|km|lt|cm)' # units
+        r'|\d{1,3}(?:[.,]\d{3})+'    # large numbers (1.000, 2,500)
+        r')',
+        re.I,
+    )
+    statistics_count = len(stat_pattern.findall(main_text))
+    stats_density = statistics_count / words_per_1k if words_per_1k > 0 else 0
+
+    if stats_density >= 5:
+        cd_score += 12
+    elif stats_density >= 3:
+        cd_score += 9
+    elif stats_density >= 1.5:
+        cd_score += 6
+    elif stats_density >= 0.5:
+        cd_score += 3
+
+    cd_score = min(25, cd_score)
+
+    citation_detail = {
+        "score": cd_score,
+        "max": 25,
+        "external_citations": ext_links_count,
+        "citation_density_per_1k": round(citation_density, 2),
+        "statistics_count": statistics_count,
+        "statistics_density_per_1k": round(stats_density, 2),
+    }
+
+    # ── (iv) AI Discovery (0-25) ──────────────────────────────────────
+    ad_score = 0
+
+    # llms.txt (8p)
+    if llms_result.get("has_llms_txt"):
+        ad_score += 6
+        if llms_result.get("has_llms_full"):
+            ad_score += 2
+
+    # GEO-critical schema types (10p)
+    geo_schema_types = {"FAQPage", "HowTo", "Organization", "LocalBusiness",
+                        "Person", "Article", "Product"}
+    present_types = geo_schema_types & set(schema_data.get("schema_types", []))
+    missing_types = geo_schema_types - present_types
+    ad_score += min(10, len(present_types) * 2)
+
+    # Freshness signals (7p)
+    freshness_signals = []
+    if soup.find("time"):
+        freshness_signals.append("time_element")
+        ad_score += 2
+
+    # Check schema for datePublished/dateModified
+    has_date_schema = False
+    for sd in schema_data.get("schema_data", []):
+        if isinstance(sd, dict) and ("datePublished" in sd or "dateModified" in sd):
+            has_date_schema = True
+            break
+    if has_date_schema:
+        freshness_signals.append("schema_date")
+        ad_score += 3
+
+    if response_headers.get("last-modified"):
+        freshness_signals.append("last_modified_header")
+        ad_score += 2
+
+    ad_score = min(25, ad_score)
+
+    ai_discovery_detail = {
+        "score": ad_score,
+        "max": 25,
+        "has_llms_txt": llms_result.get("has_llms_txt", False),
+        "geo_schema_types_present": sorted(present_types),
+        "geo_schema_types_missing": sorted(missing_types),
+        "freshness_signals": freshness_signals,
+    }
+
+    # ── Total GEO Score ───────────────────────────────────────────────
+    total = ai_crawler_score + cs_score + cd_score + ad_score
+
+    result = {
+        "geo_readiness_score": total,
+        "ai_crawler_access": ai_crawler_detail,
+        "content_structure": content_structure_detail,
+        "citation_data": citation_detail,
+        "ai_discovery": ai_discovery_detail,
+    }
+    result["recommendations"] = _generate_geo_recommendations(result)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Phase 2c: GEO recommendation generator
+# ---------------------------------------------------------------------------
+
+def _generate_geo_recommendations(geo_result: dict[str, Any]) -> list[dict[str, Any]]:
+    """Generate user-friendly Turkish recommendations from GEO readiness scores.
+
+    Examines each GEO category and produces actionable advice for low-scoring
+    areas.  Returns a list of dicts with category/priority/action/reason.
+    """
+    recs: list[dict[str, Any]] = []
+
+    # ── AI Crawler Access ───────────────────────────────────────────────
+    ai = geo_result.get("ai_crawler_access", {})
+    if ai.get("bots_blocked"):
+        recs.append({
+            "category": "AI Erişimi",
+            "priority": "high",
+            "action": "Yapay zeka arama motorlarının sitenize erişmesine izin verin",
+            "reason": "ChatGPT ve benzeri araçlar sitenizi öneremedikçe potansiyel müşterilerinizi kaçırırsınız.",
+        })
+    elif ai.get("score", 25) < 15:
+        recs.append({
+            "category": "AI Erişimi",
+            "priority": "medium",
+            "action": "robots.txt dosyanızda AI botlarına erişim izni verin",
+            "reason": "Yapay zeka araçları sitenize tam erişemediğinde sizi öneremez.",
+        })
+
+    # ── Content Structure ───────────────────────────────────────────────
+    cs = geo_result.get("content_structure", {})
+    if not cs.get("has_faq_section"):
+        recs.append({
+            "category": "İçerik Yapısı",
+            "priority": "high",
+            "action": "Sıkça Sorulan Sorular (SSS) bölümü ekleyin",
+            "reason": "Yapay zeka araçları soru-cevap formatındaki içerikleri çok sever ve kullanıcılara doğrudan sunar.",
+        })
+    if cs.get("tables_count", 0) == 0 and cs.get("lists_count", 0) == 0:
+        recs.append({
+            "category": "İçerik Yapısı",
+            "priority": "medium",
+            "action": "Bilgileri listeler ve tablolarla sunun",
+            "reason": "Yapay zeka araçları düzenli bilgileri daha kolay okur ve önerir.",
+        })
+    if cs.get("question_headings_count", 0) == 0:
+        recs.append({
+            "category": "İçerik Yapısı",
+            "priority": "medium",
+            "action": "Başlıklarınızı soru formatında yazın",
+            "reason": "Yapay zeka araçları soru-cevap içeriklerini doğrudan yanıt olarak gösterir.",
+        })
+
+    # ── Citation & Data Density ─────────────────────────────────────────
+    cd = geo_result.get("citation_data", {})
+    if cd.get("citation_density_per_1k", 0) < 1:
+        recs.append({
+            "category": "Kaynak ve Veri",
+            "priority": "medium",
+            "action": "İçeriğinize güvenilir kaynak linkleri ekleyin",
+            "reason": "Yapay zeka araçları kaynaklarla desteklenen içerikleri daha güvenilir bulur.",
+        })
+    if cd.get("statistics_density_per_1k", 0) < 1:
+        recs.append({
+            "category": "Kaynak ve Veri",
+            "priority": "medium",
+            "action": "İçeriğinize istatistikler ve rakamsal veriler ekleyin",
+            "reason": "Yapay zeka araçları verilerle desteklenen içerikleri tercih eder ve daha sık önerir.",
+        })
+
+    # ── AI Discovery ────────────────────────────────────────────────────
+    ad = geo_result.get("ai_discovery", {})
+    if not ad.get("has_llms_txt"):
+        recs.append({
+            "category": "AI Keşfedilebilirlik",
+            "priority": "low",
+            "action": "Sitenize bir llms.txt dosyası ekleyin",
+            "reason": "Bu dosya yapay zeka araçlarına sitenizi ve içeriklerinizi tanıtır.",
+        })
+    if len(ad.get("geo_schema_types_missing", [])) > 0:
+        recs.append({
+            "category": "AI Keşfedilebilirlik",
+            "priority": "medium",
+            "action": "İşletme bilgilerinizi yapılandırılmış veri olarak ekleyin",
+            "reason": "Yapay zeka araçları bilgilerinizi daha doğru ve güvenilir şekilde aktarır.",
+        })
+    if not ad.get("freshness_signals"):
+        recs.append({
+            "category": "AI Keşfedilebilirlik",
+            "priority": "medium",
+            "action": "İçeriklerinize tarih bilgisi ekleyin",
+            "reason": "Güncel içerikler yapay zeka tarafından daha çok önerilir.",
+        })
+
+    return recs
 
 
 # ---------------------------------------------------------------------------
@@ -783,13 +1152,314 @@ def _calculate_seo_score_v2(analysis: dict[str, Any]) -> dict[str, Any]:
     penalty_total = sum(p["points"] for p in penalties)
     final_score = max(0, min(100, raw_total + penalty_total))
 
-    return {
+    result = {
         "total_score": final_score,
         "raw_score": raw_total,
         "penalty_total": penalty_total,
         "breakdown": breakdown,
         "penalties": penalties,
     }
+    result["recommendations"] = _generate_seo_recommendations(breakdown, penalties)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Phase 3b: SEO recommendation generator
+# ---------------------------------------------------------------------------
+
+def _generate_seo_recommendations(
+    breakdown: dict[str, Any],
+    penalties: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Generate user-friendly Turkish recommendations from SEO score breakdown.
+
+    Examines each category's sub-metrics and produces actionable advice for
+    low-scoring areas.  Returns a list of dicts with
+    category / priority / action / reason.
+    """
+    recs: list[dict[str, Any]] = []
+
+    # ── Technical SEO ───────────────────────────────────────────────────
+    tech = breakdown.get("technical_seo", {}).get("details", {})
+
+    if tech.get("robots_txt", 0) == 0:
+        recs.append({
+            "category": "Teknik Altyapı",
+            "priority": "high",
+            "action": "Web sitenize bir robots.txt dosyası ekleyin",
+            "reason": "Arama motorları sitenizi nasıl tarayacağını bilemiyor.",
+        })
+    if tech.get("sitemap", 0) == 0:
+        recs.append({
+            "category": "Teknik Altyapı",
+            "priority": "high",
+            "action": "Site haritası (sitemap) oluşturun",
+            "reason": "Arama motorları sayfalarınızı daha kolay bulsun.",
+        })
+    if tech.get("ssl_security", 0) <= 1:
+        recs.append({
+            "category": "Teknik Altyapı",
+            "priority": "high",
+            "action": "Sitenizi HTTPS ile güvenli hale getirin",
+            "reason": "Ziyaretçiler güvende olmadığını düşünebilir ve Google güvenli siteleri tercih eder.",
+        })
+    if tech.get("ttfb", 0) <= 1:
+        recs.append({
+            "category": "Teknik Altyapı",
+            "priority": "medium",
+            "action": "Sitenizin açılış hızını artırın",
+            "reason": "Siteniz yavaş açılıyor, ziyaretçiler beklemeden çıkabilir.",
+        })
+    if tech.get("canonical", 0) == 0:
+        recs.append({
+            "category": "Teknik Altyapı",
+            "priority": "low",
+            "action": "Her sayfanın orijinal adresini belirtin (canonical tag)",
+            "reason": "Aynı içerik farklı adreslerde görünüp sıralamanızı düşürebilir.",
+        })
+
+    # ── On-Page SEO ─────────────────────────────────────────────────────
+    onpage = breakdown.get("on_page_seo", {}).get("details", {})
+
+    if onpage.get("title", 0) == 0:
+        recs.append({
+            "category": "Sayfa İçi SEO",
+            "priority": "high",
+            "action": "Sayfa başlığınızı 50-60 karakter arasında yazın",
+            "reason": "Başlık, Google'da ilk görünen şeydir ve tıklanma oranını doğrudan etkiler.",
+        })
+    elif onpage.get("title", 0) <= 2:
+        recs.append({
+            "category": "Sayfa İçi SEO",
+            "priority": "medium",
+            "action": "Sayfa başlığınızı 50-60 karakter arasında optimize edin",
+            "reason": "Başlığınız var ama ideal uzunlukta değil, Google'da tam görünmeyebilir.",
+        })
+    if onpage.get("meta_description", 0) == 0:
+        recs.append({
+            "category": "Sayfa İçi SEO",
+            "priority": "high",
+            "action": "Sayfa açıklamanızı 120-160 karakter arasında yazın",
+            "reason": "İnsanlar Google'da bu açıklamayı görüp tıklayıp tıklamamaya karar verir.",
+        })
+    elif onpage.get("meta_description", 0) <= 2:
+        recs.append({
+            "category": "Sayfa İçi SEO",
+            "priority": "medium",
+            "action": "Sayfa açıklamanızı 120-160 karakter arasında düzenleyin",
+            "reason": "Açıklamanız var ama ideal uzunlukta değil.",
+        })
+    if onpage.get("h1", 0) == 0:
+        recs.append({
+            "category": "Sayfa İçi SEO",
+            "priority": "high",
+            "action": "Her sayfanın bir ana başlığı (H1) olsun",
+            "reason": "Ana başlık sayfanın ne hakkında olduğunu hem ziyaretçilere hem Google'a anlatır.",
+        })
+    if onpage.get("image_alt", 0) <= 1:
+        recs.append({
+            "category": "Sayfa İçi SEO",
+            "priority": "medium",
+            "action": "Resimlere açıklayıcı metin (alt text) ekleyin",
+            "reason": "Arama motorları resimlerin ne olduğunu anlayamaz, siz anlatmalısınız.",
+        })
+
+    # ── Content Quality ─────────────────────────────────────────────────
+    cq = breakdown.get("content_quality", {}).get("details", {})
+
+    if cq.get("word_count", 0) <= 1:
+        recs.append({
+            "category": "İçerik Kalitesi",
+            "priority": "high",
+            "action": "Sayfalarınıza daha fazla içerik ekleyin",
+            "reason": "Kısa içerikler Google'da üst sıralara çıkmakta zorlanır.",
+        })
+    if cq.get("no_stuffing", 4) == 0:
+        recs.append({
+            "category": "İçerik Kalitesi",
+            "priority": "high",
+            "action": "Anahtar kelimeleri daha doğal kullanın, tekrardan kaçının",
+            "reason": "Aynı kelimeyi çok fazla tekrarlamak Google tarafından cezalandırılır.",
+        })
+    if cq.get("keyword_in_title", 0) == 0 and cq.get("keyword_in_h1", 0) == 0:
+        recs.append({
+            "category": "İçerik Kalitesi",
+            "priority": "medium",
+            "action": "Anahtar kelimenizi başlıkta ve ana başlıkta kullanın",
+            "reason": "Google sayfanızın konusunu anlamak için başlıklara bakar.",
+        })
+
+    # ── Mobile & Performance ────────────────────────────────────────────
+    mob = breakdown.get("mobile_performance", {}).get("details", {})
+
+    if mob.get("viewport", 0) == 0:
+        recs.append({
+            "category": "Mobil Uyumluluk",
+            "priority": "high",
+            "action": "Sitenizi mobil uyumlu yapın",
+            "reason": "İnsanların çoğu sitenize telefondan giriyor, mobil uyumsuz siteler Google'da düşer.",
+        })
+    if mob.get("touch_icon", 0) == 0:
+        recs.append({
+            "category": "Mobil Uyumluluk",
+            "priority": "low",
+            "action": "Telefonlar için bir site ikonu ekleyin",
+            "reason": "Favori olarak eklendiğinde ikonunuz görünsün, profesyonel görünüm sağlar.",
+        })
+
+    # ── Schema & Structured Data ────────────────────────────────────────
+    sd = breakdown.get("schema_structured_data", {}).get("details", {})
+
+    if sd.get("json_ld", 0) == 0:
+        recs.append({
+            "category": "Yapılandırılmış Veri",
+            "priority": "medium",
+            "action": "İşletme bilgilerinizi Google'a tanıtın (yapılandırılmış veri)",
+            "reason": "Adres, telefon, çalışma saatleri gibi bilgiler Google'da direkt görünsün.",
+        })
+    if sd.get("og_tags", 0) == 0:
+        recs.append({
+            "category": "Yapılandırılmış Veri",
+            "priority": "low",
+            "action": "Sosyal medya paylaşım bilgilerinizi ekleyin",
+            "reason": "Siteniz paylaşıldığında güzel bir önizleme göstersin.",
+        })
+
+    # ── Authority Signals ───────────────────────────────────────────────
+    auth = breakdown.get("authority_signals", {}).get("details", {})
+
+    if auth.get("external_links", 0) == 0:
+        recs.append({
+            "category": "Otorite Sinyalleri",
+            "priority": "low",
+            "action": "Güvenilir kaynaklara referans linkler verin",
+            "reason": "Google güvenilir kaynaklara referans veren siteleri sever.",
+        })
+    if auth.get("internal_links", 0) == 0:
+        recs.append({
+            "category": "Otorite Sinyalleri",
+            "priority": "medium",
+            "action": "Sayfalarınız arasında bağlantılar verin",
+            "reason": "Ziyaretçiler diğer sayfalarınızı da keşfetsin ve sitenizde daha uzun kalsın.",
+        })
+
+    # ── Penalties → additional high-priority recs ───────────────────────
+    _PENALTY_MAP = {
+        "Missing title tag": {
+            "category": "Sayfa İçi SEO",
+            "priority": "high",
+            "action": "Sayfanıza bir başlık etiketi ekleyin",
+            "reason": "Başlık etiketi olmadan Google sayfanızı doğru listeleyemez.",
+        },
+        "Missing H1 heading": {
+            "category": "Sayfa İçi SEO",
+            "priority": "high",
+            "action": "Sayfanıza bir ana başlık (H1) ekleyin",
+            "reason": "Ana başlık olmadan sayfanızın konusu belirsiz kalır.",
+        },
+        "Not using HTTPS": {
+            "category": "Teknik Altyapı",
+            "priority": "high",
+            "action": "Sitenizi HTTPS'e geçirin",
+            "reason": "Güvenli olmayan siteler Google'da daha düşük sıralanır ve ziyaretçiler uyarı görür.",
+        },
+        "Multiple H1 tags": {
+            "category": "Sayfa İçi SEO",
+            "priority": "medium",
+            "action": "Her sayfada yalnızca bir ana başlık (H1) kullanın",
+            "reason": "Birden fazla H1 kullanmak arama motorlarını karıştırır.",
+        },
+        "Keyword stuffing detected": {
+            "category": "İçerik Kalitesi",
+            "priority": "high",
+            "action": "Anahtar kelime tekrarını azaltın, doğal bir dil kullanın",
+            "reason": "Google anahtar kelime doldurmayı tespit eder ve sitenizi cezalandırır.",
+        },
+        "No sitemap.xml found": {
+            "category": "Teknik Altyapı",
+            "priority": "medium",
+            "action": "Bir sitemap.xml dosyası oluşturun",
+            "reason": "Arama motorları sitenizdeki tüm sayfaları keşfedebilsin.",
+        },
+    }
+
+    for pen in penalties:
+        reason_key = pen.get("reason", "")
+        # Exact match first
+        if reason_key in _PENALTY_MAP:
+            recs.append(_PENALTY_MAP[reason_key])
+        else:
+            # Pattern-based fallback for dynamic penalty messages
+            if "SSL expires" in reason_key:
+                recs.append({
+                    "category": "Teknik Altyapı",
+                    "priority": "high",
+                    "action": "SSL sertifikanızı yenileyin",
+                    "reason": "SSL sertifikanızın süresi dolmak üzere, siteniz güvensiz olarak işaretlenebilir.",
+                })
+            elif "Redirect chain" in reason_key:
+                recs.append({
+                    "category": "Teknik Altyapı",
+                    "priority": "medium",
+                    "action": "Yönlendirme zincirlerini kısaltın",
+                    "reason": "Çok fazla yönlendirme sitenizin yavaş açılmasına neden olur.",
+                })
+            elif "robots.txt blocks" in reason_key:
+                recs.append({
+                    "category": "Teknik Altyapı",
+                    "priority": "high",
+                    "action": "robots.txt dosyanızda önemli sayfaların engellenmediğinden emin olun",
+                    "reason": "Önemli sayfalarınız arama motorları tarafından taranamıyor.",
+                })
+
+    return recs
+
+
+async def _serper_search(
+    query: str,
+    num: int = 10,
+    search_type: str = "text",
+    gl: str = "tr",
+    hl: str = "tr",
+) -> dict[str, Any]:
+    """Shared helper for Serper.dev Google Search API.
+
+    Args:
+        query: Search query.
+        num: Number of results.
+        search_type: "text" or "news".
+        gl: Country code for geolocation (default "tr").
+        hl: Language code (default "tr").
+
+    Returns:
+        Raw JSON response from Serper.dev.
+
+    Raises:
+        ValueError: If SERPER_API_KEY is not configured.
+        httpx.HTTPStatusError: On non-2xx responses.
+    """
+    settings = get_settings()
+    if not settings.serper_api_key:
+        raise ValueError("SERPER_API_KEY not configured")
+
+    endpoint = (
+        "https://google.serper.dev/news"
+        if search_type == "news"
+        else "https://google.serper.dev/search"
+    )
+
+    headers = {
+        "X-API-KEY": settings.serper_api_key,
+        "Content-Type": "application/json",
+    }
+    payload = {"q": query, "num": num, "gl": gl, "hl": hl}
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(
+            endpoint, headers=headers, content=json.dumps(payload),
+        )
+        resp.raise_for_status()
+        return resp.json()
 
 
 @function_tool
@@ -799,7 +1469,7 @@ async def web_search(
     search_type: str = "text",
 ) -> dict[str, Any]:
     """
-    Search the web using DuckDuckGo.
+    Search the web using Google (via Serper.dev API).
 
     Args:
         query: Search query string.
@@ -809,43 +1479,29 @@ async def web_search(
     Returns:
         Dictionary with search results including titles, URLs, and snippets.
     """
-    if DDGS is None:
-        return {
-            "success": False,
-            "error": "ddgs not installed. Run: pip install ddgs",
-            "query": query,
-            "results": [],
-        }
-
     try:
-        # Limit results
         num_results = min(num_results, 10)
+
+        data = await _serper_search(query, num=num_results, search_type=search_type)
 
         results = []
 
-        with DDGS() as ddgs:
-            if search_type == "news":
-                # News search for recent articles
-                search_results = ddgs.news(query, max_results=num_results)
-            else:
-                # Regular text search
-                search_results = ddgs.text(query, max_results=num_results)
-
-            for r in search_results:
-                if search_type == "news":
-                    results.append({
-                        "url": r.get("url", ""),
-                        "title": r.get("title", ""),
-                        "snippet": r.get("body", ""),
-                        "date": r.get("date", ""),
-                        "source": r.get("source", ""),
-                    })
-                else:
-                    results.append({
-                        "url": r.get("href", ""),
-                        "title": r.get("title", ""),
-                        "snippet": r.get("body", ""),
-                    })
+        if search_type == "news":
+            for r in data.get("news", []):
+                results.append({
+                    "url": r.get("link", ""),
+                    "title": r.get("title", ""),
+                    "snippet": r.get("snippet", ""),
+                    "date": r.get("date", ""),
+                    "source": r.get("source", ""),
+                })
+        else:
+            for r in data.get("organic", []):
+                results.append({
+                    "url": r.get("link", ""),
+                    "title": r.get("title", ""),
+                    "snippet": r.get("snippet", ""),
+                })
 
         return {
             "success": True,
@@ -1481,6 +2137,14 @@ def _analyze_single_page_seo(
         # Mobile TTFB (if provided)
         analysis["mobile_ttfb_ms"] = enhanced_data.get("mobile_ttfb_ms", 0)
 
+        # GEO readiness analysis (uses already-parsed data, no extra HTTP)
+        geo_analysis = _analyze_geo_readiness(
+            soup, main_text, enhanced_data.get("robots_txt", {}),
+            enhanced_data.get("llms_txt", {}), schema, content_quality, links,
+            enhanced_data.get("response_headers", {}),
+        )
+        analysis["geo_analysis"] = geo_analysis
+
         # Inject response headers for SSL scoring
         ssl_data = enhanced_data.get("ssl_security", {})
         ssl_data["security_headers"] = enhanced_data.get("response_headers", {})
@@ -1529,6 +2193,7 @@ async def scrape_for_seo(
         - content_quality: depth, readability, keyword placement
         - score_breakdown: 6-category scoring with per-category details
         - seo_score: Overall score (0-100, v2 algorithm)
+        - geo_analysis: GEO readiness analysis (AI crawler access, content structure, citation density, AI discovery)
         - subpages: Analysis of subpages (if include_subpages=True)
     """
     try:
@@ -1558,11 +2223,14 @@ async def scrape_for_seo(
         html = fetch_result["html"]
         final_url = fetch_result["final_url"] or url
 
-        # 2. Run async technical checks in parallel
+        # 2. Run async technical checks in parallel (including GEO llms.txt)
         robots_task = _check_robots_txt(url)
         ssl_task = _check_ssl_security(url)
+        llms_task = _check_llms_txt(url)
 
-        robots_result, ssl_result = await asyncio.gather(robots_task, ssl_task)
+        robots_result, ssl_result, llms_result = await asyncio.gather(
+            robots_task, ssl_task, llms_task,
+        )
 
         # Sitemap depends on robots.txt sitemaps
         sitemap_result = await _check_sitemap(url, robots_result.get("sitemap_urls"))
@@ -1576,6 +2244,7 @@ async def scrape_for_seo(
             "robots_txt": robots_result,
             "sitemap": sitemap_result,
             "ssl_security": ssl_result,
+            "llms_txt": llms_result,
             "response_headers": fetch_result["response_headers"],
             "ttfb_ms": fetch_result["ttfb_ms"],
             "redirect_count": fetch_result["redirect_count"],
@@ -1803,11 +2472,12 @@ async def check_serp_position(
     num_results: int = 10,
 ) -> dict[str, Any]:
     """
-    Check real search engine visibility for a domain across keywords.
+    Check real Google search visibility for a domain across keywords.
 
-    Searches DuckDuckGo for each keyword and checks if the domain appears
-    in the top results.  This is the ultimate validation of SEO effectiveness:
-    a site can have perfect on-page SEO but still be invisible in search.
+    Searches Google (via Serper.dev) for each keyword and checks if the domain
+    appears in the top results.  This is the ultimate validation of SEO
+    effectiveness: a site can have perfect on-page SEO but still be invisible
+    in search.
 
     IMPORTANT: The 'keywords' parameter is REQUIRED. Provide 5-10 keywords.
 
@@ -1824,10 +2494,11 @@ async def check_serp_position(
         - found_count: How many keywords the domain was found for
         - not_found_keywords: Keywords where domain was NOT in results
     """
-    if DDGS is None:
+    settings = get_settings()
+    if not settings.serper_api_key:
         return {
             "success": False,
-            "error": "ddgs not installed. Run: pip install ddgs",
+            "error": "SERPER_API_KEY not configured",
         }
 
     if not keywords or not isinstance(keywords, list) or len(keywords) < 1:
@@ -1847,9 +2518,9 @@ async def check_serp_position(
     not_found_keywords = []
 
     for i, keyword in enumerate(keywords):
-        # Rate limit: 1 second between searches
+        # Rate limit: 0.3s between searches (Serper supports 300 req/s)
         if i > 0:
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(0.3)
 
         kw_result: dict[str, Any] = {
             "keyword": keyword,
@@ -1860,27 +2531,26 @@ async def check_serp_position(
         }
 
         try:
-            with DDGS() as ddgs:
-                search_results = ddgs.text(keyword, max_results=num_results)
+            data = await _serper_search(keyword, num=num_results)
 
-                for pos, r in enumerate(search_results, 1):
-                    result_url = r.get("href", "")
-                    result_domain = urlparse(result_url).netloc.lower()
+            for pos, r in enumerate(data.get("organic", []), 1):
+                result_url = r.get("link", "")
+                result_domain = urlparse(result_url).netloc.lower()
 
-                    kw_result["top_results"].append({
-                        "position": pos,
-                        "domain": result_domain,
-                        "title": r.get("title", ""),
-                    })
+                kw_result["top_results"].append({
+                    "position": pos,
+                    "domain": result_domain,
+                    "title": r.get("title", ""),
+                })
 
-                    # Check if our domain matches
-                    if not kw_result["found"] and (
-                        domain in result_domain or result_domain.endswith("." + domain)
-                    ):
-                        kw_result["position"] = pos
-                        kw_result["found"] = True
-                        kw_result["found_url"] = result_url
-                        found_count += 1
+                # Check if our domain matches
+                if not kw_result["found"] and (
+                    domain in result_domain or result_domain.endswith("." + domain)
+                ):
+                    kw_result["position"] = pos
+                    kw_result["found"] = True
+                    kw_result["found_url"] = result_url
+                    found_count += 1
 
         except Exception as e:
             kw_result["error"] = str(e)

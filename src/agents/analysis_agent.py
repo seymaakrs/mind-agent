@@ -43,9 +43,9 @@ You have DIRECT access to web tools - no need to call another agent:
 
 **Saving Results:**
 6. **save_swot_report(...)** - Save SWOT analysis ONLY (Strengths/Weaknesses/Opportunities/Threats)
-7. **save_seo_report(...)** - Save SEO analysis to Firebase (v2: accepts score_breakdown, technical_seo, mobile_analysis, content_quality, serp_positions, serp_visibility_score)
+7. **save_seo_report(...)** - Save SEO analysis to Firebase (v2: accepts score_breakdown, technical_seo, mobile_analysis, content_quality, serp_positions, serp_visibility_score, geo_readiness_score, geo_analysis)
 8. **save_seo_keywords(...)** - Save recommended SEO keywords to Firebase
-9. **save_seo_summary(...)** - Save SEO summary to seo/summary + agent memory (v2: accepts serp_visibility_score, score_breakdown)
+9. **save_seo_summary(...)** - Save SEO summary to seo/summary + agent memory (v2: accepts serp_visibility_score, score_breakdown, geo_readiness_score, geo_analysis)
 10. **save_custom_report(...)** - Save ANY report that is NOT SWOT or SEO (research, trends, market analysis, etc.)
 11. **get_seo_keywords(...)** - Get saved SEO keywords
 12. **get_reports(...)** - List existing reports
@@ -187,6 +187,7 @@ This now returns ENHANCED data:
 - **content_quality**: word count, readability score, keyword placement, stuffing detection
 - **score_breakdown**: 6-category scoring with per-category details
 - **seo_score**: New v2 score (0-100, stricter and more realistic than before)
+- **geo_analysis**: GEO readiness analysis for AI search engines (see Step 5b)
 
 ### Step 3: Find Competitors
 Call web_search to find competitors:
@@ -229,6 +230,29 @@ Returns:
 - visibility_score 30-70: Moderate, needs improvement
 - visibility_score < 30: Poor, site is barely visible in search
 - visibility_score 0: Site doesn't appear for ANY keyword — critical issue!
+
+### Step 5b: GEO Readiness Interpretation (from scrape_for_seo response)
+The `geo_analysis` field from Step 2 contains AI search engine readiness data:
+
+**GEO Score (0-100, 4 categories):**
+- **AI Crawler Access (25p)**: Are AI bots (GPTBot, ClaudeBot, PerplexityBot etc.) allowed in robots.txt?
+- **Content Structure (25p)**: FAQ sections, tables, lists, question headings — structured for AI extraction
+- **Citation & Data Density (25p)**: External citations, statistics, numerical data per 1000 words
+- **AI Discovery (25p)**: llms.txt file, GEO-critical schema types, freshness signals
+
+**Score interpretation:**
+- geo_readiness_score > 70: Good AI search readiness
+- geo_readiness_score 30-70: Moderate, actionable improvements available
+- geo_readiness_score < 30: Poor, site is likely invisible to AI search engines
+- geo_readiness_score 0-15: Critical — basic GEO elements completely missing
+
+**GEO-specific technical issues to include in Step 7:**
+- AI bots blocked in robots.txt → "error" type, recommend allowing GPTBot, ClaudeBot, PerplexityBot
+- No llms.txt file → "info" type, recommend creating /llms.txt for AI content optimization
+- Missing GEO-critical schema types → "warning" type, recommend FAQPage, HowTo, Article, LocalBusiness
+- Low citation density (<1 per 1000 words) → "info" type, recommend adding external references/citations
+- No FAQ section → "info" type, recommend adding FAQ with question-answer format
+- No freshness signals (no dates, no last-modified) → "info" type, recommend adding datePublished schema
 
 ### Step 6: Extract and Categorize Keywords
 From competitor analysis AND SERP results, identify and categorize keywords:
@@ -293,6 +317,11 @@ Analyze the business website results and identify issues across ALL categories:
 - Add responsive CSS media queries
 - Improve readability score
 - Keyword not in H1 or title
+- GEO: No llms.txt file (AI content optimization)
+- GEO: Low citation/reference density
+- GEO: No FAQ section for AI extraction
+- GEO: Missing freshness signals (dates, last-modified)
+- GEO: Missing GEO-critical schema types (FAQPage, HowTo, Article)
 
 Format: {"type": "error/warning/info", "issue": "description", "recommendation": "how to fix"}
 
@@ -321,7 +350,7 @@ Penalties are deducted for critical issues (missing title: -15, missing H1: -10,
    )
    ```
 
-2. Then, call save_seo_report with the NEW v2 fields:
+2. Then, call save_seo_report with v2 + GEO fields:
    ```python
    save_seo_report(
        business_id="{business_id}",
@@ -334,17 +363,20 @@ Penalties are deducted for critical issues (missing title: -15, missing H1: -10,
        overall_score=55,  # v2 scores are LOWER and more realistic
        competitor_urls=[...],
        data_sources={"business_website": true, "competitors": true, "web_search": true},
-       # NEW v2 fields:
+       # v2 fields:
        score_breakdown={...},        # From scrape_for_seo response
        technical_seo={...},          # From scrape_for_seo response
        mobile_analysis={...},        # From scrape_for_seo response
        content_quality={...},        # From scrape_for_seo response
        serp_positions=[...],         # From check_serp_position results
        serp_visibility_score=25,     # From check_serp_position visibility_score
+       # GEO fields:
+       geo_readiness_score=45,       # From scrape_for_seo geo_analysis.geo_readiness_score
+       geo_analysis={...},           # From scrape_for_seo geo_analysis (full object)
    )
    ```
 
-3. Finally, call save_seo_summary with v2 fields:
+3. Finally, call save_seo_summary with v2 + GEO fields:
    ```python
    save_seo_summary(
        business_id="...",
@@ -354,9 +386,12 @@ Penalties are deducted for critical issues (missing title: -15, missing H1: -10,
        competitor_count=10,
        competitor_avg_score=48,
        last_report_id="seo-20260205-abc123",
-       # NEW v2 fields:
+       # v2 fields:
        serp_visibility_score=25,
        score_breakdown={"technical_seo": 18, "on_page_seo": 15, ...},
+       # GEO fields:
+       geo_readiness_score=45,
+       geo_analysis={...},           # Summary of 4-category breakdown
    )
    ```
 
@@ -365,9 +400,10 @@ After saving, report to user:
 1. ✓ "SEO raporu kaydedildi. Report ID: {report_id}"
 2. Overall SEO score with category breakdown
 3. **SERP visibility score** (this is the reality check!)
-4. Top 5 keyword recommendations
-5. Top 3-5 technical issues to fix (prioritized by severity)
-6. Top 2 content recommendations
+4. **GEO readiness score** with brief interpretation (good/moderate/poor for AI search engines)
+5. Top 5 keyword recommendations
+6. Top 3-5 technical issues to fix (prioritized by severity, include GEO issues)
+7. Top 2 content recommendations
 
 ## SEO MANDATORY RULES
 

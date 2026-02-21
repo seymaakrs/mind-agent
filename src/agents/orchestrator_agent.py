@@ -110,6 +110,7 @@ def create_orchestrator_agent(
             "3) Use this EXACT value when calling marketing_agent_tool: \r"
             "   - instagram_id = instagram_id from fetch_business \r"
             "4) NEVER guess or invent this value! It MUST come from fetch_business! \r"
+            "5) If profile contains seo_keywords, include them in your prompt to marketing_agent_tool: 'SEO Keywords: [keyword1, keyword2, ...]' \r"
             "\n"
             "CRITICAL - CAROUSEL POSTS: "
             "When user asks for carousel/multi-slide Instagram posts: "

@@ -21,10 +21,13 @@ docker
 
 # Web scraping / search
 beautifulsoup4>=4.12
-ddgs>=7.0
 
 # Token counting (for dry-run mode cost analysis)
 tiktoken>=0.5
 
 # fal.ai (MMAudio - video audio generation)
 fal-client>=0.13
+
+# Testing
+pytest>=8.0
+pytest-asyncio>=0.23

@@ -419,6 +419,555 @@ async def post_carousel_on_instagram(
 
 
 @function_tool(
+    name_override="post_carousel_on_tiktok",
+    description_override=(
+        "Post a carousel (photo slideshow) to TikTok via Late API.\n\n"
+        "Automatically fetches tiktok_account_id from the business profile in Firebase.\n\n"
+        "REQUIRED PARAMETERS:\n"
+        "1. media_items: List of 2-35 image objects. EACH object MUST have:\n"
+        '   - "url": Full public URL (JPEG/PNG/WebP, max 20MB each)\n'
+        '   - "type": "image"\n'
+        "2. content: Carousel title (max 90 chars). Hashtags/URLs auto-cleaned by TikTok.\n"
+        "3. privacy_level: Creator's allowed privacy value (e.g. PUBLIC_TO_EVERYONE, MUTUAL_FOLLOW_FRIENDS, SELF_ONLY)\n"
+        "4. business_id: Business ID to fetch tiktok_account_id from Firebase\n\n"
+        "OPTIONAL PARAMETERS:\n"
+        "- description: Long caption (max 4000 chars). content is the title, description is the real caption.\n"
+        "- allow_comment: Allow comments (default: true)\n"
+        "- photo_cover_index: Which photo is cover (0-indexed, default: 0)\n"
+        "- auto_add_music: TikTok auto-adds music (carousel only)\n"
+        "- video_made_with_ai: AI disclosure flag\n"
+        "- draft: Send to Creator Inbox, don't publish directly\n"
+        "- commercial_content_type: Commercial content disclosure\n\n"
+        "NOTE: allow_duet and allow_stitch are NOT applicable for carousel posts (video only)."
+    ),
+    strict_mode=False,
+)
+async def post_carousel_on_tiktok(
+    media_items: list[dict],
+    content: str,
+    privacy_level: str,
+    business_id: str,
+    description: str | None = None,
+    allow_comment: bool = True,
+    photo_cover_index: int | None = None,
+    auto_add_music: bool | None = None,
+    video_made_with_ai: bool | None = None,
+    draft: bool | None = None,
+    commercial_content_type: str | None = None,
+) -> dict[str, Any]:
+    """
+    Post a carousel to TikTok via Late API.
+
+    Args:
+        media_items: List of image items [{"type": "image", "url": "..."}, ...] (2-35 items).
+        content: Carousel title (max 90 chars).
+        privacy_level: TikTok privacy level.
+        business_id: Business ID to fetch tiktok_account_id from Firebase.
+        description: Long caption (max 4000 chars, optional).
+        allow_comment: Allow comments (default True).
+        photo_cover_index: Cover photo index, 0-based (optional).
+        auto_add_music: Let TikTok auto-add music (optional).
+        video_made_with_ai: AI disclosure flag (optional).
+        draft: Send to Creator Inbox instead of publishing (optional).
+        commercial_content_type: Commercial content disclosure (optional).
+
+    Returns:
+        dict with success, post_id, and details.
+    """
+    try:
+        # --- Validations ---
+        if len(content) > 90:
+            return {
+                "success": False,
+                "error": f"Content (title) exceeds 90 characters ({len(content)} chars)",
+            }
+
+        if description and len(description) > 4000:
+            return {
+                "success": False,
+                "error": f"Description exceeds 4000 characters ({len(description)} chars)",
+            }
+
+        if len(media_items) < 2:
+            return {
+                "success": False,
+                "error": "TikTok carousel requires at least 2 media items",
+            }
+
+        if len(media_items) > 35:
+            return {
+                "success": False,
+                "error": "TikTok carousel cannot have more than 35 media items",
+            }
+
+        # Validate each media item
+        for i, item in enumerate(media_items):
+            if not isinstance(item, dict):
+                return {
+                    "success": False,
+                    "error": f"media_items[{i}] must be a dict, got {type(item).__name__}",
+                }
+            url = item.get("url")
+            if not url:
+                return {
+                    "success": False,
+                    "error": f"media_items[{i}] missing required 'url' field",
+                }
+            if not url.startswith("http"):
+                return {
+                    "success": False,
+                    "error": f"media_items[{i}] has invalid URL '{url}'. URL must start with http:// or https://",
+                }
+
+        # Validate photo_cover_index
+        if photo_cover_index is not None and (photo_cover_index < 0 or photo_cover_index >= len(media_items)):
+            return {
+                "success": False,
+                "error": f"photo_cover_index ({photo_cover_index}) is out of range. Must be 0-{len(media_items) - 1}",
+            }
+
+        # --- Fetch tiktok_account_id from Firebase ---
+        doc_client = get_document_client("businesses")
+        business = doc_client.get_document(business_id)
+
+        if business is None:
+            return {
+                "success": False,
+                "error": f"Business not found: {business_id}",
+            }
+
+        tiktok_account_id = business.get("tiktok_account_id")
+        if not tiktok_account_id:
+            return {
+                "success": False,
+                "error": f"No tiktok_account_id found for business {business_id}. Please add it to the business profile.",
+            }
+
+        # --- Post via Late API ---
+        late = get_late_client(tiktok_account_id)
+        result = await late.post_tiktok_carousel(
+            media_items=media_items,
+            content=content,
+            privacy_level=privacy_level,
+            allow_comment=allow_comment,
+            description=description,
+            photo_cover_index=photo_cover_index,
+            auto_add_music=auto_add_music,
+            video_made_with_ai=video_made_with_ai,
+            draft=draft,
+            commercial_content_type=commercial_content_type,
+        )
+
+        if not result.get("success"):
+            return {
+                "success": False,
+                "error": result.get("error", "Unknown error"),
+                "status_code": result.get("status_code"),
+                "item_count": len(media_items),
+            }
+
+        return {
+            "success": True,
+            "post_id": result.get("platform_post_id"),
+            "late_post_id": result.get("post_id"),
+            "post_url": result.get("platform_post_url"),
+            "content_type": "carousel",
+            "item_count": result.get("item_count"),
+            "message": f"Successfully posted carousel with {result.get('item_count')} items to TikTok",
+        }
+
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": f"TikTok carousel posting failed: {type(exc).__name__}: {exc}",
+            "item_count": len(media_items),
+        }
+
+
+@function_tool(
+    name_override="post_on_tiktok",
+    description_override=(
+        "Post a video to TikTok via Late API.\n\n"
+        "Automatically fetches tiktok_account_id from the business profile in Firebase.\n\n"
+        "REQUIRED PARAMETERS:\n"
+        "1. video_url: Public URL of the video (MP4/MOV/WebM, max 4GB, 3s-10min)\n"
+        "2. content: Video caption (max 2200 chars)\n"
+        "3. privacy_level: Creator's allowed value (PUBLIC_TO_EVERYONE, MUTUAL_FOLLOW_FRIENDS, FOLLOWER_OF_CREATOR, SELF_ONLY)\n"
+        "4. business_id: Business ID to fetch tiktok_account_id from Firebase\n\n"
+        "OPTIONAL PARAMETERS:\n"
+        "- allow_comment: Allow comments (default: true)\n"
+        "- allow_duet: Allow duet (default: true). Video only.\n"
+        "- allow_stitch: Allow stitch (default: true). Video only.\n"
+        "- video_cover_timestamp_ms: Cover frame timestamp in ms (default: 1000 = 1st second)\n"
+        "- video_made_with_ai: AI disclosure flag\n"
+        "- draft: Send to Creator Inbox, don't publish directly\n"
+        "- commercial_content_type: 'none', 'brand_organic', or 'brand_content'"
+    ),
+    strict_mode=False,
+)
+async def post_on_tiktok(
+    video_url: str,
+    content: str,
+    privacy_level: str,
+    business_id: str,
+    allow_comment: bool = True,
+    allow_duet: bool = True,
+    allow_stitch: bool = True,
+    video_cover_timestamp_ms: int | None = None,
+    video_made_with_ai: bool | None = None,
+    draft: bool | None = None,
+    commercial_content_type: str | None = None,
+) -> dict[str, Any]:
+    """
+    Post a video to TikTok via Late API.
+
+    Args:
+        video_url: Public URL of the video file.
+        content: Video caption (max 2200 chars).
+        privacy_level: TikTok privacy level.
+        business_id: Business ID to fetch tiktok_account_id from Firebase.
+        allow_comment: Allow comments (default True).
+        allow_duet: Allow duet (default True).
+        allow_stitch: Allow stitch (default True).
+        video_cover_timestamp_ms: Cover frame timestamp in ms (optional).
+        video_made_with_ai: AI disclosure flag (optional).
+        draft: Send to Creator Inbox (optional).
+        commercial_content_type: Commercial content disclosure (optional).
+
+    Returns:
+        dict with success, post_id, and details.
+    """
+    try:
+        # --- Validations ---
+        if len(content) > 2200:
+            return {
+                "success": False,
+                "error": f"Content (caption) exceeds 2200 characters ({len(content)} chars)",
+            }
+
+        if not video_url.startswith("http"):
+            return {
+                "success": False,
+                "error": f"Invalid video URL '{video_url}'. URL must start with http:// or https://",
+            }
+
+        # --- Fetch tiktok_account_id from Firebase ---
+        doc_client = get_document_client("businesses")
+        business = doc_client.get_document(business_id)
+
+        if business is None:
+            return {
+                "success": False,
+                "error": f"Business not found: {business_id}",
+            }
+
+        tiktok_account_id = business.get("tiktok_account_id")
+        if not tiktok_account_id:
+            return {
+                "success": False,
+                "error": f"No tiktok_account_id found for business {business_id}. Please add it to the business profile.",
+            }
+
+        # --- Post via Late API ---
+        late = get_late_client(tiktok_account_id)
+        result = await late.post_tiktok_video(
+            video_url=video_url,
+            content=content,
+            privacy_level=privacy_level,
+            allow_comment=allow_comment,
+            allow_duet=allow_duet,
+            allow_stitch=allow_stitch,
+            video_cover_timestamp_ms=video_cover_timestamp_ms,
+            video_made_with_ai=video_made_with_ai,
+            draft=draft,
+            commercial_content_type=commercial_content_type,
+        )
+
+        if not result.get("success"):
+            return {
+                "success": False,
+                "error": result.get("error", "Unknown error"),
+                "status_code": result.get("status_code"),
+            }
+
+        return {
+            "success": True,
+            "post_id": result.get("platform_post_id"),
+            "late_post_id": result.get("post_id"),
+            "post_url": result.get("platform_post_url"),
+            "content_type": "video",
+            "message": "Successfully posted video to TikTok",
+        }
+
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": f"TikTok video posting failed: {type(exc).__name__}: {exc}",
+        }
+
+
+@function_tool(
+    name_override="post_on_linkedin",
+    description_override=(
+        "Post to LinkedIn via Late API (text-only, single image, or video).\n\n"
+        "Automatically fetches linkedin_account_id from the business profile in Firebase.\n\n"
+        "SCENARIOS:\n"
+        "1. Text-only: Provide only content (no media_url)\n"
+        "2. Image post: Provide content + media_url + media_type='image'\n"
+        "3. Video post: Provide content + media_url + media_type='video'\n\n"
+        "REQUIRED:\n"
+        "- business_id: Business ID to fetch linkedin_account_id from Firebase\n"
+        "- content: Post text (max 3000 chars). Optional only if media_url provided.\n\n"
+        "OPTIONAL:\n"
+        "- media_url: Public URL of image or video\n"
+        "- media_type: 'image' or 'video' (required if media_url provided)\n"
+        "- first_comment: Auto-posted first comment (recommended for links - LinkedIn suppresses posts with URLs by 40-50%%)\n"
+        "- disable_link_preview: Suppress URL preview card (default: false)\n"
+        "- organization_urn: Post as company page (format: urn:li:organization:XXXXX)\n"
+        "- scheduled_for: ISO datetime for scheduled post"
+    ),
+    strict_mode=False,
+)
+async def post_on_linkedin(
+    business_id: str,
+    content: str | None = None,
+    media_url: str | None = None,
+    media_type: Literal["image", "video"] | None = None,
+    first_comment: str | None = None,
+    disable_link_preview: bool | None = None,
+    organization_urn: str | None = None,
+    scheduled_for: str | None = None,
+) -> dict[str, Any]:
+    """
+    Post to LinkedIn via Late API.
+
+    Args:
+        business_id: Business ID to fetch linkedin_account_id from Firebase.
+        content: Post text (max 3000 chars).
+        media_url: Public URL of image or video (optional).
+        media_type: "image" or "video" (required if media_url provided).
+        first_comment: Auto-posted first comment (optional).
+        disable_link_preview: Suppress URL preview card (optional).
+        organization_urn: Post as company page (optional).
+        scheduled_for: ISO datetime for scheduled post (optional).
+
+    Returns:
+        dict with success, post_id, and details.
+    """
+    try:
+        # --- Validations ---
+        if not content and not media_url:
+            return {
+                "success": False,
+                "error": "Either content or media_url must be provided",
+            }
+
+        if content and len(content) > 3000:
+            return {
+                "success": False,
+                "error": f"Content exceeds 3000 characters ({len(content)} chars)",
+            }
+
+        if media_url and not media_type:
+            return {
+                "success": False,
+                "error": "media_type is required when media_url is provided. Use 'image' or 'video'.",
+            }
+
+        if media_url and not media_url.startswith("http"):
+            return {
+                "success": False,
+                "error": f"Invalid media URL '{media_url}'. URL must start with http:// or https://",
+            }
+
+        # --- Fetch linkedin_account_id from Firebase ---
+        doc_client = get_document_client("businesses")
+        business = doc_client.get_document(business_id)
+
+        if business is None:
+            return {
+                "success": False,
+                "error": f"Business not found: {business_id}",
+            }
+
+        linkedin_account_id = business.get("linkedin_account_id")
+        if not linkedin_account_id:
+            return {
+                "success": False,
+                "error": f"No linkedin_account_id found for business {business_id}. Please add it to the business profile.",
+            }
+
+        # --- Post via Late API ---
+        late = get_late_client(linkedin_account_id)
+        result = await late.post_linkedin(
+            content=content,
+            media_url=media_url,
+            media_type=media_type,
+            first_comment=first_comment,
+            disable_link_preview=disable_link_preview,
+            organization_urn=organization_urn,
+            scheduled_for=scheduled_for,
+        )
+
+        if not result.get("success"):
+            return {
+                "success": False,
+                "error": result.get("error", "Unknown error"),
+                "status_code": result.get("status_code"),
+            }
+
+        content_type = media_type or "text"
+        return {
+            "success": True,
+            "post_id": result.get("platform_post_id"),
+            "late_post_id": result.get("post_id"),
+            "post_url": result.get("platform_post_url"),
+            "content_type": content_type,
+            "message": f"Successfully posted {content_type} to LinkedIn",
+        }
+
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": f"LinkedIn posting failed: {type(exc).__name__}: {exc}",
+        }
+
+
+@function_tool(
+    name_override="post_carousel_on_linkedin",
+    description_override=(
+        "Post a multi-image carousel (2-20 images) to LinkedIn via Late API.\n\n"
+        "Automatically fetches linkedin_account_id from the business profile in Firebase.\n\n"
+        "REQUIRED:\n"
+        "- media_items: List of 2-20 image objects. Each must have 'url' and 'type': 'image'\n"
+        "- business_id: Business ID to fetch linkedin_account_id from Firebase\n\n"
+        "OPTIONAL:\n"
+        "- content: Post text (max 3000 chars)\n"
+        "- first_comment: Auto-posted first comment\n"
+        "- disable_link_preview: Suppress URL preview card\n"
+        "- organization_urn: Post as company page (format: urn:li:organization:XXXXX)\n"
+        "- scheduled_for: ISO datetime for scheduled post\n\n"
+        "NOTE: Cannot mix media types. All items must be images."
+    ),
+    strict_mode=False,
+)
+async def post_carousel_on_linkedin(
+    media_items: list[dict],
+    business_id: str,
+    content: str | None = None,
+    first_comment: str | None = None,
+    disable_link_preview: bool | None = None,
+    organization_urn: str | None = None,
+    scheduled_for: str | None = None,
+) -> dict[str, Any]:
+    """
+    Post a multi-image carousel to LinkedIn via Late API.
+
+    Args:
+        media_items: List of image items (2-20).
+        business_id: Business ID to fetch linkedin_account_id from Firebase.
+        content: Post text (max 3000 chars, optional).
+        first_comment: Auto-posted first comment (optional).
+        disable_link_preview: Suppress URL preview card (optional).
+        organization_urn: Post as company page (optional).
+        scheduled_for: ISO datetime for scheduled post (optional).
+
+    Returns:
+        dict with success, post_id, and details.
+    """
+    try:
+        # --- Validations ---
+        if len(media_items) < 2:
+            return {
+                "success": False,
+                "error": "LinkedIn carousel requires at least 2 media items",
+            }
+
+        if len(media_items) > 20:
+            return {
+                "success": False,
+                "error": "LinkedIn carousel cannot have more than 20 media items",
+            }
+
+        if content and len(content) > 3000:
+            return {
+                "success": False,
+                "error": f"Content exceeds 3000 characters ({len(content)} chars)",
+            }
+
+        for i, item in enumerate(media_items):
+            if not isinstance(item, dict):
+                return {
+                    "success": False,
+                    "error": f"media_items[{i}] must be a dict, got {type(item).__name__}",
+                }
+            url = item.get("url")
+            if not url:
+                return {
+                    "success": False,
+                    "error": f"media_items[{i}] missing required 'url' field",
+                }
+            if not url.startswith("http"):
+                return {
+                    "success": False,
+                    "error": f"media_items[{i}] has invalid URL '{url}'. URL must start with http:// or https://",
+                }
+
+        # --- Fetch linkedin_account_id from Firebase ---
+        doc_client = get_document_client("businesses")
+        business = doc_client.get_document(business_id)
+
+        if business is None:
+            return {
+                "success": False,
+                "error": f"Business not found: {business_id}",
+            }
+
+        linkedin_account_id = business.get("linkedin_account_id")
+        if not linkedin_account_id:
+            return {
+                "success": False,
+                "error": f"No linkedin_account_id found for business {business_id}. Please add it to the business profile.",
+            }
+
+        # --- Post via Late API ---
+        late = get_late_client(linkedin_account_id)
+        result = await late.post_linkedin_carousel(
+            media_items=media_items,
+            content=content,
+            first_comment=first_comment,
+            disable_link_preview=disable_link_preview,
+            organization_urn=organization_urn,
+            scheduled_for=scheduled_for,
+        )
+
+        if not result.get("success"):
+            return {
+                "success": False,
+                "error": result.get("error", "Unknown error"),
+                "status_code": result.get("status_code"),
+                "item_count": len(media_items),
+            }
+
+        return {
+            "success": True,
+            "post_id": result.get("platform_post_id"),
+            "late_post_id": result.get("post_id"),
+            "post_url": result.get("platform_post_url"),
+            "content_type": "carousel",
+            "item_count": result.get("item_count"),
+            "message": f"Successfully posted carousel with {result.get('item_count')} images to LinkedIn",
+        }
+
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": f"LinkedIn carousel posting failed: {type(exc).__name__}: {exc}",
+            "item_count": len(media_items),
+        }
+
+
+@function_tool(
     name_override="post_on_youtube",
     description_override=(
         "Post a video to YouTube via Late API. Automatically saves record to Firestore.\n\n"
@@ -579,6 +1128,10 @@ def get_orchestrator_tools() -> list[FunctionTool]:
         post_on_instagram,
         post_carousel_on_instagram,
         post_on_youtube,
+        post_carousel_on_tiktok,
+        post_on_tiktok,
+        post_on_linkedin,
+        post_carousel_on_linkedin,
         report_error,
     ]
 
@@ -651,7 +1204,8 @@ async def report_error(
         "Fetches a business profile from Firestore by business_id. "
         "Returns business info including name, colors, logo URL, website URL, profile data, "
         "instagram_id for Instagram posting, late_profile_id for Instagram analytics, "
-        "and youtube_id for YouTube posting via Late API."
+        "youtube_id for YouTube posting, tiktok_account_id for TikTok posting, "
+        "and linkedin_account_id for LinkedIn posting via Late API."
     ),
 )
 async def fetch_business(business_id: str) -> dict[str, Any]:
@@ -663,7 +1217,7 @@ async def fetch_business(business_id: str) -> dict[str, Any]:
 
     Returns:
         dict: Business data including name, colors, logo, website, profile, instagram_id,
-              late_profile_id (for analytics), and youtube_id.
+              late_profile_id (for analytics), youtube_id, tiktok_account_id, and linkedin_account_id.
     """
     doc_client = get_document_client("businesses")
     doc = doc_client.get_document(business_id)
@@ -681,6 +1235,8 @@ async def fetch_business(business_id: str) -> dict[str, Any]:
         "instagram_id": doc.get("instagram_id"),  # Late API account ID (acc_xxxxx) - for POSTING
         "late_profile_id": doc.get("late_profile_id"),  # Late profile ID (raw ObjectId) - for ANALYTICS
         "youtube_id": doc.get("youtube_id"),  # Late API YouTube account ID (acc_xxxxx)
+        "tiktok_account_id": doc.get("tiktok_account_id"),  # Late API TikTok account ID
+        "linkedin_account_id": doc.get("linkedin_account_id"),  # Late API LinkedIn account ID
     }
 
 
@@ -694,6 +1250,10 @@ __all__ = [
     "post_on_instagram",
     "post_carousel_on_instagram",
     "post_on_youtube",
+    "post_carousel_on_tiktok",
+    "post_on_tiktok",
+    "post_on_linkedin",
+    "post_carousel_on_linkedin",
     "report_error",
     "get_orchestrator_tools",
     "fetch_business",

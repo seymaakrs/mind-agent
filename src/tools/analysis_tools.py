@@ -385,13 +385,13 @@ async def get_report(
 @function_tool(strict_mode=False)
 async def save_seo_report(
     business_id: str,
-    business_website_analysis: dict[str, Any],
-    competitors: list[dict[str, Any]],
-    keyword_recommendations: list[dict[str, Any]],
-    technical_issues: list[dict[str, Any]],
-    content_recommendations: list[str],
     summary: str,
     overall_score: int,
+    business_website_analysis: dict[str, Any] | None = None,
+    competitors: list[dict[str, Any]] | None = None,
+    keyword_recommendations: list[dict[str, Any]] | None = None,
+    technical_issues: list[dict[str, Any]] | None = None,
+    content_recommendations: list[str] | None = None,
     competitor_urls: list[str] | None = None,
     data_sources: dict[str, bool] | None = None,
     score_breakdown: dict[str, Any] | None = None,
@@ -400,18 +400,21 @@ async def save_seo_report(
     content_quality: dict[str, Any] | None = None,
     serp_positions: list[dict[str, Any]] | None = None,
     serp_visibility_score: int | None = None,
+    geo_readiness_score: int | None = None,
+    geo_analysis: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Save a comprehensive SEO analysis report for a business.
 
     Args:
         business_id: Business ID.
+        summary: Executive summary of the SEO analysis (2-3 paragraphs).
+        overall_score: Overall SEO score (0-100).
         business_website_analysis: SEO analysis of the business's own website.
             Should include: url, meta_tags, headings, images, links, schema_markup,
             url_analysis, seo_score, word_count, keyword_density.
         competitors: List of competitor SEO analyses.
-            Each with: domain, pages_analyzed, common_keywords, avg_content_length,
-            schema_types_used, top_headings, seo_score.
+            Each with: domain, seo_score, title, description, mobile_viewport, content_depth.
         keyword_recommendations: List of recommended keywords.
             Each with: keyword, category (primary/secondary/long_tail/local),
             search_intent (informational/transactional/navigational),
@@ -419,8 +422,6 @@ async def save_seo_report(
         technical_issues: List of SEO issues found.
             Each with: type (error/warning/info), issue, recommendation.
         content_recommendations: List of content improvement suggestions.
-        summary: Executive summary of the SEO analysis (2-3 paragraphs).
-        overall_score: Overall SEO score (0-100).
         competitor_urls: List of competitor URLs that were analyzed.
         data_sources: Which data sources were used.
             Example: {"business_website": true, "competitors": true, "web_search": true}
@@ -430,6 +431,8 @@ async def save_seo_report(
         content_quality: Content quality analysis - depth, readability, keyword placement (optional).
         serp_positions: Per-keyword SERP position data from check_serp_position (optional).
         serp_visibility_score: Overall SERP visibility score 0-100 (optional).
+        geo_readiness_score: GEO readiness score 0-100 (optional).
+        geo_analysis: Full GEO analysis with 4-category breakdown (optional).
 
     Returns:
         dict with report_id and success status.
@@ -437,23 +440,10 @@ async def save_seo_report(
     try:
         # Validate inputs
         if not business_website_analysis:
-            return {
-                "success": False,
-                "error": "business_website_analysis is required",
-            }
+            business_website_analysis = {}
 
-        if not keyword_recommendations or len(keyword_recommendations) < 1:
-            return {
-                "success": False,
-                "error": "keyword_recommendations must have at least 1 item",
-            }
-
-        for i, kw in enumerate(keyword_recommendations):
-            if not isinstance(kw, dict) or "keyword" not in kw:
-                return {
-                    "success": False,
-                    "error": f"keyword_recommendations[{i}] must have 'keyword' field",
-                }
+        if not keyword_recommendations:
+            keyword_recommendations = []
 
         if not technical_issues:
             technical_issues = []
@@ -504,6 +494,10 @@ async def save_seo_report(
             report_data["serp_positions"] = serp_positions
         if serp_visibility_score is not None:
             report_data["serp_visibility_score"] = serp_visibility_score
+        if geo_readiness_score is not None:
+            report_data["geo_readiness_score"] = geo_readiness_score
+        if geo_analysis is not None:
+            report_data["geo_analysis"] = geo_analysis
 
         doc_client.set_document(report_id, report_data)
 
@@ -602,10 +596,25 @@ async def save_seo_keywords(
         # Overwrite the keywords document (not merge - always fresh)
         doc_client.set_document("keywords", keywords_doc, merge=False)
 
+        # Also save top keywords to business profile for marketing agent access
+        # This ensures fetch_business returns seo_keywords even if save_seo_summary
+        # is not called (e.g., due to max turns exceeded)
+        top_kw_for_profile = [
+            kw["keyword"] for kw in keyword_items
+            if kw.get("priority") in ("high", "medium")
+        ][:7]
+        if top_kw_for_profile:
+            business_client = get_document_client("businesses")
+            business_client.set_document(
+                business_id,
+                {"profile": {"seo_keywords": top_kw_for_profile}},
+                merge=True,
+            )
+
         return {
             "success": True,
             "saved_count": len(keyword_items),
-            "message": f"Saved {len(keyword_items)} SEO keywords to seo/keywords",
+            "message": f"Saved {len(keyword_items)} SEO keywords to seo/keywords and business profile",
         }
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -695,6 +704,8 @@ async def save_seo_summary(
     last_report_id: str | None = None,
     serp_visibility_score: int | None = None,
     score_breakdown: dict[str, Any] | None = None,
+    geo_readiness_score: int | None = None,
+    geo_analysis: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Save SEO summary to both seo/summary document and agent memory.
@@ -714,6 +725,8 @@ async def save_seo_summary(
         last_report_id: ID of the latest SEO report (in reports/ collection).
         serp_visibility_score: Real search visibility score 0-100 from check_serp_position (optional).
         score_breakdown: v2 scoring breakdown summary with category scores (optional).
+        geo_readiness_score: GEO readiness score 0-100 (optional).
+        geo_analysis: GEO analysis summary with 4-category breakdown (optional).
 
     Returns:
         dict with success status.
@@ -741,6 +754,10 @@ async def save_seo_summary(
             summary_data["serp_visibility_score"] = serp_visibility_score
         if score_breakdown is not None:
             summary_data["score_breakdown"] = score_breakdown
+        if geo_readiness_score is not None:
+            summary_data["geo_readiness_score"] = geo_readiness_score
+        if geo_analysis is not None:
+            summary_data["geo_analysis"] = geo_analysis
 
         # Overwrite the summary document (not merge - always fresh)
         seo_doc_client.set_document("summary", summary_data, merge=False)
@@ -764,13 +781,27 @@ async def save_seo_summary(
         if serp_visibility_score is not None:
             seo_memory["serp_visibility"] = serp_visibility_score
 
+        # Add GEO readiness to agent memory if available
+        if geo_readiness_score is not None:
+            seo_memory["geo_readiness"] = geo_readiness_score
+
         # Merge with existing memory (keep other memory fields)
         updated_memory = {**existing_memory, **seo_memory}
         memory_client.set_document("marketing", updated_memory, merge=True)
 
+        # 3. Save top SEO keywords to business profile for marketing agent access
+        # This allows fetch_business to return seo_keywords so captions can include them
+        business_client = get_document_client("businesses")
+        top_kw_for_profile = top_keywords[:7]  # Only top 7 keywords
+        business_client.set_document(
+            business_id,
+            {"profile": {"seo_keywords": top_kw_for_profile}},
+            merge=True,
+        )
+
         return {
             "success": True,
-            "message": "SEO summary saved to seo/summary and agent_memory",
+            "message": "SEO summary saved to seo/summary, agent_memory, and business profile",
         }
     except Exception as e:
         return {"success": False, "error": str(e)}
