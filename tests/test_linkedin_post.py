@@ -333,7 +333,7 @@ class TestPostOnLinkedInTool:
         mock_doc = MagicMock()
         mock_doc.get_document.return_value = None
 
-        with patch("src.tools.orchestrator_tools.get_document_client", return_value=mock_doc):
+        with patch("src.tools.orchestrator.linkedin.get_document_client", return_value=mock_doc):
             result = await _invoke_tool(post_on_linkedin, {
                 "content": "Test",
                 "business_id": "biz_1",
@@ -349,7 +349,7 @@ class TestPostOnLinkedInTool:
         mock_doc = MagicMock()
         mock_doc.get_document.return_value = {"name": "Biz"}
 
-        with patch("src.tools.orchestrator_tools.get_document_client", return_value=mock_doc):
+        with patch("src.tools.orchestrator.linkedin.get_document_client", return_value=mock_doc):
             result = await _invoke_tool(post_on_linkedin, {
                 "content": "Test",
                 "business_id": "biz_1",
@@ -374,8 +374,8 @@ class TestPostOnLinkedInTool:
             "status": "published",
         }
 
-        with patch("src.tools.orchestrator_tools.get_document_client", return_value=mock_doc), \
-             patch("src.tools.orchestrator_tools.get_late_client", return_value=mock_late):
+        with patch("src.tools.orchestrator.linkedin.get_document_client", return_value=mock_doc), \
+             patch("src.tools.orchestrator.linkedin.get_late_client", return_value=mock_late):
 
             result = await _invoke_tool(post_on_linkedin, {
                 "content": "Hello LinkedIn",
@@ -400,8 +400,8 @@ class TestPostOnLinkedInTool:
             "platform_post_url": "https://linkedin.com/li_1", "status": "published",
         }
 
-        with patch("src.tools.orchestrator_tools.get_document_client", return_value=mock_doc), \
-             patch("src.tools.orchestrator_tools.get_late_client", return_value=mock_late):
+        with patch("src.tools.orchestrator.linkedin.get_document_client", return_value=mock_doc), \
+             patch("src.tools.orchestrator.linkedin.get_late_client", return_value=mock_late):
 
             result = await _invoke_tool(post_on_linkedin, {
                 "content": "Photo post",
@@ -429,8 +429,8 @@ class TestPostOnLinkedInTool:
             "platform_post_url": "https://linkedin.com/li_1", "status": "published",
         }
 
-        with patch("src.tools.orchestrator_tools.get_document_client", return_value=mock_doc), \
-             patch("src.tools.orchestrator_tools.get_late_client", return_value=mock_late):
+        with patch("src.tools.orchestrator.linkedin.get_document_client", return_value=mock_doc), \
+             patch("src.tools.orchestrator.linkedin.get_late_client", return_value=mock_late):
 
             await _invoke_tool(post_on_linkedin, {
                 "content": "Test",
@@ -459,8 +459,8 @@ class TestPostOnLinkedInTool:
             "success": False, "error": "Duplicate content", "status_code": 422,
         }
 
-        with patch("src.tools.orchestrator_tools.get_document_client", return_value=mock_doc), \
-             patch("src.tools.orchestrator_tools.get_late_client", return_value=mock_late):
+        with patch("src.tools.orchestrator.linkedin.get_document_client", return_value=mock_doc), \
+             patch("src.tools.orchestrator.linkedin.get_late_client", return_value=mock_late):
 
             result = await _invoke_tool(post_on_linkedin, {
                 "content": "Duplicate",
@@ -552,7 +552,7 @@ class TestPostCarouselOnLinkedInTool:
         mock_doc = MagicMock()
         mock_doc.get_document.return_value = None
 
-        with patch("src.tools.orchestrator_tools.get_document_client", return_value=mock_doc):
+        with patch("src.tools.orchestrator.linkedin.get_document_client", return_value=mock_doc):
             result = await _invoke_tool(post_carousel_on_linkedin, {
                 "media_items": [
                     {"type": "image", "url": "https://a.com/1.jpg"},
@@ -571,7 +571,7 @@ class TestPostCarouselOnLinkedInTool:
         mock_doc = MagicMock()
         mock_doc.get_document.return_value = {"name": "Biz"}
 
-        with patch("src.tools.orchestrator_tools.get_document_client", return_value=mock_doc):
+        with patch("src.tools.orchestrator.linkedin.get_document_client", return_value=mock_doc):
             result = await _invoke_tool(post_carousel_on_linkedin, {
                 "media_items": [
                     {"type": "image", "url": "https://a.com/1.jpg"},
@@ -600,8 +600,8 @@ class TestPostCarouselOnLinkedInTool:
             "item_count": 3,
         }
 
-        with patch("src.tools.orchestrator_tools.get_document_client", return_value=mock_doc), \
-             patch("src.tools.orchestrator_tools.get_late_client", return_value=mock_late):
+        with patch("src.tools.orchestrator.linkedin.get_document_client", return_value=mock_doc), \
+             patch("src.tools.orchestrator.linkedin.get_late_client", return_value=mock_late):
 
             result = await _invoke_tool(post_carousel_on_linkedin, {
                 "media_items": [
@@ -631,8 +631,8 @@ class TestPostCarouselOnLinkedInTool:
             "platform_post_url": "https://linkedin.com/li_1", "status": "ok", "item_count": 2,
         }
 
-        with patch("src.tools.orchestrator_tools.get_document_client", return_value=mock_doc), \
-             patch("src.tools.orchestrator_tools.get_late_client", return_value=mock_late):
+        with patch("src.tools.orchestrator.linkedin.get_document_client", return_value=mock_doc), \
+             patch("src.tools.orchestrator.linkedin.get_late_client", return_value=mock_late):
 
             await _invoke_tool(post_carousel_on_linkedin, {
                 "media_items": [

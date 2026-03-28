@@ -217,7 +217,16 @@ class CliLoggingHooks(RunHooksBase):
 
         # Firebase logging
         if self.task_logger:
-            output_data = result if isinstance(result, dict) else {"result": str(result)}
+            if isinstance(result, dict):
+                output_data = result
+            else:
+                # Normalize non-dict results (e.g. agent wrapper string outputs)
+                # so every action.output has a predictable shape for the panel
+                output_data = {
+                    "result": str(result),
+                    "success": not is_error,
+                    "type": "agent_output",
+                }
             self.task_logger.log_action(
                 tool=tool.name,
                 input_data=input_data,

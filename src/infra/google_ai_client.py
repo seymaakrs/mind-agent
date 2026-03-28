@@ -46,14 +46,14 @@ class ImageGenerationClient:
     async def generate_image(
         self,
         prompt: str,
-        aspect_ratio: str = "3:4",
+        aspect_ratio: str = "4:5",
     ) -> list[bytes]:
         """
         Text'ten gorsel uretir (text-to-image).
 
         Args:
             prompt: Gorsel icin aciklama.
-            aspect_ratio: En-boy orani ("1:1", "16:9", "9:16", "4:3", "3:4").
+            aspect_ratio: En-boy orani ("4:5", "1:1", "16:9", "9:16", "4:3").
 
         Returns:
             list[bytes]: Uretilen gorsellerin binary datasi.
@@ -87,7 +87,7 @@ class ImageGenerationClient:
         self,
         prompt: str,
         source_image: bytes,
-        aspect_ratio: str = "3:4",
+        aspect_ratio: str = "4:5",
     ) -> list[bytes]:
         """
         Mevcut bir gorseli duzenler (image editing).

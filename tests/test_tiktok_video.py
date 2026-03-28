@@ -206,7 +206,7 @@ class TestPostOnTikTokTool:
         mock_doc_client = MagicMock()
         mock_doc_client.get_document.return_value = {"name": "Biz"}
 
-        with patch("src.tools.orchestrator_tools.get_document_client", return_value=mock_doc_client):
+        with patch("src.tools.orchestrator.tiktok.get_document_client", return_value=mock_doc_client):
             result = await _invoke_tool(post_on_tiktok, {
                 "video_url": "https://cdn.example.com/video.mp4",
                 "content": "Test",
@@ -225,7 +225,7 @@ class TestPostOnTikTokTool:
         mock_doc_client = MagicMock()
         mock_doc_client.get_document.return_value = None
 
-        with patch("src.tools.orchestrator_tools.get_document_client", return_value=mock_doc_client):
+        with patch("src.tools.orchestrator.tiktok.get_document_client", return_value=mock_doc_client):
             result = await _invoke_tool(post_on_tiktok, {
                 "video_url": "https://cdn.example.com/video.mp4",
                 "content": "Test",
@@ -254,8 +254,8 @@ class TestPostOnTikTokTool:
             "type": "video",
         }
 
-        with patch("src.tools.orchestrator_tools.get_document_client", return_value=mock_doc_client), \
-             patch("src.tools.orchestrator_tools.get_late_client", return_value=mock_late):
+        with patch("src.tools.orchestrator.tiktok.get_document_client", return_value=mock_doc_client), \
+             patch("src.tools.orchestrator.tiktok.get_late_client", return_value=mock_late):
 
             result = await _invoke_tool(post_on_tiktok, {
                 "video_url": "https://cdn.example.com/video.mp4",
@@ -292,8 +292,8 @@ class TestPostOnTikTokTool:
             "type": "video",
         }
 
-        with patch("src.tools.orchestrator_tools.get_document_client", return_value=mock_doc_client), \
-             patch("src.tools.orchestrator_tools.get_late_client", return_value=mock_late):
+        with patch("src.tools.orchestrator.tiktok.get_document_client", return_value=mock_doc_client), \
+             patch("src.tools.orchestrator.tiktok.get_late_client", return_value=mock_late):
 
             await _invoke_tool(post_on_tiktok, {
                 "video_url": "https://cdn.example.com/v.mp4",
@@ -321,8 +321,8 @@ class TestPostOnTikTokTool:
             "platform_post_url": "https://tiktok.com/v/t1", "status": "ok", "type": "video",
         }
 
-        with patch("src.tools.orchestrator_tools.get_document_client", return_value=mock_doc_client), \
-             patch("src.tools.orchestrator_tools.get_late_client", return_value=mock_late):
+        with patch("src.tools.orchestrator.tiktok.get_document_client", return_value=mock_doc_client), \
+             patch("src.tools.orchestrator.tiktok.get_late_client", return_value=mock_late):
 
             await _invoke_tool(post_on_tiktok, {
                 "video_url": "https://cdn.example.com/v.mp4",
@@ -349,8 +349,8 @@ class TestPostOnTikTokTool:
             "status_code": 422,
         }
 
-        with patch("src.tools.orchestrator_tools.get_document_client", return_value=mock_doc_client), \
-             patch("src.tools.orchestrator_tools.get_late_client", return_value=mock_late):
+        with patch("src.tools.orchestrator.tiktok.get_document_client", return_value=mock_doc_client), \
+             patch("src.tools.orchestrator.tiktok.get_late_client", return_value=mock_late):
 
             result = await _invoke_tool(post_on_tiktok, {
                 "video_url": "https://cdn.example.com/short.mp4",

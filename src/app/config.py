@@ -43,6 +43,10 @@ class Settings(BaseModel):
     # Serper.dev (Google SERP API for SEO analysis)
     serper_api_key: str | None = Field(default=None, alias="SERPER_API_KEY")
 
+    # Kling AI (Video generation)
+    kling_access_key: str | None = Field(default=None, alias="KLING_ACCESS_KEY")
+    kling_secret_key: str | None = Field(default=None, alias="KLING_SECRET_KEY")
+
     # Dry-run mode - Google API'lerine gercek cagri yapmadan prompt'lari loglar
     dry_run: bool = Field(default=False, alias="DRY_RUN")
 
@@ -62,6 +66,8 @@ class Settings(BaseModel):
                 "fal_key": os.getenv("FAL_KEY"),
                 "serper_api_key": os.getenv("SERPER_API_KEY"),
                 "dry_run": os.getenv("DRY_RUN", "").lower() in ("true", "1", "yes"),
+                "kling_access_key": os.getenv("KLING_ACCESS_KEY"),
+                "kling_secret_key": os.getenv("KLING_SECRET_KEY"),
             }
         )
 
@@ -84,6 +90,7 @@ class ModelSettings(BaseModel):
     image_generation_model: str = "gemini-2.5-flash-image"
     video_generation_model: str = "veo-3.1-generate-preview"
     vertex_video_model: str = "veo-2.0-generate-001"
+    kling_video_model: str = "kling-v3"
 
 
 # Cache for model settings
@@ -131,6 +138,7 @@ def get_model_settings() -> ModelSettings:
             image_generation_model=doc.get("imageGenerationModel", "gemini-2.5-flash-image"),
             video_generation_model=doc.get("videoGenerationModel", "veo-3.1-generate-preview"),
             vertex_video_model=doc.get("vertexVideoModel", "veo-2.0-generate-001"),
+            kling_video_model=doc.get("klingVideoModel", "kling-v3"),
         )
     except Exception:
         # Firebase hatasi olursa default degerleri kullan
@@ -145,4 +153,90 @@ def clear_model_settings_cache() -> None:
     _model_settings_cache = None
 
 
-__all__ = ["Settings", "get_settings", "ModelSettings", "get_model_settings", "clear_model_settings_cache"]
+# ---------------------------------------------------------------------------
+# Dynamic Agent Instructions (Firebase: settings/agent_instructions)
+# ---------------------------------------------------------------------------
+
+
+class PromptFieldConfig(BaseModel):
+    """Tek bir Pydantic field'inin override bilgisi (description + examples)."""
+
+    description: str
+    examples: list[Any] = []
+
+
+class AgentInstructionConfig(BaseModel):
+    """Agent persona + prompt field override konfigurasyonu."""
+
+    persona: str | None = None
+    prompt_fields: dict[str, PromptFieldConfig] = {}
+
+
+# Cache for agent instructions
+_agent_instructions_cache: dict[str, AgentInstructionConfig] | None = None
+
+
+def _load_agent_instructions_from_firebase() -> dict[str, Any]:
+    """Firebase'den settings/agent_instructions dokumanini okur."""
+    from src.infra.firebase_client import get_document_client
+
+    doc_client = get_document_client("settings")
+    doc = doc_client.get_document("agent_instructions")
+    return doc or {}
+
+
+def _parse_agent_instructions(raw: dict[str, Any]) -> dict[str, AgentInstructionConfig]:
+    """Firebase raw dict'ini AgentInstructionConfig dict'ine donusturur."""
+    result: dict[str, AgentInstructionConfig] = {}
+    for agent_name, agent_data in raw.items():
+        if not isinstance(agent_data, dict):
+            continue
+        prompt_fields: dict[str, PromptFieldConfig] = {}
+        raw_fields = agent_data.get("prompt_fields", {})
+        if isinstance(raw_fields, dict):
+            for field_name, field_data in raw_fields.items():
+                if isinstance(field_data, dict) and "description" in field_data:
+                    prompt_fields[field_name] = PromptFieldConfig(**field_data)
+        result[agent_name] = AgentInstructionConfig(
+            persona=agent_data.get("persona"),
+            prompt_fields=prompt_fields,
+        )
+    return result
+
+
+def get_agent_instructions(agent_name: str) -> AgentInstructionConfig:
+    """
+    Firebase settings/agent_instructions'dan agent config okur ve cache'ler.
+
+    Fallback: Firebase hatasi veya agent bulunamazsa bos AgentInstructionConfig doner.
+    """
+    global _agent_instructions_cache
+
+    if _agent_instructions_cache is None:
+        try:
+            raw = _load_agent_instructions_from_firebase()
+            _agent_instructions_cache = _parse_agent_instructions(raw)
+        except Exception:
+            # Firebase hatasi — bos cache ile devam et, sistem kirilmaz
+            _agent_instructions_cache = {}
+
+    return _agent_instructions_cache.get(agent_name, AgentInstructionConfig())
+
+
+def clear_agent_instructions_cache() -> None:
+    """Agent instructions cache'ini temizler (test veya reload icin)."""
+    global _agent_instructions_cache
+    _agent_instructions_cache = None
+
+
+__all__ = [
+    "Settings",
+    "get_settings",
+    "ModelSettings",
+    "get_model_settings",
+    "clear_model_settings_cache",
+    "PromptFieldConfig",
+    "AgentInstructionConfig",
+    "get_agent_instructions",
+    "clear_agent_instructions_cache",
+]

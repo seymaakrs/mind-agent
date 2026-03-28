@@ -166,6 +166,13 @@ class TaskLogger:
                     "public_url": output_data.get("public_url"),
                 })
 
+    # Fields that should never be truncated (URLs, IDs, etc.)
+    _PROTECTED_FIELDS = frozenset({
+        "public_url", "url", "path", "post_url", "video_url", "image_url",
+        "thumbnail_url", "permalink", "post_id", "media_id", "business_id",
+        "instagram_id", "late_profile_id", "log_id", "task_id", "report_id",
+    })
+
     def _sanitize_for_firestore(self, data: Any) -> Any:
         """Firestore icin veriyi temizler (nested dict/list derinligini sinirlar)."""
         if data is None:
@@ -173,10 +180,9 @@ class TaskLogger:
         if isinstance(data, (str, int, float, bool)):
             return data
         if isinstance(data, dict):
-            # Cok buyuk verileri truncate et
             result = {}
             for k, v in data.items():
-                if isinstance(v, str) and len(v) > 1000:
+                if isinstance(v, str) and len(v) > 1000 and k not in self._PROTECTED_FIELDS:
                     result[k] = v[:1000] + "...[truncated]"
                 elif isinstance(v, (dict, list)):
                     result[k] = self._sanitize_for_firestore(v)

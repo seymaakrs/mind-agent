@@ -360,8 +360,8 @@ class TestPostCarouselOnTikTokTool:
             "item_count": 2,
         }
 
-        with patch("src.tools.orchestrator_tools.get_document_client", return_value=mock_doc_client), \
-             patch("src.tools.orchestrator_tools.get_late_client", return_value=mock_late):
+        with patch("src.tools.orchestrator.tiktok.get_document_client", return_value=mock_doc_client), \
+             patch("src.tools.orchestrator.tiktok.get_late_client", return_value=mock_late):
 
             result = await _invoke_tool(post_carousel_on_tiktok, {
                 "media_items": [
@@ -389,7 +389,7 @@ class TestPostCarouselOnTikTokTool:
         mock_doc_client = MagicMock()
         mock_doc_client.get_document.return_value = {"name": "Test Business"}
 
-        with patch("src.tools.orchestrator_tools.get_document_client", return_value=mock_doc_client):
+        with patch("src.tools.orchestrator.tiktok.get_document_client", return_value=mock_doc_client):
             result = await _invoke_tool(post_carousel_on_tiktok, {
                 "media_items": [
                     {"type": "image", "url": "https://a.com/1.jpg"},
@@ -411,7 +411,7 @@ class TestPostCarouselOnTikTokTool:
         mock_doc_client = MagicMock()
         mock_doc_client.get_document.return_value = None
 
-        with patch("src.tools.orchestrator_tools.get_document_client", return_value=mock_doc_client):
+        with patch("src.tools.orchestrator.tiktok.get_document_client", return_value=mock_doc_client):
             result = await _invoke_tool(post_carousel_on_tiktok, {
                 "media_items": [
                     {"type": "image", "url": "https://a.com/1.jpg"},

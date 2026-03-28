@@ -28,6 +28,9 @@ tiktoken>=0.5
 # fal.ai (MMAudio - video audio generation)
 fal-client>=0.13
 
+# Kling AI (JWT authentication for video generation API)
+PyJWT>=2.8
+
 # Testing
 pytest>=8.0
 pytest-asyncio>=0.23

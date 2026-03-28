@@ -22,7 +22,7 @@ OpenAI Agents SDK uzerine kurulu multi-agent orchestrator sistemi.
 ```
 src/
 ├── agents/         orchestrator, image, video, marketing, analysis, registry
-├── infra/          firebase_client, google_ai_client, late_client, task_logger
+├── infra/          firebase_client, google_ai_client, kling_client, late_client, task_logger
 ├── tools/          orchestrator_tools, image_tools, video_tools, instagram_tools,
 │                   marketing_tools, web_tools, analysis_tools, agent_wrapper_tools
 ├── models/         prompts.py (ImagePrompt, VideoPrompt)
@@ -37,6 +37,8 @@ FIREBASE_CREDENTIALS_FILE, FIREBASE_STORAGE_BUCKET
 LATE_API_KEY              # Late API (Instagram/YouTube posting)
 FAL_KEY                   # fal.ai MMAudio ses ekleme
 SERPER_API_KEY            # Serper.dev Google SERP arama
+KLING_ACCESS_KEY          # Kling AI Access Key (app.klingai.com)
+KLING_SECRET_KEY          # Kling AI Secret Key
 DRY_RUN=false             # true: API cagirmadan prompt logla
 ```
 
@@ -44,7 +46,7 @@ DRY_RUN=false             # true: API cagirmadan prompt logla
 
 **Orchestrator:** `fetch_business`, `upload_file`, `list_files`, `delete_file`, `get_document`, `save_document`, `query_documents`, `post_on_instagram`, `post_carousel_on_instagram`, `post_on_youtube`, `post_on_tiktok`, `post_carousel_on_tiktok`, `post_on_linkedin`, `post_carousel_on_linkedin`, `report_error`
 
-**Image/Video:** `generate_image`, `generate_video`, `add_audio_to_video` (fal.ai MMAudio V2)
+**Image/Video:** `generate_image`, `generate_video` (Veo 3.1), `generate_video_kling` (Kling 3.0), `add_audio_to_video` (fal.ai MMAudio V2)
 
 **Marketing:** `create_weekly_plan`, `get_plans`, `get_todays_posts`, `save_instagram_post`, `get_instagram_posts`, `save_youtube_video`, `get_youtube_videos`, `get_marketing_memory`, `update_marketing_memory`, `get_admin_notes`
 
@@ -70,14 +72,14 @@ DRY_RUN=false             # true: API cagirmadan prompt logla
 
 ## Docker Deployment
 
-**Guncel Versiyon:** `v1.10.2`
+**Guncel Versiyon:** `v1.14.0`
 **GCP Project:** `instagram-post-bot-471518`
-**Image:** `gcr.io/instagram-post-bot-471518/agents-sdk-api:v1.10.2`
+**Image:** `gcr.io/instagram-post-bot-471518/agents-sdk-api:v1.14.0`
 
 ```bash
-docker build -t agents-sdk-api:v1.10.2 .
-docker tag agents-sdk-api:v1.10.2 gcr.io/instagram-post-bot-471518/agents-sdk-api:v1.10.2
-docker push gcr.io/instagram-post-bot-471518/agents-sdk-api:v1.10.2
+docker build -t agents-sdk-api:v1.14.0 .
+docker tag agents-sdk-api:v1.14.0 gcr.io/instagram-post-bot-471518/agents-sdk-api:v1.14.0
+docker push gcr.io/instagram-post-bot-471518/agents-sdk-api:v1.14.0
 ```
 
 Versioning: `vMAJOR.MINOR.PATCH` (MAJOR=breaking, MINOR=feature, PATCH=bugfix)
@@ -137,6 +139,7 @@ Akis: `generate_video` → `add_audio_to_video` → `post_on_instagram/youtube`
 | orchestratorModel | gpt-4o-mini |
 | image/video/marketing/analysisModel | gpt-4o |
 | videoGenerationModel | veo-3.1-generate-preview |
+| klingVideoModel | kling-v3 |
 
 ## API
 
