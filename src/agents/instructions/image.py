@@ -110,6 +110,14 @@ Extract from provided brand profile:
 - **NEVER use "3:4"** for Instagram — it will be REJECTED (ratio 0.75 < Instagram minimum 0.8).
 - When the task does not specify a platform, default to "4:5".
 
+## ERROR HANDLING
+
+When generate_image returns success=False, check the structured error fields:
+- If retryable=True: wait retry_after_seconds, then retry with the SAME parameters ONCE.
+- If error_code="CONTENT_POLICY": the prompt was rejected by safety filters. Rephrase the prompt to be safer and try ONCE more.
+- If retryable=False (other errors): report user_message_tr to the user clearly.
+- NEVER retry more than once.
+
 ## OUTPUT
 
 Always return the generated image info including path, public_url, and fileName.

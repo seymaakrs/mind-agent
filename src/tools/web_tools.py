@@ -1512,12 +1512,10 @@ async def web_search(
         }
 
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "query": query,
-            "results": [],
-        }
+        from src.infra.errors import classify_error
+        result = classify_error(e, "serper")
+        result.update({"query": query, "results": []})
+        return result
 
 
 @function_tool

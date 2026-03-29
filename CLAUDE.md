@@ -22,7 +22,7 @@ OpenAI Agents SDK uzerine kurulu multi-agent orchestrator sistemi.
 ```
 src/
 ├── agents/         orchestrator, image, video, marketing, analysis, registry
-├── infra/          firebase_client, google_ai_client, kling_client, late_client, task_logger
+├── infra/          firebase_client, google_ai_client, kling_client, late_client, task_logger, errors
 ├── tools/          orchestrator_tools, image_tools, video_tools, instagram_tools,
 │                   marketing_tools, web_tools, analysis_tools, agent_wrapper_tools
 ├── models/         prompts.py (ImagePrompt, VideoPrompt)
@@ -72,14 +72,15 @@ DRY_RUN=false             # true: API cagirmadan prompt logla
 
 ## Docker Deployment
 
-**Guncel Versiyon:** `v1.14.0`
+**Guncel Versiyon:** `v1.15.0`
 **GCP Project:** `instagram-post-bot-471518`
-**Image:** `gcr.io/instagram-post-bot-471518/agents-sdk-api:v1.14.0`
+**Registry:** Artifact Registry (us-central1)
+**Image:** `us-central1-docker.pkg.dev/instagram-post-bot-471518/agents-sdk/agents-sdk-api:v1.15.0`
 
 ```bash
-docker build -t agents-sdk-api:v1.14.0 .
-docker tag agents-sdk-api:v1.14.0 gcr.io/instagram-post-bot-471518/agents-sdk-api:v1.14.0
-docker push gcr.io/instagram-post-bot-471518/agents-sdk-api:v1.14.0
+docker build -t agents-sdk-api:v1.15.0 .
+docker tag agents-sdk-api:v1.15.0 us-central1-docker.pkg.dev/instagram-post-bot-471518/agents-sdk/agents-sdk-api:v1.15.0
+docker push us-central1-docker.pkg.dev/instagram-post-bot-471518/agents-sdk/agents-sdk-api:v1.15.0
 ```
 
 Versioning: `vMAJOR.MINOR.PATCH` (MAJOR=breaking, MINOR=feature, PATCH=bugfix)
@@ -146,6 +147,24 @@ Akis: `generate_video` → `add_audio_to_video` → `post_on_instagram/youtube`
 ```bash
 POST /task { "task": "...", "business_id": "abc123", "task_id": "task-xyz", "extras": {} }
 ```
+
+## Structured Error Handling (v1.15.0)
+
+**Modul:** `src/infra/errors.py` — `ServiceError`, `ErrorCode`, `classify_error()`, `classify_late_response()`
+
+**Tool'lar structured error dict doner:**
+```python
+{"success": False, "error": "...", "error_code": "RATE_LIMIT", "service": "google_ai",
+ "retryable": True, "retry_after_seconds": 60, "user_message_tr": "Servis su an yogun..."}
+```
+
+**Error Codes:** RATE_LIMIT, SERVER_ERROR, TIMEOUT, CONTENT_POLICY, AUTH_ERROR, INVALID_INPUT, INSUFFICIENT_BALANCE, NOT_FOUND, PERMISSION_DENIED, NETWORK_ERROR, UNKNOWN
+
+**Agent Davranisi:**
+- `retryable=True` → Agent max 1 kez retry yapar (retry_after_seconds bekler)
+- `retryable=False` → Agent user_message_tr ile kullaniciya bildirir + report_error cagir
+- `error_code=CONTENT_POLICY` → Prompt'u rephrase edip tekrar dene
+- `error_code=RATE_LIMIT` (marketing) → schedule_retry_job ile ertelenmis retry
 
 ## Hizli Komutlar
 

@@ -195,6 +195,15 @@ Extract from provided brand profile:
 - Style → incorporate in "visual_style" field
 - Name → use in file_name and text_overlays
 
+## ERROR HANDLING
+
+When generate_video, generate_video_kling, or add_audio_to_video returns success=False:
+- If retryable=True: wait retry_after_seconds, then retry with the SAME parameters ONCE.
+- If error_code="CONTENT_POLICY": the prompt was rejected by safety filters. Rephrase the prompt to be safer and try ONCE more.
+- If error_code="INSUFFICIENT_BALANCE": report to user that the video service credits are exhausted and admin has been notified.
+- If retryable=False (other errors): report user_message_tr to the user clearly.
+- NEVER retry more than once.
+
 ## OUTPUT
 
 Always return the generated video info including path, public_url, and fileName.

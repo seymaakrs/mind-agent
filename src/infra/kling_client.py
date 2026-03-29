@@ -8,6 +8,7 @@ import httpx
 import jwt
 
 from src.app.config import get_settings, get_model_settings
+from src.infra.errors import ServiceError
 
 
 class KlingVideoClient:
@@ -103,7 +104,10 @@ class KlingVideoClient:
             data = response.json()
             task_id = data.get("data", {}).get("task_id")
             if not task_id:
-                raise RuntimeError(f"task_id bulunamadi: {data}")
+                raise ServiceError(
+                    f"task_id bulunamadi: {data}",
+                    status_code=500, service="kling",
+                )
 
         print(f"[kling] Text-to-video task olusturuldu: {task_id}")
 
@@ -156,7 +160,10 @@ class KlingVideoClient:
             data = response.json()
             task_id = data.get("data", {}).get("task_id")
             if not task_id:
-                raise RuntimeError(f"task_id bulunamadi: {data}")
+                raise ServiceError(
+                    f"task_id bulunamadi: {data}",
+                    status_code=500, service="kling",
+                )
 
         print(f"[kling] Image-to-video task olusturuldu: {task_id}")
 
@@ -193,11 +200,15 @@ class KlingVideoClient:
                     works = data.get("output", {}).get("works", [])
                     if works and works[0].get("url"):
                         return works[0]["url"]
-                    raise RuntimeError(f"Video URL bulunamadi: {data}")
+                    raise ServiceError(
+                        f"Video URL bulunamadi: {data}",
+                        status_code=500, service="kling",
+                    )
 
                 if status == "failed":
-                    raise RuntimeError(
-                        f"Kling video uretimi basarisiz: {data.get('task_status_msg', 'bilinmeyen hata')}"
+                    raise ServiceError(
+                        f"Kling video uretimi basarisiz: {data.get('task_status_msg', 'bilinmeyen hata')}",
+                        status_code=500, service="kling",
                     )
 
                 # submitted veya processing — beklemeye devam
@@ -224,22 +235,25 @@ class KlingVideoClient:
         async with httpx.AsyncClient(timeout=300.0, follow_redirects=True) as client:
             response = await client.get(video_url)
             if response.status_code != 200:
-                raise RuntimeError(
-                    f"Video indirme hatasi {response.status_code}: {response.text[:200]}"
+                raise ServiceError(
+                    f"Video indirme hatasi {response.status_code}: {response.text[:200]}",
+                    status_code=response.status_code, service="kling",
                 )
             return response.content
 
     @staticmethod
     def _check_response(response: httpx.Response) -> None:
-        """HTTP response'u kontrol eder, hata varsa RuntimeError firlatir."""
+        """HTTP response'u kontrol eder, hata varsa ServiceError firlatir."""
         if response.status_code != 200:
-            raise RuntimeError(
-                f"Kling API Error {response.status_code}: {response.text[:500]}"
+            raise ServiceError(
+                f"Kling API Error {response.status_code}: {response.text[:500]}",
+                status_code=response.status_code, service="kling",
             )
         body = response.json()
         if body.get("code") != 0:
-            raise RuntimeError(
-                f"Kling API Error code={body.get('code')}: {body.get('message', 'bilinmeyen hata')}"
+            raise ServiceError(
+                f"Kling API Error code={body.get('code')}: {body.get('message', 'bilinmeyen hata')}",
+                status_code=body.get("code"), service="kling",
             )
 
 

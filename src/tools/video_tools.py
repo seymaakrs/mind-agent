@@ -1,6 +1,7 @@
 from agents import FunctionTool, function_tool
 
 from src.app.config import get_settings, AgentInstructionConfig
+from src.infra.errors import classify_error
 from src.infra.firebase_client import get_storage_client, save_media_record, save_dry_run_log
 from src.infra.google_ai_client import get_video_generation_client
 from src.infra.kling_client import get_kling_client
@@ -180,10 +181,7 @@ def _make_generate_video_tool(prompt_model: type[VideoPrompt]) -> FunctionTool:
             }
 
         except Exception as exc:
-            return {
-                "success": False,
-                "error": f"Servis hatasi (video): {type(exc).__name__}: {exc}",
-            }
+            return classify_error(exc, "google_ai")
 
     return generate_video
 
@@ -336,10 +334,7 @@ async def add_audio_to_video(
         return response
 
     except Exception as exc:
-        return {
-            "success": False,
-            "error": f"Ses ekleme hatasi: {type(exc).__name__}: {exc}",
-        }
+        return classify_error(exc, "fal_ai")
 
 
 _GENERATE_VIDEO_KLING_DESCRIPTION = (
@@ -492,10 +487,7 @@ async def generate_video_kling(
         }
 
     except Exception as exc:
-        return {
-            "success": False,
-            "error": f"Kling servis hatasi: {type(exc).__name__}: {exc}",
-        }
+        return classify_error(exc, "kling")
 
 
 def get_video_tools(config: AgentInstructionConfig | None = None) -> list[FunctionTool]:

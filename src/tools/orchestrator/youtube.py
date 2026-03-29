@@ -5,6 +5,7 @@ from typing import Any, Literal
 
 from agents import function_tool
 
+from src.infra.errors import classify_error, classify_late_response
 from src.infra.firebase_client import get_document_client
 from src.infra.late_client import get_late_client
 
@@ -106,12 +107,9 @@ async def post_on_youtube(
         )
 
         if not result.get("success"):
-            return {
-                "success": False,
-                "error": result.get("error", "Unknown error"),
-                "status_code": result.get("status_code"),
-                "video_url": video_url,
-            }
+            classified = classify_late_response(result, "late")
+            classified.update({"video_url": video_url})
+            return classified
 
         # Extract response data
         youtube_video_id = result.get("platform_post_id")
@@ -151,8 +149,6 @@ async def post_on_youtube(
         }
 
     except Exception as exc:
-        return {
-            "success": False,
-            "error": f"YouTube posting failed: {type(exc).__name__}: {exc}",
-            "video_url": video_url,
-        }
+        result = classify_error(exc, "late")
+        result.update({"video_url": video_url})
+        return result

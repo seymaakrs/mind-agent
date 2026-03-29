@@ -70,6 +70,8 @@ async def report_error(
     error_message: str,
     error_type: Literal["api_error", "validation_error", "timeout", "rate_limit", "not_found", "permission", "unknown"] = "unknown",
     severity: Literal["low", "medium", "high", "critical"] = "medium",
+    error_code: str | None = None,
+    service: str | None = None,
     context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
@@ -82,6 +84,8 @@ async def report_error(
         error_message: The error message or description.
         error_type: Type of error.
         severity: Error severity (low, medium, high, critical).
+        error_code: Structured error code from classify_error (e.g., "RATE_LIMIT", "CONTENT_POLICY").
+        service: Which external service failed (e.g., "google_ai", "kling", "late").
         context: Additional context data (optional).
 
     Returns:
@@ -97,6 +101,8 @@ async def report_error(
             "error_message": error_message,
             "error_type": error_type,
             "severity": severity,
+            "error_code": error_code,
+            "service": service,
             "context": context,
             "created_at": datetime.now().isoformat(),
             "resolved": False,

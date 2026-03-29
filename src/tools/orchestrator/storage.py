@@ -4,6 +4,7 @@ from typing import Any
 
 from agents import function_tool
 
+from src.infra.errors import classify_error
 from src.infra.firebase_client import get_storage_client
 
 
@@ -79,4 +80,6 @@ async def delete_file(file_path: str) -> dict[str, Any]:
         storage_client.delete_file(file_path)
         return {"success": True, "message": f"File deleted: {file_path}"}
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        result = classify_error(e, "firebase")
+        result["file_path"] = file_path
+        return result

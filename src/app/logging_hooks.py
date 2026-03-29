@@ -207,7 +207,13 @@ class CliLoggingHooks(RunHooksBase):
             self._write_only(f"[TOOL:OUTPUT] {tool.name} (ERROR)")
             self._write_only(self._format_json(result, max_length=3000))
             # Send progress
-            self._send_progress("tool_error", f"❌ {tool.name} hata verdi", {"tool": tool.name})
+            error_code = result.get("error_code") if isinstance(result, dict) else None
+            self._send_progress("tool_error", f"❌ {tool.name} hata verdi", {
+                "tool": tool.name,
+                "error_code": error_code,
+                "retryable": result.get("retryable") if isinstance(result, dict) else None,
+                "service": result.get("service") if isinstance(result, dict) else None,
+            })
         else:
             self._log(f"[TOOL:END] {agent.name} <- {tool.name}")
             self._write_only(f"[TOOL:OUTPUT] {tool.name}")

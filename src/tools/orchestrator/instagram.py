@@ -4,6 +4,7 @@ from typing import Any, Literal
 
 from agents import function_tool
 
+from src.infra.errors import classify_error, classify_late_response
 from src.infra.late_client import get_late_client
 
 
@@ -76,14 +77,9 @@ async def post_on_instagram(
         )
 
         if not result.get("success"):
-            return {
-                "success": False,
-                "error": result.get("error", "Unknown error"),
-                "status_code": result.get("status_code"),
-                "file_url": file_url,
-                "content_type": content_type,
-                "is_story": is_story,
-            }
+            classified = classify_late_response(result, "late")
+            classified.update({"file_url": file_url, "content_type": content_type, "is_story": is_story})
+            return classified
 
         post_type = "story" if is_story else content_type
         return {
@@ -97,13 +93,9 @@ async def post_on_instagram(
         }
 
     except Exception as exc:
-        return {
-            "success": False,
-            "error": f"Instagram posting failed: {type(exc).__name__}: {exc}",
-            "file_url": file_url,
-            "content_type": content_type,
-            "is_story": is_story,
-        }
+        result = classify_error(exc, "late")
+        result.update({"file_url": file_url, "content_type": content_type, "is_story": is_story})
+        return result
 
 
 @function_tool(
@@ -218,12 +210,9 @@ async def post_carousel_on_instagram(
         )
 
         if not result.get("success"):
-            return {
-                "success": False,
-                "error": result.get("error", "Unknown error"),
-                "status_code": result.get("status_code"),
-                "item_count": len(media_items),
-            }
+            classified = classify_late_response(result, "late")
+            classified["item_count"] = len(media_items)
+            return classified
 
         response = {
             "success": True,
@@ -241,8 +230,6 @@ async def post_carousel_on_instagram(
         return response
 
     except Exception as exc:
-        return {
-            "success": False,
-            "error": f"Instagram carousel posting failed: {type(exc).__name__}: {exc}",
-            "item_count": len(media_items),
-        }
+        result = classify_error(exc, "late")
+        result["item_count"] = len(media_items)
+        return result

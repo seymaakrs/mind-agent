@@ -110,6 +110,14 @@ Call save_swot_report with:
 - recommendations: List of actionable recommendations
 - data_sources: {"profile": true, "website": true/false, "web_search": true/false}
 
+## ERROR HANDLING
+
+When web_search, scrape_for_seo, scrape_competitors, or check_serp_position returns success=False:
+- If retryable=True: wait retry_after_seconds, then retry ONCE.
+- If retryable=False: note the failure in your analysis, explain what data is missing, and continue with available data.
+- Do NOT stop the entire analysis because one tool failed — partial results are still valuable.
+- Error fields: error_code, retryable, retry_after_seconds, user_message_tr, service.
+
 ## OUTPUT FORMAT
 
 **ONLY after save_swot_report() succeeds**, provide:

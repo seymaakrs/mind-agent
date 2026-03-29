@@ -1,6 +1,7 @@
 from agents import FunctionTool, function_tool
 
 from src.app.config import get_settings, AgentInstructionConfig
+from src.infra.errors import classify_error
 from src.infra.firebase_client import get_storage_client, save_media_record, save_dry_run_log
 from src.infra.google_ai_client import get_image_generation_client
 from src.models.prompts import ImagePrompt, build_image_prompt_model
@@ -171,7 +172,7 @@ def _make_generate_image_tool(prompt_model: type[ImagePrompt]) -> FunctionTool:
             }
 
         except Exception as exc:
-            return {"success": False, "error": f"Servis hatasi (image): {type(exc).__name__}: {exc}"}
+            return classify_error(exc, "google_ai")
 
     return generate_image
 

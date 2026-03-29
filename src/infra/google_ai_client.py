@@ -10,6 +10,7 @@ import google.auth.transport.requests
 from google.oauth2 import service_account
 
 from src.app.config import get_settings, get_model_settings
+from src.infra.errors import ServiceError
 
 
 class ImageGenerationClient:
@@ -78,7 +79,10 @@ class ImageGenerationClient:
             )
             if response.status_code != 200:
                 error_detail = response.text
-                raise RuntimeError(f"API Error {response.status_code}: {error_detail}")
+                raise ServiceError(
+                    f"API Error {response.status_code}: {error_detail}",
+                    status_code=response.status_code, service="google_ai",
+                )
             data = response.json()
 
         return self._extract_images(data)
@@ -131,7 +135,10 @@ class ImageGenerationClient:
             )
             if response.status_code != 200:
                 error_detail = response.text
-                raise RuntimeError(f"API Error {response.status_code}: {error_detail}")
+                raise ServiceError(
+                    f"API Error {response.status_code}: {error_detail}",
+                    status_code=response.status_code, service="google_ai",
+                )
             data = response.json()
 
         return self._extract_images(data)
@@ -226,12 +233,18 @@ class VideoGenerationClient:
             )
             if response.status_code != 200:
                 error_detail = response.text
-                raise RuntimeError(f"API Error {response.status_code}: {error_detail}")
+                raise ServiceError(
+                    f"API Error {response.status_code}: {error_detail}",
+                    status_code=response.status_code, service="google_ai",
+                )
 
             data = response.json()
             operation_name = data.get("name")
             if not operation_name:
-                raise RuntimeError(f"Operation name not found in response: {data}")
+                raise ServiceError(
+                    f"Operation name not found in response: {data}",
+                    status_code=500, service="google_ai",
+                )
 
         # 2. Poll for completion
         video_uri = await self._poll_operation(operation_name)
@@ -340,19 +353,26 @@ class VideoGenerationClient:
                 error_detail = response.text
                 # 403 hatasi icin ozel mesaj
                 if response.status_code == 403 and "API has not been used" in error_detail:
-                    raise RuntimeError(
+                    raise ServiceError(
                         f"Vertex AI API etkinlestirilmemis! "
                         f"GCP Console'da Vertex AI API'yi etkinlestirin: "
                         f"https://console.cloud.google.com/apis/api/aiplatform.googleapis.com "
                         f"Proje: {self._settings.gcp_project_id}. "
-                        f"Detay: {error_detail}"
+                        f"Detay: {error_detail}",
+                        status_code=403, service="google_ai",
                     )
-                raise RuntimeError(f"Vertex AI Error {response.status_code}: {error_detail}")
+                raise ServiceError(
+                    f"Vertex AI Error {response.status_code}: {error_detail}",
+                    status_code=response.status_code, service="google_ai",
+                )
 
             data = response.json()
             operation_name = data.get("name")
             if not operation_name:
-                raise RuntimeError(f"Operation name not found in response: {data}")
+                raise ServiceError(
+                    f"Operation name not found in response: {data}",
+                    status_code=500, service="google_ai",
+                )
 
         # Poll for completion
         video_gcs_uri = await self._poll_vertex_operation(operation_name, access_token)
@@ -386,7 +406,10 @@ class VideoGenerationClient:
                 response = await client.get(poll_url, headers=headers)
                 if response.status_code != 200:
                     error_detail = response.text
-                    raise RuntimeError(f"Poll Error {response.status_code}: {error_detail}")
+                    raise ServiceError(
+                        f"Poll Error {response.status_code}: {error_detail}",
+                        status_code=response.status_code, service="google_ai",
+                    )
 
                 data = response.json()
                 is_done = data.get("done", False)
@@ -395,7 +418,10 @@ class VideoGenerationClient:
                     # Check for error
                     if "error" in data:
                         error = data["error"]
-                        raise RuntimeError(f"Video generation failed: {error}")
+                        raise ServiceError(
+                            f"Video generation failed: {error}",
+                            status_code=500, service="google_ai",
+                        )
 
                     # Extract video GCS URI from response
                     # Response format: {"done": true, "response": {"predictions": [{"video": {"gcsUri": "..."}}]}}
@@ -405,7 +431,10 @@ class VideoGenerationClient:
                         if video_gcs_uri:
                             return video_gcs_uri
 
-                    raise RuntimeError(f"Video GCS URI not found in response: {data}")
+                    raise ServiceError(
+                        f"Video GCS URI not found in response: {data}",
+                        status_code=500, service="google_ai",
+                    )
 
                 # Wait before next poll
                 await asyncio.sleep(self.POLL_INTERVAL)
@@ -442,7 +471,10 @@ class VideoGenerationClient:
             response = await client.get(download_url, headers=headers)
             if response.status_code != 200:
                 error_detail = response.text
-                raise RuntimeError(f"GCS download error {response.status_code}: {error_detail}")
+                raise ServiceError(
+                    f"GCS download error {response.status_code}: {error_detail}",
+                    status_code=response.status_code, service="google_ai",
+                )
 
             return response.content
 
@@ -468,7 +500,10 @@ class VideoGenerationClient:
                 )
                 if response.status_code != 200:
                     error_detail = response.text
-                    raise RuntimeError(f"Poll Error {response.status_code}: {error_detail}")
+                    raise ServiceError(
+                        f"Poll Error {response.status_code}: {error_detail}",
+                        status_code=response.status_code, service="google_ai",
+                    )
 
                 data = response.json()
                 is_done = data.get("done", False)
@@ -477,7 +512,10 @@ class VideoGenerationClient:
                     # Check for error
                     if "error" in data:
                         error = data["error"]
-                        raise RuntimeError(f"Video generation failed: {error}")
+                        raise ServiceError(
+                            f"Video generation failed: {error}",
+                            status_code=500, service="google_ai",
+                        )
 
                     # Extract video URI
                     video_uri = (
@@ -488,7 +526,10 @@ class VideoGenerationClient:
                         .get("uri")
                     )
                     if not video_uri:
-                        raise RuntimeError(f"Video URI not found in response: {data}")
+                        raise ServiceError(
+                            f"Video URI not found in response: {data}",
+                            status_code=500, service="google_ai",
+                        )
 
                     return video_uri
 
@@ -514,7 +555,10 @@ class VideoGenerationClient:
             )
             if response.status_code != 200:
                 error_detail = response.text
-                raise RuntimeError(f"Video download error {response.status_code}: {error_detail}")
+                raise ServiceError(
+                    f"Video download error {response.status_code}: {error_detail}",
+                    status_code=response.status_code, service="google_ai",
+                )
 
             return response.content
 

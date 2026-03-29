@@ -63,7 +63,19 @@
       "WebFetch(domain:community.n8n.io)",
       "Bash(gcloud services:*)",
       "Bash(gcloud artifacts:*)",
-      "Bash(gcloud auth:*)"
+      "Bash(gcloud auth:*)",
+      "Bash(gcloud projects:*)",
+      "Bash(gcloud run:*)",
+      "WebFetch(domain:docs.fal.ai)",
+      "WebFetch(domain:serper.dev)",
+      "WebFetch(domain:mcpmarket.com)",
+      "WebFetch(domain:www.openai-hk.com)",
+      "WebFetch(domain:piapi.ai)",
+      "WebFetch(domain:jsr.io)",
+      "WebFetch(domain:reelmind.ai)",
+      "Bash(/tmp/errors.txt:*)",
+      "Read(//tmp/**)",
+      "Bash(docker info:*)"
     ]
   },
   "outputStyle": "Explanatory"
