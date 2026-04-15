@@ -11,8 +11,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from src.app.capabilities import CAPABILITIES
 from src.app.config import get_settings
 from src.app.orchestrator_runner import run_orchestrator_async
+from src.infra.thread_manager import generate_thread_id
 
 settings = get_settings()
 set_default_openai_key(settings.openai_api_key)
@@ -29,6 +31,29 @@ app.add_middleware(
 )
 
 
+class Reference(BaseModel):
+    """A Firebase item (document or file) the user has selected in the frontend."""
+
+    type: str = Field(
+        ...,
+        description=(
+            "Item type: 'image' | 'video' | 'instagram_post' | 'report' | 'media' | 'plan'"
+        ),
+    )
+    id: str = Field(
+        ...,
+        description="Firestore document path (e.g. businesses/abc/instagram_posts/xyz) or Storage file path.",
+    )
+    url: str | None = Field(
+        default=None,
+        description="Public URL for storage files. Agent can use this directly without fetching.",
+    )
+    label: str | None = Field(
+        default=None,
+        description="Optional human-readable label shown in the UI (e.g. 'Geçen haftanın görseli').",
+    )
+
+
 class TaskRequest(BaseModel):
     task: str = Field(..., description="User task text to run through the orchestrator.")
     business_id: str | None = Field(
@@ -36,6 +61,21 @@ class TaskRequest(BaseModel):
     )
     task_id: str | None = Field(
         default=None, description="Task ID for tracking in Firebase and admin panel."
+    )
+    thread_id: str | None = Field(
+        default=None,
+        description=(
+            "Conversation thread ID for multi-turn chat. "
+            "Omit to start a new thread — the API will generate one and return it. "
+            "Pass the value from a previous response to continue the same conversation."
+        ),
+    )
+    references: list[Reference] | None = Field(
+        default=None,
+        description=(
+            "Firebase items the user has selected in the UI. "
+            "Injected into the agent context as a [Referenced Items] block."
+        ),
     )
     extras: dict[str, Any] | None = Field(
         default=None, description="Optional flexible data - structure may vary per request."
@@ -62,7 +102,10 @@ async def run_task(payload: TaskRequest):
     {"type": "result", "success": false, "error": "..."}
     """
     async def generate():
-        # Merge business_id, task_id and extras into context
+        # Resolve thread_id — generate a new one if the client didn't provide one
+        thread_id = payload.thread_id or generate_thread_id()
+
+        # Merge business_id, task_id, extras and references into context
         context = payload.context or {}
         if payload.business_id:
             context["business_id"] = payload.business_id
@@ -70,6 +113,8 @@ async def run_task(payload: TaskRequest):
             context["task_id"] = payload.task_id
         if payload.extras:
             context["extras"] = payload.extras
+        if payload.references:
+            context["references"] = [r.model_dump(exclude_none=True) for r in payload.references]
 
         # Create progress queue for streaming events
         progress_queue: asyncio.Queue = asyncio.Queue(maxsize=100)
@@ -80,6 +125,7 @@ async def run_task(payload: TaskRequest):
                 user_input=payload.task,
                 context=context,
                 progress_queue=progress_queue,
+                thread_id=thread_id,
             )
         )
 
@@ -96,6 +142,15 @@ async def run_task(payload: TaskRequest):
                 # No progress event, send heartbeat to keep connection alive
                 yield json.dumps({"type": "heartbeat"}) + "\n"
 
+        # Drain any remaining events that were queued just before task completed
+        # (race condition: last events like agent_end may be in queue when loop exits)
+        while not progress_queue.empty():
+            try:
+                progress = progress_queue.get_nowait()
+                yield json.dumps(progress, ensure_ascii=False) + "\n"
+            except asyncio.QueueEmpty:
+                break
+
         # Get result
         try:
             output, log_path = await task
@@ -103,7 +158,8 @@ async def run_task(payload: TaskRequest):
                 "type": "result",
                 "success": True,
                 "output": output,
-                "log_path": log_path
+                "log_path": log_path,
+                "thread_id": thread_id,
             }, ensure_ascii=False) + "\n"
             yield result
         except Exception as exc:
@@ -112,7 +168,8 @@ async def run_task(payload: TaskRequest):
             result = json.dumps({
                 "type": "result",
                 "success": False,
-                "error": error_detail
+                "error": error_detail,
+                "thread_id": thread_id,
             }, ensure_ascii=False) + "\n"
             yield result
 
@@ -126,6 +183,16 @@ async def run_task(payload: TaskRequest):
             "Transfer-Encoding": "chunked",  # Enable chunked transfer
         }
     )
+
+
+@app.get("/capabilities")
+async def get_capabilities():
+    """Returns the full list of agent capabilities in structured JSON.
+
+    Intended for frontend use — display a feature overview or help page.
+    Does not invoke any AI model; response is static.
+    """
+    return CAPABILITIES
 
 
 @app.get("/health")

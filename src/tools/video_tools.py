@@ -4,6 +4,7 @@ from src.app.config import get_settings, AgentInstructionConfig
 from src.infra.errors import classify_error
 from src.infra.firebase_client import get_storage_client, save_media_record, save_dry_run_log
 from src.infra.google_ai_client import get_video_generation_client
+from src.infra.heygen_client import get_heygen_client
 from src.infra.kling_client import get_kling_client
 from src.models.prompts import VideoPrompt, build_video_prompt_model
 
@@ -490,6 +491,134 @@ async def generate_video_kling(
         return classify_error(exc, "kling")
 
 
+_GENERATE_VIDEO_HEYGEN_DESCRIPTION = (
+    "Generates a video using HeyGen Video Agent AI. "
+    "HeyGen automatically selects scenes, transitions, and visual style based on the prompt. "
+    "\n\n"
+    "PARAMETERS:\n"
+    "- prompt (REQUIRED): Natural language description of the desired video. "
+    "Be specific about the content, mood, and style (e.g., 'A professional corporate video showing a team "
+    "collaborating in a modern office, energetic and inspiring tone, dark minimalist aesthetic').\n"
+    "- file_name (REQUIRED): Name to save the generated video as in Firebase Storage (e.g., 'promo_heygen.mp4').\n"
+    "- business_id: Business ID for organizing files under videos/{id}/.\n"
+    "- orientation: Video orientation — 'landscape' (16:9, for YouTube/web) or 'portrait' (9:16, for Instagram Reels/Stories). "
+    "Default is 'landscape'.\n"
+    "- duration_sec: Approximate video duration in seconds (minimum 5). HeyGen may adjust slightly. Default: not specified.\n"
+    "- image_url: Optional reference image URL. HeyGen will use this image as visual context when generating the video.\n"
+    "\n"
+    "Returns the generated video info including path and public_url."
+)
+
+
+@function_tool(
+    name_override="generate_video_heygen",
+    description_override=_GENERATE_VIDEO_HEYGEN_DESCRIPTION,
+    strict_mode=False,
+)
+async def generate_video_heygen(
+    prompt: str,
+    file_name: str,
+    business_id: str | None = None,
+    orientation: str = "landscape",
+    duration_sec: int | None = None,
+    image_url: str | None = None,
+) -> dict[str, str | bool]:
+    """
+    Generate a video using HeyGen Video Agent.
+
+    Args:
+        prompt: Natural language video description.
+        file_name: Name to save the generated video as in Firebase Storage.
+        business_id: Business ID for organizing files under videos/{id}/.
+        orientation: Video orientation ("landscape" or "portrait").
+        duration_sec: Approximate duration in seconds (minimum 5).
+        image_url: Optional reference image URL for visual context.
+
+    Returns:
+        dict with success, path, public_url, and fileName.
+    """
+    settings = get_settings()
+
+    # DRY-RUN MODE
+    if settings.dry_run:
+        token_count = _count_tokens(prompt)
+        print(f"[DRY-RUN] HeyGen video prompt token count: {token_count}")
+        print(f"[DRY-RUN] HeyGen prompt:\n{prompt[:500]}...")
+
+        if business_id:
+            try:
+                save_dry_run_log(
+                    business_id=business_id,
+                    media_type="video_heygen",
+                    prompt_data={"prompt": prompt, "orientation": orientation, "duration_sec": duration_sec},
+                    full_prompt=prompt,
+                    token_count=token_count,
+                    file_name=file_name,
+                    aspect_ratio=orientation,
+                    duration_seconds=duration_sec or 0,
+                )
+            except Exception as e:
+                print(f"[DRY-RUN] Firestore log hatasi: {e}")
+
+        return {
+            "success": True,
+            "message": f"[DRY-RUN] HeyGen video uretimi simule edildi. Token sayisi: {token_count}",
+            "path": f"[DRY-RUN] videos/{business_id or 'unknown'}/{file_name}",
+            "public_url": "[DRY-RUN] No actual video generated",
+            "fileName": file_name,
+            "dry_run": True,
+            "token_count": token_count,
+        }
+
+    # NORMAL MODE: Call HeyGen API
+    heygen_client = get_heygen_client()
+    storage_client = get_storage_client()
+
+    try:
+        print(
+            f"[video_tools] HeyGen Video Agent: orientation={orientation}, "
+            f"duration={duration_sec}s, image={'yes' if image_url else 'no'}"
+        )
+        video_data = await heygen_client.generate_video(
+            prompt=prompt,
+            orientation=orientation,
+            duration_sec=duration_sec,
+            image_url=image_url,
+        )
+
+        # Upload to Firebase Storage (HeyGen video_url expires in 7 days)
+        destination_path = f"videos/{business_id}/{file_name}" if business_id else f"videos/{file_name}"
+        upload_result = storage_client.upload_file(
+            file_data=video_data,
+            destination_path=destination_path,
+            content_type="video/mp4",
+        )
+
+        if business_id:
+            try:
+                save_media_record(
+                    business_id=business_id,
+                    media_type="video",
+                    storage_path=upload_result["path"],
+                    public_url=upload_result["public_url"],
+                    file_name=file_name,
+                    prompt_summary=prompt[:200],
+                )
+            except Exception:
+                pass
+
+        return {
+            "success": True,
+            "message": "HeyGen ile video olusturuldu",
+            "path": upload_result["path"],
+            "public_url": upload_result["public_url"],
+            "fileName": file_name,
+        }
+
+    except Exception as exc:
+        return classify_error(exc, "heygen")
+
+
 def get_video_tools(config: AgentInstructionConfig | None = None) -> list[FunctionTool]:
     """
     Video agent icin kullanilabilir tool listesi.
@@ -502,7 +631,7 @@ def get_video_tools(config: AgentInstructionConfig | None = None) -> list[Functi
         video_tool = _make_generate_video_tool(prompt_model)
     else:
         video_tool = generate_video
-    return [video_tool, generate_video_kling, add_audio_to_video]
+    return [video_tool, generate_video_kling, generate_video_heygen, add_audio_to_video]
 
 
-__all__ = ["generate_video", "generate_video_kling", "add_audio_to_video", "get_video_tools"]
+__all__ = ["generate_video", "generate_video_kling", "generate_video_heygen", "add_audio_to_video", "get_video_tools"]

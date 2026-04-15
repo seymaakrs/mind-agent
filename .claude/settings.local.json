@@ -75,7 +75,17 @@
       "WebFetch(domain:reelmind.ai)",
       "Bash(/tmp/errors.txt:*)",
       "Read(//tmp/**)",
-      "Bash(docker info:*)"
+      "Bash(docker info:*)",
+      "Bash(docker:*)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:docs.postiz.com)",
+      "WebFetch(domain:postiz.com)",
+      "WebFetch(domain:getlate.dev)",
+      "WebFetch(domain:appsumo.com)",
+      "Bash(python3 -c \"import json,sys; issues=json.load\\(sys.stdin\\); [print\\(f'#{i[\\\\\"number\\\\\"]}: {i[\\\\\"title\\\\\"]}'\\) for i in issues[:20]]\")",
+      "WebFetch(domain:bababuilds.com)",
+      "WebFetch(domain:docs.heygen.com)",
+      "WebFetch(domain:www.remotion.dev)"
     ]
   },
   "outputStyle": "Explanatory"

@@ -7,7 +7,14 @@
 3. **HER SESSION'DA BU DOSYAYI GUNCELLE**: Yeni ozellikler, degisiklikler eklendiginde MUTLAKA guncelle.
 4. **BILMEDIGIN SEYLERI SOR**: Belirsiz veya eksik bilgi varsa MUTLAKA kullaniciya sor. Varsayim yapma.
 5. **ONCEKI CALISMALARI OKU**: Bu dosyayi okuyarak onceki session'larda yapilan calismalar hakkinda bilgi edin.
-6. **KULLANICI BIR YAZILIM MUHENDİSİ**: Kullanıcı bir yeni mezun olacak bir yazılım mühendisi. Kodları sana yazdırıyor çünkü sen daha iyi yazıyorsun. Fakat kendisi de yazılımdan geri kalmak istemiyor kendini geliştirmek istiyor. Bu yüzden onu da süreçlere dahil ederek onunda kendini gelistirmesini sagla. Fakat yazilim mühendisliğinde bulunan genel kavramları öğrenmesini sağla. Özellikle kod yazarken kullanilan kavramlari anlat. 
+6. **KULLANICI BIR YAZILIM MUHENDİSİ**: Kullanıcı bir yeni mezun olacak bir yazılım mühendisi. Kodları sana yazdırıyor çünkü sen daha iyi yazıyorsun. Fakat kendisi de yazılımdan geri kalmak istemiyor kendini geliştirmek istiyor. Bu yüzden onu da süreçlere dahil ederek onunda kendini gelistirmesini sagla. Fakat yazilim mühendisliğinde bulunan genel kavramları öğrenmesini sağla. Özellikle kod yazarken kullanilan kavramlari anlat.
+7. **YENİ EKLEME = BAĞLI YERLERİ DE GÜNCELLE**: Yeni bir tool, agent veya özellik eklendiğinde MUTLAKA şu yerleri kontrol et ve güncelle:
+   - `src/agents/instructions/video.py` → `## YOUR TOOLS` listesi (tool sayısı ve açıklaması)
+   - `src/agents/instructions/video.py` → `## TOOL SELECTION` bölümü (ne zaman kullanılacağı)
+   - `src/agents/instructions/orchestrator.py` → ilgili keyword listesi ve NOTE satırları
+   - `src/tools/video_tools.py` → `get_video_tools()` return listesi
+   - Bu CLAUDE.md → Ana Tools özeti ve ilgili bölümler
+   **Kural:** Bir tool'u sadece kod olarak eklemek yetmez. Agent o tool'u ancak instruction'larında görürse kullanır.
 
 ## Proje Ozeti
 
@@ -39,6 +46,7 @@ FAL_KEY                   # fal.ai MMAudio ses ekleme
 SERPER_API_KEY            # Serper.dev Google SERP arama
 KLING_ACCESS_KEY          # Kling AI Access Key (app.klingai.com)
 KLING_SECRET_KEY          # Kling AI Secret Key
+HEYGEN_API_KEY            # HeyGen AI API Key (app.heygen.com/settings)
 DRY_RUN=false             # true: API cagirmadan prompt logla
 ```
 
@@ -46,7 +54,7 @@ DRY_RUN=false             # true: API cagirmadan prompt logla
 
 **Orchestrator:** `fetch_business`, `upload_file`, `list_files`, `delete_file`, `get_document`, `save_document`, `query_documents`, `post_on_instagram`, `post_carousel_on_instagram`, `post_on_youtube`, `post_on_tiktok`, `post_carousel_on_tiktok`, `post_on_linkedin`, `post_carousel_on_linkedin`, `report_error`
 
-**Image/Video:** `generate_image`, `generate_video` (Veo 3.1), `generate_video_kling` (Kling 3.0), `add_audio_to_video` (fal.ai MMAudio V2)
+**Image/Video:** `generate_image`, `generate_video` (Veo 3.1), `generate_video_kling` (Kling 3.0), `generate_video_heygen` (HeyGen Video Agent), `add_audio_to_video` (fal.ai MMAudio V2)
 
 **Marketing:** `create_weekly_plan`, `get_plans`, `get_todays_posts`, `save_instagram_post`, `get_instagram_posts`, `save_youtube_video`, `get_youtube_videos`, `get_marketing_memory`, `update_marketing_memory`, `get_admin_notes`
 
@@ -72,15 +80,15 @@ DRY_RUN=false             # true: API cagirmadan prompt logla
 
 ## Docker Deployment
 
-**Guncel Versiyon:** `v1.15.0`
+**Guncel Versiyon:** `v1.18.0`
 **GCP Project:** `instagram-post-bot-471518`
 **Registry:** Artifact Registry (us-central1)
-**Image:** `us-central1-docker.pkg.dev/instagram-post-bot-471518/agents-sdk/agents-sdk-api:v1.15.0`
+**Image:** `us-central1-docker.pkg.dev/instagram-post-bot-471518/agents-sdk/agents-sdk-api:v1.18.0`
 
 ```bash
-docker build -t agents-sdk-api:v1.15.0 .
-docker tag agents-sdk-api:v1.15.0 us-central1-docker.pkg.dev/instagram-post-bot-471518/agents-sdk/agents-sdk-api:v1.15.0
-docker push us-central1-docker.pkg.dev/instagram-post-bot-471518/agents-sdk/agents-sdk-api:v1.15.0
+docker build -t agents-sdk-api:v1.16.1 .
+docker tag agents-sdk-api:v1.16.1 us-central1-docker.pkg.dev/instagram-post-bot-471518/agents-sdk/agents-sdk-api:v1.16.1
+docker push us-central1-docker.pkg.dev/instagram-post-bot-471518/agents-sdk/agents-sdk-api:v1.16.1
 ```
 
 Versioning: `vMAJOR.MINOR.PATCH` (MAJOR=breaking, MINOR=feature, PATCH=bugfix)
