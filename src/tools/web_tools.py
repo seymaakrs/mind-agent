@@ -26,6 +26,7 @@ from bs4 import BeautifulSoup
 from agents import function_tool
 
 from src.app.config import get_settings
+from src.infra.url_safety import UnsafeURLError, safe_get, validate_url_safety
 
 
 # ---------------------------------------------------------------------------
@@ -52,6 +53,9 @@ _AI_BOTS = [
 async def _fetch_page_enhanced(url: str, *, mobile: bool = False) -> dict[str, Any]:
     """Fetch a page capturing TTFB, redirect chain, and response headers.
 
+    SECURITY: SSRF koruma — validate_url_safety + safe_get her redirect
+    hop'unda dogrulama yapar (SECURITY_REPORT_TR.md Madde 1).
+
     Returns a dict with:
       html, final_url, status_code, ttfb_ms, redirect_chain,
       redirect_count, response_headers, success, error
@@ -60,9 +64,9 @@ async def _fetch_page_enhanced(url: str, *, mobile: bool = False) -> dict[str, A
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             t0 = time.monotonic()
-            response = await client.get(
+            response = await safe_get(
+                client,
                 url,
-                follow_redirects=True,
                 headers={
                     "User-Agent": ua,
                     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -71,7 +75,11 @@ async def _fetch_page_enhanced(url: str, *, mobile: bool = False) -> dict[str, A
             )
             ttfb_ms = round((time.monotonic() - t0) * 1000)
 
-            redirect_chain = [str(r.url) for r in response.history]
+            # safe_get manuel redirect takibi yapiyor; response.history yerine
+            # bilgiyi response.url'den alabiliriz.
+            redirect_chain = (
+                [str(r.url) for r in getattr(response, "history", []) or []]
+            )
 
             # Grab a few useful headers
             headers_of_interest = {}
@@ -97,6 +105,13 @@ async def _fetch_page_enhanced(url: str, *, mobile: bool = False) -> dict[str, A
                 "success": response.status_code == 200,
                 "error": None if response.status_code == 200 else f"HTTP {response.status_code}",
             }
+    except UnsafeURLError as exc:
+        return {
+            "html": None, "final_url": url, "status_code": 0,
+            "ttfb_ms": 0, "redirect_chain": [], "redirect_count": 0,
+            "response_headers": {}, "success": False,
+            "error": f"URL refused (SSRF protection): {exc}",
+        }
     except httpx.TimeoutException:
         return {
             "html": None, "final_url": url, "status_code": 0,
@@ -169,8 +184,15 @@ async def _check_robots_txt(url: str) -> dict[str, Any]:
     }
     try:
         async with httpx.AsyncClient(timeout=8.0) as client:
-            resp = await client.get(robots_url, follow_redirects=True,
-                                    headers={"User-Agent": _DESKTOP_UA})
+            try:
+                resp = await safe_get(
+                    client,
+                    robots_url,
+                    headers={"User-Agent": _DESKTOP_UA},
+                )
+            except UnsafeURLError as exc:
+                result["issues"].append(f"robots.txt URL refused: {exc}")
+                return result
         if resp.status_code != 200:
             result["issues"].append("robots.txt not found")
             return result
@@ -244,8 +266,14 @@ async def _check_llms_txt(url: str) -> dict[str, Any]:
     }
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(llms_url, follow_redirects=True,
-                                    headers={"User-Agent": _DESKTOP_UA})
+            try:
+                resp = await safe_get(
+                    client,
+                    llms_url,
+                    headers={"User-Agent": _DESKTOP_UA},
+                )
+            except UnsafeURLError:
+                return result
         if resp.status_code == 200:
             body = resp.text
             result["has_llms_txt"] = True
@@ -282,8 +310,14 @@ async def _check_sitemap(base_url: str, declared_sitemaps: list[str] | None = No
     for sitemap_url in urls_to_try[:3]:  # Try at most 3
         try:
             async with httpx.AsyncClient(timeout=8.0) as client:
-                resp = await client.get(sitemap_url, follow_redirects=True,
-                                        headers={"User-Agent": _DESKTOP_UA})
+                try:
+                    resp = await safe_get(
+                        client,
+                        sitemap_url,
+                        headers={"User-Agent": _DESKTOP_UA},
+                    )
+                except UnsafeURLError:
+                    continue
             if resp.status_code != 200:
                 continue
 
@@ -1548,15 +1582,23 @@ async def scrape_website(
             }
 
         async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.get(
-                url,
-                follow_redirects=True,
-                headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                    "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+            try:
+                # SSRF koruma: validate + redirect-aware GET (Madde 1).
+                response = await safe_get(
+                    client,
+                    url,
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                        "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+                    },
+                )
+            except UnsafeURLError as exc:
+                return {
+                    "success": False,
+                    "error": f"URL refused (SSRF protection): {exc}",
+                    "url": url,
                 }
-            )
 
             if response.status_code != 200:
                 return {
