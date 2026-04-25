@@ -6,12 +6,103 @@ from typing import Any
 
 from agents import function_tool
 
+from src.infra.firebase_client import get_document_client
 from src.infra.late_client import get_late_client
+
+
+def _service_error(
+    error_code: str,
+    error: str,
+    user_message_tr: str,
+    retryable: bool = False,
+) -> dict[str, Any]:
+    """ServiceError pattern — instagram tool tutarliligi icin."""
+    return {
+        "success": False,
+        "service": "late",
+        "error": error,
+        "error_code": error_code,
+        "retryable": retryable,
+        "user_message_tr": user_message_tr,
+    }
+
+
+def _check_late_profile_ownership(
+    *,
+    business_id: str,
+    caller_late_profile_id: str | None,
+) -> tuple[bool, str | dict[str, Any]]:
+    """
+    Late profile sahiplik kontrolu (IDOR koruma).
+
+    Kural: Firestore businesses/{business_id}.late_profile_id =
+    "kanonik late_profile_id". Tool bunu kullanir; caller verdiyse de
+    eslesip eslesmedigini dogrular.
+
+    Args:
+        business_id: Required, kanonik late_profile_id'yi cekmek icin.
+        caller_late_profile_id: Caller (LLM) verdiyse bunu dogrula. Yoksa None.
+
+    Returns:
+        (True, effective_profile_id) — kullanilabilir.
+        (False, error_dict) — saldiri tespit edildi veya konfig eksik.
+
+    SECURITY_REPORT_TR.md Madde 4.
+    """
+    if not business_id or not isinstance(business_id, str):
+        return False, _service_error(
+            error_code="INVALID_INPUT",
+            error="business_id is required for ownership check.",
+            user_message_tr="Business ID belirtilmedi.",
+        )
+
+    try:
+        doc_client = get_document_client("businesses")
+        business_doc = doc_client.get_document(business_id)
+    except Exception as exc:
+        return False, _service_error(
+            error_code="SERVER_ERROR",
+            error=f"Failed to read business doc: {exc}",
+            user_message_tr="Sistem su an isletme bilgisini okuyamadi.",
+            retryable=True,
+        )
+
+    if not business_doc:
+        return False, _service_error(
+            error_code="NOT_FOUND",
+            error=f"Business {business_id} not found.",
+            user_message_tr="Isletme bulunamadi.",
+        )
+
+    expected = (business_doc.get("late_profile_id") or "").strip()
+    if not expected:
+        return False, _service_error(
+            error_code="INVALID_INPUT",
+            error=f"Business {business_id} has no late_profile_id configured.",
+            user_message_tr="Bu isletme icin Instagram analitigi henuz baglanmamis.",
+        )
+
+    if caller_late_profile_id is not None and caller_late_profile_id != expected:
+        # IDOR girisimi: caller baska business'in profile_id'sini gecirdi.
+        return False, _service_error(
+            error_code="PERMISSION_DENIED",
+            error=(
+                f"late_profile_id mismatch for business {business_id}: "
+                f"caller-provided value does not match business profile."
+            ),
+            user_message_tr=(
+                "Bu isletmenin Instagram profili icin yetkiniz yok. "
+                "Istek reddedildi."
+            ),
+        )
+
+    return True, expected
 
 
 @function_tool
 async def get_instagram_insights(
-    late_profile_id: str,
+    business_id: str,
+    late_profile_id: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
     limit: int = 20,
@@ -27,8 +118,12 @@ async def get_instagram_insights(
 
     NOTE: Analytics data is cached and refreshed at most once per hour by Late API.
 
+    SECURITY: business_id REQUIRED. late_profile_id Firestore'dan okunur ve
+    caller'in (varsa) verdigiyle dogrulanir (IDOR koruma).
+
     Args:
-        late_profile_id: Late profile ID (raw ObjectId like "6977991f7e7ed569a4f15eca") from business.late_profile_id.
+        business_id: REQUIRED. Firestore businesses/{id} document.
+        late_profile_id: Optional. Verilirse business profile'da depolu degerle eslesmeli.
         date_from: Start date filter (YYYY-MM-DD format, optional).
         date_to: End date filter (YYYY-MM-DD format, optional).
         limit: Posts per page (default 20, max 100).
@@ -43,9 +138,24 @@ async def get_instagram_insights(
         - pagination: {total, page, limit, total_pages}
         - summary: aggregated statistics (totals, averages, top performers)
     """
+    ok, ownership_result = _check_late_profile_ownership(
+        business_id=business_id,
+        caller_late_profile_id=late_profile_id,
+    )
+    if not ok:
+        # ownership_result error dict
+        err: dict[str, Any] = dict(ownership_result)  # type: ignore[arg-type]
+        err.setdefault("media_items", [])
+        err.setdefault(
+            "pagination",
+            {"total": 0, "page": 1, "limit": limit, "total_pages": 0},
+        )
+        return err
+    effective_profile_id: str = ownership_result  # type: ignore[assignment]
+
     try:
         # Analytics uses late_profile_id (raw ObjectId), not instagram_id (acc_xxxxx)
-        late = get_late_client(late_profile_id, strip_prefix=False)
+        late = get_late_client(effective_profile_id, strip_prefix=False)
 
         # Validate sort_by parameter
         valid_sort_by = sort_by if sort_by in ("date", "engagement") else "date"
@@ -191,18 +301,20 @@ def _calculate_summary(media_items: list[dict[str, Any]]) -> dict[str, Any]:
 
 @function_tool
 async def get_post_analytics(
-    late_profile_id: str,
+    business_id: str,
     post_id: str,
+    late_profile_id: str | None = None,
 ) -> dict[str, Any]:
     """
     Fetch detailed analytics for a specific Instagram post.
 
-    Use this when you need complete metrics for a single post.
-    The API accepts both Late Post ID and External Post ID - it auto-resolves.
+    SECURITY: business_id REQUIRED. late_profile_id Firestore'dan okunur ve
+    caller'in (varsa) verdigiyle dogrulanir (IDOR koruma).
 
     Args:
-        late_profile_id: Late profile ID (raw ObjectId like "6977991f7e7ed569a4f15eca") from business.late_profile_id.
+        business_id: REQUIRED. Firestore businesses/{id} document.
         post_id: The post ID (Late ID like "65f1c0a9..." or External ID).
+        late_profile_id: Optional. Verilirse business profile'daki ile eslesmeli.
 
     Returns:
         dict with:
@@ -215,9 +327,17 @@ async def get_post_analytics(
           }
         - platform_analytics: Per-platform breakdown (for cross-posted content)
     """
+    ok, ownership_result = _check_late_profile_ownership(
+        business_id=business_id,
+        caller_late_profile_id=late_profile_id,
+    )
+    if not ok:
+        return dict(ownership_result)  # type: ignore[arg-type]
+    effective_profile_id: str = ownership_result  # type: ignore[assignment]
+
     try:
         # Analytics uses late_profile_id (raw ObjectId), not instagram_id (acc_xxxxx)
-        late = get_late_client(late_profile_id, strip_prefix=False)
+        late = get_late_client(effective_profile_id, strip_prefix=False)
         result = await late.get_analytics(post_id=post_id)
 
         if not result.get("success"):
