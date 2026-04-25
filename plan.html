@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Zernio Dual-Agent 8H Sprint — Plan</title>
+<style>
+  :root {
+    --bg: #fafafe;
+    --card: #ffffff;
+    --ink: #2d2a3e;
+    --muted: #8b85a1;
+    --border: #f0e8f8;
+    --pink: #ffb5c5;
+    --pink-soft: #ffe4ec;
+    --lavender: #c5baff;
+    --lavender-soft: #ece8ff;
+    --mint: #b5e4d0;
+    --mint-soft: #e1f5ec;
+    --peach: #ffd4b5;
+    --peach-soft: #fff0e1;
+    --yellow: #fff1b5;
+    --yellow-soft: #fffadf;
+    --shadow: 0 4px 20px rgba(197, 186, 255, 0.08);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.5;
+    padding: 32px 24px;
+    min-height: 100vh;
+  }
+
+  .container { max-width: 1280px; margin: 0 auto; }
+
+  header {
+    background: var(--card);
+    border-radius: 24px;
+    padding: 28px 32px;
+    box-shadow: var(--shadow);
+    margin-bottom: 28px;
+    border: 1px solid var(--border);
+  }
+
+  .title-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+  h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+  .subtitle { color: var(--muted); font-size: 14px; margin-top: 6px; }
+
+  .meta {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+  }
+  .pill {
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--lavender-soft);
+    color: #6b5dca;
+  }
+  .pill.pink { background: var(--pink-soft); color: #c0577a; }
+  .pill.mint { background: var(--mint-soft); color: #3d8b6c; }
+  .pill.peach { background: var(--peach-soft); color: #b86e3c; }
+
+  .progress-wrap {
+    margin-top: 22px;
+    background: var(--bg);
+    height: 14px;
+    border-radius: 999px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--pink), var(--lavender), var(--mint));
+    width: 0%;
+    transition: width 0.5s ease;
+    border-radius: 999px;
+  }
+  .progress-text {
+    margin-top: 10px;
+    color: var(--muted);
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .reset-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .reset-btn:hover { background: var(--pink-soft); color: #c0577a; border-color: var(--pink); }
+
+  .phase {
+    background: var(--card);
+    border-radius: 20px;
+    padding: 24px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+    border-left: 6px solid var(--lavender);
+  }
+  .phase.p1 { border-left-color: var(--lavender); }
+  .phase.p2 { border-left-color: var(--mint); }
+  .phase.p3 { border-left-color: var(--yellow); }
+  .phase.p4 { border-left-color: #a8d8ff; }
+  .phase.p5 { border-left-color: var(--peach); }
+  .phase.p6 { border-left-color: var(--pink); }
+  .phase.p7 { border-left-color: #ffb5b5; }
+  .phase.p8 { border-left-color: #d8d8d8; }
+
+  .phase-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
+  .phase-title { font-size: 18px; font-weight: 700; }
+  .phase-time { color: var(--muted); font-size: 13px; font-weight: 600; }
+  .phase-goal { color: var(--muted); font-size: 13px; font-style: italic; margin-bottom: 16px; }
+
+  .columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 720px) {
+    .columns { grid-template-columns: 1fr; }
+  }
+
+  .col {
+    background: var(--bg);
+    border-radius: 14px;
+    padding: 16px 18px;
+    border: 1px solid var(--border);
+  }
+  .col.seyma { background: var(--pink-soft); border-color: #ffd4dc; }
+  .col.beyza { background: var(--lavender-soft); border-color: #d8d0ff; }
+
+  .col-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .col.seyma .col-title { color: #c0577a; }
+  .col.beyza .col-title { color: #6b5dca; }
+
+  .task-list { list-style: none; }
+  .task {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 0;
+    cursor: pointer;
+    user-select: none;
+  }
+  .task input[type="checkbox"] {
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 6px;
+    border: 2px solid #d0c8e0;
+    background: white;
+    cursor: pointer;
+    flex-shrink: 0;
+    margin-top: 2px;
+    position: relative;
+    transition: all 0.2s;
+  }
+  .col.seyma .task input[type="checkbox"]:checked { background: var(--pink); border-color: var(--pink); }
+  .col.beyza .task input[type="checkbox"]:checked { background: var(--lavender); border-color: var(--lavender); }
+  .task input[type="checkbox"]:checked::after {
+    content: "";
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    width: 5px;
+    height: 9px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+  .task-time {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+    background: white;
+    padding: 2px 7px;
+    border-radius: 6px;
+    margin-right: 4px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .task-text { font-size: 14px; line-height: 1.5; }
+  .task input:checked ~ .task-text { text-decoration: line-through; color: var(--muted); }
+
+  .sync-banner {
+    background: linear-gradient(90deg, var(--mint-soft), var(--yellow-soft));
+    border-radius: 12px;
+    padding: 10px 16px;
+    margin-top: 14px;
+    font-size: 13px;
+    color: #3d8b6c;
+    border: 1px dashed #b5e4d0;
+    font-weight: 600;
+  }
+
+  .footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 32px;
+    padding: 20px;
+  }
+
+  .done-badge {
+    display: inline-block;
+    margin-left: 8px;
+    font-size: 11px;
+    background: var(--mint);
+    color: #2d5a47;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-weight: 700;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="title-row">
+      <div>
+        <h1>Zernio Dual-Agent · 8H Sprint</h1>
+        <div class="subtitle">25 Nisan 2026 · 11:00 → 19:00 · Branch: <code>claude/dual-agent-setup-7ez1b</code></div>
+      </div>
+      <button class="reset-btn" onclick="resetAll()">Sıfırla</button>
+    </div>
+    <div class="meta">
+      <span class="pill pink">Şeyma · UI & Komuta</span>
+      <span class="pill">Beyza · Backend & Güvenlik</span>
+      <span class="pill mint">8 Faz</span>
+      <span class="pill peach">Freeze 18:00</span>
+    </div>
+    <div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
+    <div class="progress-text">
+      <span id="progressLabel">0 / 0 görev tamamlandı</span>
+      <span id="progressPercent">0%</span>
+    </div>
+  </header>
+
+  <div id="phases"></div>
+
+  <div class="footer">
+    İşaretlerin tarayıcında otomatik kaydedilir · Tek dosya, sıfır bağımlılık
+  </div>
+</div>
+
+<script>
+const PHASES = [
+  {
+    id: 1, time: "11:00 – 12:00", title: "Faz 1 · Keşif & Sözleşme",
+    goal: "İki kişinin de aynı haritaya bakması. API kontratı imzalanır.",
+    seyma: [
+      ["11:00", "Branch'e geç, projeyi pull et, install yap"],
+      ["11:10", "Komuta paneli wireframe (5 ekran sketch)"],
+      ["11:30", "Soft-dopamine palet & font tokens dosyası"],
+      ["11:45", "Mock data JSON (10 lead, 5 kampanya, 3 rapor)"],
+    ],
+    beyza: [
+      ["11:00", "Branch'e geç, SECURITY_REPORT_TR.md oku"],
+      ["11:15", "src/agents & src/tools haritası çıkar"],
+      ["11:30", "n8n endpoint kontratları (Pydantic schema)"],
+      ["11:45", ".env audit — eksik key'leri listele"],
+    ],
+    sync: "11:55 SENKRON · API kontrat mutabakatı (docs/api-contract.md onayı)",
+  },
+  {
+    id: 2, time: "12:00 – 13:00", title: "Faz 2 · Güvenlik Bariyeri + Layout",
+    goal: "Köprü açılmadan duvar dik. Şeyma iskelet kurar.",
+    seyma: [
+      ["12:00", "Tailwind + HTML iskelet (header + sidebar + grid)"],
+      ["12:20", "Sidebar nav: Dashboard/Leads/Content/Campaigns/Reports"],
+      ["12:40", "Boş state komponenti + skeleton loader"],
+      ["12:55", "Mock data ile Lead listesi tablo render"],
+    ],
+    beyza: [
+      ["12:00", "SSRF Fix · web_tools.py URL allowlist + private IP block"],
+      ["12:20", "Auth Middleware · /task X-API-Key zorunluluğu"],
+      ["12:40", "IDOR Fix · orchestrator_tools collection allowlist"],
+      ["12:55", "tests/test_security.py — 3 patch için unit test"],
+    ],
+    sync: "13:00 SENKRON · Patch'ler commit'lendi mi? İskelet ayakta mı?",
+  },
+  {
+    id: 3, time: "13:00 – 14:00", title: "Faz 3 · Köprü Kurulumu",
+    goal: "n8n → Claude Manager Agent köprüsü ilk paketi geçirir.",
+    seyma: [
+      ["13:00", "Lead Skor kartı UI (0-100 + Hot/Warm/Cold)"],
+      ["13:25", "Content Studio paneli (prompt + preview + üret)"],
+      ["13:50", "Loading + error toast komponenti"],
+    ],
+    beyza: [
+      ["13:00", "POST /agent/score endpoint + Pydantic"],
+      ["13:25", "POST /agent/content + image/video tool"],
+      ["13:50", "POST /agent/decision + kampanya logic"],
+    ],
+    sync: "14:00 SENKRON · 3 endpoint curl ile 200 dönüyor mu?",
+  },
+  {
+    id: 4, time: "14:00 – 15:00", title: "Faz 4 · n8n Webhook Geri Dönüş",
+    goal: "Köprü çift yönlü. Agent n8n'i tetikleyebilir.",
+    seyma: [
+      ["14:00", "Lead listesi → /agent/score gerçek bağlantı"],
+      ["14:25", "Content Studio → /agent/content bağla"],
+      ["14:50", "Filtreleme + sıralama (skor, tarih)"],
+    ],
+    beyza: [
+      ["14:00", "POST /n8n/notify (mail/WhatsApp tetikle)"],
+      ["14:25", "POST /n8n/save-lead (NocoDB REST adapter)"],
+      ["14:50", "POST /n8n/send-message + HMAC imza doğrulama"],
+    ],
+    sync: "15:00 SENKRON · UI → n8n → NocoDB end-to-end smoke",
+  },
+  {
+    id: 5, time: "15:00 – 16:00", title: "Faz 5 · Veri Katmanı",
+    goal: "NocoDB tek gerçek kaynak. Memory Store kalıcı.",
+    seyma: [
+      ["15:00", "Kampanya listesi UI + durum badge"],
+      ["15:25", "Reklam metrik dashboard (Chart.js)"],
+      ["15:50", "Auto-refresh (30sn) toggle"],
+    ],
+    beyza: [
+      ["15:00", "nocodb_client.py CRUD wrapper"],
+      ["15:25", "Clay MCP · lead enrichment tool"],
+      ["15:50", "Memory Store → Firestore agent_memory/zernio"],
+    ],
+    sync: "16:00 SENKRON · Demo lead NocoDB'de görünüyor mu?",
+  },
+  {
+    id: 6, time: "16:00 – 17:00", title: "Faz 6 · Raporlama & Strateji",
+    goal: "Çıktılar görünür, indirilebilir, bildirimli.",
+    seyma: [
+      ["16:00", "Rapor listesi UI + filtre (haftalık/aylık)"],
+      ["16:25", "PDF/XLSX indir + preview modal"],
+      ["16:50", "Bildirim merkezi (toast + bell)"],
+    ],
+    beyza: [
+      ["16:00", "xlsx_export.py · openpyxl ile günlük rapor"],
+      ["16:25", "pdf_export.py · reportlab template"],
+      ["16:50", "Günlük rapor cron + e-posta dispatcher"],
+    ],
+    sync: "17:00 SENKRON · İlk gerçek rapor üretildi & indirildi",
+  },
+  {
+    id: 7, time: "17:00 – 18:00", title: "Faz 7 · Test & Sertleştirme",
+    goal: "Kırılma noktalarını bul. Kötü senaryoları çalıştır.",
+    seyma: [
+      ["17:00", "Manuel UI tur · 5 ekran (mobile + desktop)"],
+      ["17:20", "Hata senaryoları · boş, 500, slow network"],
+      ["17:40", "Accessibility · tab nav, kontrast, alt text"],
+    ],
+    beyza: [
+      ["17:00", "pytest -v tüm suite — kırmızı varsa düzelt"],
+      ["17:20", "Rate limit + circuit breaker (slowapi 60/dk)"],
+      ["17:40", "Log redaction · secret sızıntısı kontrolü"],
+    ],
+    sync: "18:00 FREEZE · Yeni feature yok, sadece bug fix",
+  },
+  {
+    id: 8, time: "18:00 – 19:00", title: "Faz 8 · Deploy & Teslim",
+    goal: "Production'da, izlenebilir, dökümante. Şeyma onaylar.",
+    seyma: [
+      ["18:00", "Demo akış scripti (5 adımlı senaryo)"],
+      ["18:20", "README güncelleme + ekran görüntüleri"],
+      ["18:45", "Final QA gözden geçirme"],
+    ],
+    beyza: [
+      ["18:00", "Docker build agents-sdk-api:v1.19.0"],
+      ["18:20", "Artifact Registry push + Cloud Run deploy"],
+      ["18:45", "Monitoring doğrula + prod smoke test"],
+    ],
+    sync: "19:00 KAPANIŞ · Şeyma onayı → mail/WA duyurusu → merge",
+  },
+];
+
+const STORAGE_KEY = "zernio-sprint-tasks";
+const state = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+
+function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); updateProgress(); }
+
+function render() {
+  const root = document.getElementById("phases");
+  root.innerHTML = PHASES.map(p => `
+    <section class="phase p${p.id}">
+      <div class="phase-header">
+        <div class="phase-title">${p.title}</div>
+        <div class="phase-time">${p.time}</div>
+      </div>
+      <div class="phase-goal">${p.goal}</div>
+      <div class="columns">
+        <div class="col seyma">
+          <div class="col-title">🌸 Şeyma · UI & Komuta</div>
+          <ul class="task-list">
+            ${p.seyma.map((t, i) => taskItem(p.id, "s", i, t)).join("")}
+          </ul>
+        </div>
+        <div class="col beyza">
+          <div class="col-title">💜 Beyza · Backend & Güvenlik</div>
+          <ul class="task-list">
+            ${p.beyza.map((t, i) => taskItem(p.id, "b", i, t)).join("")}
+          </ul>
+        </div>
+      </div>
+      <div class="sync-banner">🤝 ${p.sync}</div>
+    </section>
+  `).join("");
+
+  document.querySelectorAll(".task input[type=checkbox]").forEach(cb => {
+    cb.addEventListener("change", e => {
+      state[e.target.dataset.key] = e.target.checked;
+      save();
+    });
+  });
+}
+
+function taskItem(phaseId, who, idx, [time, text]) {
+  const key = `p${phaseId}-${who}-${idx}`;
+  const checked = state[key] ? "checked" : "";
+  return `
+    <li class="task">
+      <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer; width:100%;">
+        <input type="checkbox" data-key="${key}" ${checked} />
+        <span class="task-time">${time}</span>
+        <span class="task-text">${text}</span>
+      </label>
+    </li>
+  `;
+}
+
+function updateProgress() {
+  const all = document.querySelectorAll(".task input[type=checkbox]");
+  const done = document.querySelectorAll(".task input[type=checkbox]:checked");
+  const total = all.length;
+  const completed = done.length;
+  const pct = total ? Math.round((completed / total) * 100) : 0;
+  document.getElementById("progressBar").style.width = pct + "%";
+  document.getElementById("progressLabel").textContent = `${completed} / ${total} görev tamamlandı`;
+  document.getElementById("progressPercent").textContent = pct + "%";
+}
+
+function resetAll() {
+  if (!confirm("Tüm işaretler silinecek. Emin misin?")) return;
+  Object.keys(state).forEach(k => delete state[k]);
+  localStorage.removeItem(STORAGE_KEY);
+  document.querySelectorAll(".task input[type=checkbox]").forEach(cb => cb.checked = false);
+  updateProgress();
+}
+
+render();
+updateProgress();
+</script>
+</body>
+</html>
