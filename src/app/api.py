@@ -76,14 +76,78 @@ def verify_api_key(
     if not secrets.compare_digest(provided_key, expected_key):
         raise HTTPException(status_code=401, detail="Invalid API key.")
 
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+# ---------------------------------------------------------------------------
+# CORS Policy
+# ---------------------------------------------------------------------------
+# Operator CORS_ALLOWED_ORIGINS env var'ina virgul ile ayrilmis trusted
+# origin'leri yazarsa o origin'ler icin browser cookie/Authorization header
+# otomatik gonderimi (allow_credentials=True) acilir.
+#
+# Env set DEGILSE: wildcard ('*') ile her origin'den cagri kabul edilir AMA
+# allow_credentials=False olur. Bu, mevcut test/admin client'lari kirmadan
+# cookie/auth-header sizintisini kapatir.
+#
+# CORS spec'e gore allow_origins=['*'] ile allow_credentials=True kombinasyonu
+# tarayicilar tarafindan zaten reddedilir; bu yuzden wildcard durumunda
+# credentials her zaman False'a sabitlenir.
+
+
+def get_cors_config() -> dict[str, Any]:
+    """
+    CORS middleware konfigurasyonunu env'den okuyarak doner.
+
+    Returns:
+        dict: FastAPI CORSMiddleware'e verilecek kwargs.
+    """
+    raw = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
+
+    if not raw:
+        return {
+            "allow_origins": ["*"],
+            "allow_credentials": False,
+            "allow_methods": ["*"],
+            "allow_headers": ["*"],
+        }
+
+    # Comma-separated parse, whitespace trim, bos itemleri at.
+    parsed = [item.strip() for item in raw.split(",")]
+    origins = [item for item in parsed if item]
+
+    if not origins:
+        # Sadece virgul/whitespace gelmis — env yokmus gibi davran.
+        return {
+            "allow_origins": ["*"],
+            "allow_credentials": False,
+            "allow_methods": ["*"],
+            "allow_headers": ["*"],
+        }
+
+    # Wildcard explicit yazilmissa: spec geregi credentials=False zorunlu.
+    if origins == ["*"]:
+        return {
+            "allow_origins": ["*"],
+            "allow_credentials": False,
+            "allow_methods": ["*"],
+            "allow_headers": ["*"],
+        }
+
+    return {
+        "allow_origins": origins,
+        "allow_credentials": True,
+        "allow_methods": ["*"],
+        "allow_headers": ["*"],
+    }
+
+
+_cors_config = get_cors_config()
+if _cors_config["allow_origins"] == ["*"]:
+    logger.warning(
+        "CORS_ALLOWED_ORIGINS env var not set; falling back to wildcard with "
+        "allow_credentials=False. For production, set this env var to a "
+        "comma-separated list of trusted origins."
+    )
+app.add_middleware(CORSMiddleware, **_cors_config)
 
 
 class Reference(BaseModel):
