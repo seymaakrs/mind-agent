@@ -8,6 +8,7 @@ from src.agents.image_agent import create_image_agent
 from src.agents.video_agent import create_video_agent
 from src.agents.marketing_agent import create_marketing_agent
 from src.agents.analysis_agent import create_analysis_agent
+from src.agents.customer_agent import create_customer_agent
 from src.agents.orchestrator_agent import create_orchestrator_agent
 
 # Agent factory tipi: parametresiz cagrida yeni agent dondurur.
@@ -45,6 +46,11 @@ def create_analysis() -> Agent[dict[str, Any]]:
     return create_analysis_agent()
 
 
+def create_customer() -> Agent[dict[str, Any]]:
+    """Customer agenti olusturur (NocoDB CRM read-only — feature flag arkasinda)."""
+    return create_customer_agent()
+
+
 def get_agent_registry() -> dict[str, AgentFactory]:
     """
     Tum agent olusturucularini isim bazli dondurur.
@@ -56,6 +62,7 @@ def get_agent_registry() -> dict[str, AgentFactory]:
         "video": create_video,
         "marketing": create_marketing,
         "analysis": create_analysis,
+        "customer": create_customer,
     }
 
 
@@ -65,6 +72,7 @@ __all__ = [
     "create_video",
     "create_marketing",
     "create_analysis",
+    "create_customer",
     "get_agent_registry",
     "AgentFactory",
 ]

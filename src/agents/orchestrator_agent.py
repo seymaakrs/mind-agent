@@ -6,16 +6,22 @@ from typing import Any
 
 from agents import Agent
 
-from src.app.config import get_settings, get_model_settings
+from src.app.config import (
+    get_customer_agent_flags,
+    get_model_settings,
+    get_settings,
+)
 from src.app.logging_hooks import CliLoggingHooks
 from src.agents.marketing_agent import create_marketing_agent
 from src.agents.analysis_agent import create_analysis_agent
+from src.agents.customer_agent import create_customer_agent
 from src.tools.orchestrator_tools import fetch_business, get_orchestrator_tools
 from src.tools.agent_wrapper_tools import (
     create_image_agent_wrapper_tool,
     create_video_agent_wrapper_tool,
     create_marketing_agent_wrapper_tool,
     create_analysis_agent_wrapper_tool,
+    create_customer_agent_wrapper_tool,
 )
 from src.agents.instructions import build_orchestrator_instructions
 
@@ -68,6 +74,20 @@ def create_orchestrator_agent(
     # Orchestrator tools (Firebase storage/firestore/instagram)
     orchestrator_tools = get_orchestrator_tools()
 
+    # Customer agent tool — feature flag arkasinda. enabled=False iken bu tool
+    # orchestrator'a HIC enjekte edilmez; LLM'in goremeyecegi bir araç,
+    # cagrilamaz. Bu, mevcut akisslarda regresyon riskini sifir tutar.
+    optional_tools: list[Any] = []
+    customer_flags = get_customer_agent_flags()
+    if customer_flags.enabled:
+        customer_agent = create_customer_agent()
+        optional_tools.append(
+            create_customer_agent_wrapper_tool(
+                customer_agent=customer_agent,
+                hooks=hooks,
+            )
+        )
+
     # Get current date for dynamic injection
     today_date = datetime.now().strftime("%Y-%m-%d")
 
@@ -75,7 +95,15 @@ def create_orchestrator_agent(
         name="orchestrator",
         handoff_description="Alt agentlari yoneten orchestrator.",
         instructions=build_orchestrator_instructions(today_date),
-        tools=[image_tool, video_tool, marketing_tool, analysis_tool, fetch_business, *orchestrator_tools],
+        tools=[
+            image_tool,
+            video_tool,
+            marketing_tool,
+            analysis_tool,
+            fetch_business,
+            *orchestrator_tools,
+            *optional_tools,
+        ],
         tool_use_behavior="run_llm_again",
         output_type=str,
         model=model or model_settings.orchestrator_model or settings.openai_model,

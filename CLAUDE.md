@@ -20,18 +20,22 @@
 
 OpenAI Agents SDK uzerine kurulu multi-agent orchestrator sistemi.
 
-**Mimari:** Image Agent (Gemini) | Video Agent (Veo 3.1) | Marketing Agent (Instagram) | Analysis Agent (SWOT+SEO+Web) | Orchestrator Agent | Firebase Storage+Firestore | Late API (Instagram/YouTube)
+**Mimari:** Image Agent (Gemini) | Video Agent (Veo 3.1) | Marketing Agent (Instagram) | Analysis Agent (SWOT+SEO+Web) | Customer Agent (NocoDB CRM, feature flag) | Orchestrator Agent | Firebase Storage+Firestore | Late API (Instagram/YouTube)
 
 **NOT:** Web Agent kaldirildi. Analysis Agent direkt web tool'larina sahip.
+
+**Customer Agent:** customer_agent ekosistemi (n8n + NocoDB) ile koprudur. Read-only iskelet, feature flag arkasinda (`settings/app_settings.customerAgent`). Sozlesme: `docs/customer-integration-contract.md`.
 
 ## Yapi
 
 ```
 src/
-├── agents/         orchestrator, image, video, marketing, analysis, registry
-├── infra/          firebase_client, google_ai_client, kling_client, late_client, task_logger, errors
+├── agents/         orchestrator, image, video, marketing, analysis, customer, registry
+├── infra/          firebase_client, google_ai_client, kling_client, late_client,
+│                   nocodb_client, task_logger, errors
 ├── tools/          orchestrator_tools, image_tools, video_tools, instagram_tools,
-│                   marketing_tools, web_tools, analysis_tools, agent_wrapper_tools
+│                   marketing_tools, web_tools, analysis_tools, customer_tools,
+│                   agent_wrapper_tools
 ├── models/         prompts.py (ImagePrompt, VideoPrompt)
 └── app/            api.py, config.py, orchestrator_runner.py
 ```
@@ -47,6 +51,14 @@ SERPER_API_KEY            # Serper.dev Google SERP arama
 KLING_ACCESS_KEY          # Kling AI Access Key (app.klingai.com)
 KLING_SECRET_KEY          # Kling AI Secret Key
 HEYGEN_API_KEY            # HeyGen AI API Key (app.heygen.com/settings)
+MIND_AGENT_API_KEY        # /task endpoint Bearer token (set => auth ON)
+NOCODB_BASE_URL           # NocoDB CRM (customer_agent ekosistemi)
+NOCODB_API_TOKEN          # NocoDB xc-token
+NOCODB_BASE_ID            # NocoDB project/base ID (p_xxxx)
+NOCODB_TABLE_LEADS        # tablo ID — Leadler
+NOCODB_TABLE_PIPELINE     # tablo ID — Pipeline
+NOCODB_TABLE_ETKILESIMLER # tablo ID — Etkilesimler
+N8N_BASE_URL              # n8n webhook base (customer_agent tetikleyici)
 DRY_RUN=false             # true: API cagirmadan prompt logla
 ```
 
@@ -65,6 +77,15 @@ DRY_RUN=false             # true: API cagirmadan prompt logla
 - `check_serp_position(domain, keywords)` - SERP gorunurlugu (max 10 keyword)
 
 **Analysis:** `save_swot_report`, `save_seo_report` (v2+GEO), `save_seo_keywords`, `save_seo_summary` (v2+GEO), `get_seo_keywords`, `get_reports`, `save_instagram_report`
+
+**Customer (Faz B/iskelet, feature flag arkasinda):**
+- `customer_search_leads(asama, limit)` - NocoDB Leadler okuma + asama filtresi
+- `customer_get_lead(lead_id)` - tek lead detayi
+- `customer_get_pipeline_summary()` - asama sayim + Kazanildi gelir toplami
+
+**Customer Agent Capability Flags** (`settings/app_settings.customerAgent`):
+- `enabled` (master) | `canReadLeads` | `canReadPipeline` | `canAttachReports` | `canTriggerFollowup` | `canPostForLead`
+- Tum bayraklar default `false`. enabled=False iken orchestrator customer tool'unu HIC enjekte etmez (regresyon yok).
 
 ## Kritik Akislar
 
