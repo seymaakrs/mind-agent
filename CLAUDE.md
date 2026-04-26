@@ -26,6 +26,45 @@ OpenAI Agents SDK uzerine kurulu multi-agent orchestrator sistemi.
 
 **Customer Agent:** customer_agent ekosistemi (n8n + NocoDB) ile koprudur. Read-only iskelet, feature flag arkasinda (`settings/app_settings.customerAgent`). Sozlesme: `docs/customer-integration-contract.md`.
 
+## Multi-Provider LLM (M1-M5 tamam)
+
+**Path:** `src/infra/llm_providers.py` + `src/infra/agent_model_factory.py` + `src/app/config.py`
+
+3 provider OpenAI-compatible (tek SDK, 3 backend):
+
+| Provider | base_url | env_var |
+|---|---|---|
+| openai | https://api.openai.com/v1 | `OPENAI_API_KEY` |
+| gemini | https://generativelanguage.googleapis.com/v1beta/openai/ | `GOOGLE_AI_API_KEY` |
+| deepseek | https://api.deepseek.com/v1 | `DEEPSEEK_API_KEY` |
+
+**Per-agent provider switch** — Firestore'da `settings/app_settings`:
+```yaml
+agentProviders:
+  orchestrator: openai
+  marketing:    gemini   # ← bu satiri degistir, agent yeniden basladiginda gecer
+  analysis:     gemini
+  customer:     openai
+```
+
+`make_agent_model(agent_name)`:
+- provider=openai → string model adi (default SDK client)
+- provider=gemini/deepseek + key SET → `OpenAIChatCompletionsModel(AsyncOpenAI(base_url, api_key))`
+- provider=gemini/deepseek + key YOK → string fallback (sistem kirilmaz)
+- bilinmeyen provider → openai fallback
+
+**Yeni agent eklerken:** `_AGENT_TO_MODEL_FIELD` dict'ine ekle (`agent_model_factory.py`).
+
+## Customer Agent Capability Flags
+
+`settings/app_settings.customerAgent`:
+- `enabled` (master, default false) — false iken orchestrator customer tool'unu HIC enjekte etmez
+- `canReadLeads` (default false) — `customer_search_leads`, `customer_get_lead`
+- `canReadPipeline` (default false) — `customer_get_pipeline_summary`
+- `canAttachReports`, `canTriggerFollowup`, `canPostForLead` — ileri faz, henuz tool yok
+
+Tum bayraklar default false → mevcut akislar etkilenmez (regresyon yok).
+
 ## Yapi
 
 ```
@@ -205,8 +244,46 @@ start-dev.bat  # Docker
 
 ## Bekleyen Isler
 
-1. Firebase Model Ayarlari Guncelleme (settings/app_settings)
-2. Video SDK Gecisi (ASKIDA) - google-genai SDK
+1. **Eski OpenAI key revoke** — Şeyma platform.openai.com'dan yapacak (yeni key `.env`'de aktif: `sk-proj-fGrN...`)
+2. **Cloud Run env var guncelle** — `instagram-post-bot-471518` projesinde `OPENAI_API_KEY` swap (Faz 4 deploy ile birlikte)
+3. **NocoDB credentials** — Şeyma'dan: `NOCODB_BASE_URL`, `NOCODB_API_TOKEN`, 3 tablo ID
+4. **Git history purge** — `.env` git geçmişinde, BFG Repo Cleaner gerekli (eski key'ler hâlâ orada)
+5. **Faz 3** — NocoDB live test (cred gelince): `customer_search_leads` end-to-end
+6. **Faz 4** — Docker `v1.19.0` build + Cloud Run deploy + flag aktivasyon
+7. **Faz 6** — Marketing agent Gemini'ye al (Firestore tek satir), 1 hafta gozlem, kademeli yayilim
+8. Firebase Model Ayarlari Guncelleme (settings/app_settings)
+9. Video SDK Gecisi (ASKIDA) - google-genai SDK
+
+## Customer Agent Integration — Yapilanlar (Apr 2026)
+
+**Branch:** `claude/integrate-customer-mind-agent-7u9Bn` | **PR:** seymaakrs/mind-agent#2 (draft)
+
+**Faz 1 (skeleton):**
+- `docs/customer-integration-contract.md` — sozlesme dokumani
+- `src/infra/nocodb_client.py` — NocoDB HTTP client + writable column whitelist
+- `src/agents/customer_agent.py`, `src/agents/instructions/customer.py`
+- `src/tools/customer_tools.py` — 3 read tool (search_leads, get_lead, pipeline_summary)
+- Customer agent feature flags (`enabled`, `canReadLeads`, `canReadPipeline`, ...)
+- Orchestrator wrapper tool injection (flag-gated)
+
+**Faz 2 (5 guvenlik fix):**
+- CORS `*` → origin whitelist (`get_cors_config()`)
+- `/task` Bearer auth (`MIND_AGENT_API_KEY`, `verify_api_key()`)
+- Path Traversal: `src/infra/path_safety.py` → `safe_path_segment()`
+- SSRF: `src/infra/url_safety.py` → `validate_url_safety()`, `safe_get()` (web_tools)
+- IDOR (Firestore): `_validate_firestore_path()`, `ALLOWED_BUSINESS_SUBCOLLECTIONS`
+- IDOR (Late): `_check_late_profile_ownership()` (instagram_tools)
+
+**Faz M1-M5 (multi-provider migration):**
+- M1: `llm_providers.py` registry
+- M2: `config.py` `agent_providers` dict + parser (case-insensitive, fail-safe)
+- M3: `agent_model_factory.py` `make_agent_model()` helper
+- M5: Gemini live adapter (`OpenAIChatCompletionsModel + AsyncOpenAI`)
+- M4 deepseek: yapi hazir, key gelirse otomatik aktif
+
+**Operasyonel:**
+- OpenAI key rotation (yeni key `.env`)
+- `.env` git takibinden cikarildi (commit `b3f43a8`)
 
 ## Notlar
 
