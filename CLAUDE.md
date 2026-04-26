@@ -56,7 +56,7 @@ DRY_RUN=false             # true: API cagirmadan prompt logla
 
 **Image/Video:** `generate_image`, `generate_video` (Veo 3.1), `generate_video_kling` (Kling 3.0), `generate_video_heygen` (HeyGen Video Agent), `add_audio_to_video` (fal.ai MMAudio V2)
 
-**Marketing:** `create_weekly_plan`, `get_plans`, `get_todays_posts`, `save_instagram_post`, `get_instagram_posts`, `save_youtube_video`, `get_youtube_videos`, `get_marketing_memory`, `update_marketing_memory`, `get_admin_notes`
+**Marketing:** `create_weekly_plan`, `get_plans`, `get_todays_posts`, `save_instagram_post`, `get_instagram_posts`, `match_insights_with_posts`, `save_youtube_video`, `get_youtube_videos`, `get_marketing_memory`, `update_marketing_memory`, `get_admin_notes`
 
 **Web (Analysis Agent):**
 - `web_search(query, num_results, search_type)` - Serper.dev API (text/news)
@@ -77,6 +77,7 @@ DRY_RUN=false             # true: API cagirmadan prompt logla
 ### Late API ID'leri
 - **Posting:** `instagram_id` (acc_xxxxx) | **Analytics:** `late_profile_id` (raw ObjectId)
 - **Metrik Eslistirme:** `platform_post_url` ↔ `permalink` (Late ID degil!)
+- **Tool:** `match_insights_with_posts(business_id, insights)` deterministik URL eslesirmesi yapar (trailing slash / query string / www normalize edilir). Agent LLM ile manuel eslestirme YAPMAMALI; bu tool'u kullanmali.
 
 ## Docker Deployment
 

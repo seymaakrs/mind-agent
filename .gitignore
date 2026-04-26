@@ -4,9 +4,10 @@ logs/
 .env
 /.claude
 .claude/settings.local.json
-.claude/settings.local.json
-.claude/settings.local.json
-.claude/settings.local.json
 CLAUDE.md
-.claude/settings.local.json
-.claude/settings.local.json
+
+# Python build artifacts
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/

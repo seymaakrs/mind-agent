@@ -14,6 +14,7 @@ from .media_tracking import (
     save_instagram_post,
     get_instagram_posts,
     get_post_by_instagram_id,
+    match_insights_with_posts,
     save_youtube_video,
     get_youtube_videos,
     get_youtube_video_by_id,
@@ -46,6 +47,7 @@ def get_marketing_tools() -> list:
         save_instagram_post,
         get_instagram_posts,
         get_post_by_instagram_id,
+        match_insights_with_posts,
         # YouTube videos
         save_youtube_video,
         get_youtube_videos,
@@ -75,6 +77,7 @@ __all__ = [
     "update_post_in_plan", "add_post_to_plan", "remove_post_from_plan", "get_todays_posts",
     # Media tracking
     "save_instagram_post", "get_instagram_posts", "get_post_by_instagram_id",
+    "match_insights_with_posts",
     "save_youtube_video", "get_youtube_videos", "get_youtube_video_by_id",
     # Memory
     "get_marketing_memory", "update_marketing_memory", "schedule_retry_job",

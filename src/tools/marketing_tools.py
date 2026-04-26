@@ -12,6 +12,7 @@ from src.tools.marketing import (  # noqa: F401
     save_instagram_post,
     get_instagram_posts,
     get_post_by_instagram_id,
+    match_insights_with_posts,
     save_youtube_video,
     get_youtube_videos,
     get_youtube_video_by_id,
