@@ -121,6 +121,19 @@ class ModelSettings(BaseModel):
     vertex_video_model: str = "veo-2.0-generate-001"
     kling_video_model: str = "kling-v3"
 
+    # Multi-provider migration (Phase M2): her LLM agent icin provider secimi.
+    # Default: hepsi 'openai' (mevcut davranisin aynisi). Firestore'da
+    # 'agentProviders' alani uzerinden agent bazinda override edilebilir.
+    # Desteklenen provider'lar: src/infra/llm_providers.py
+    agent_providers: dict[str, str] = {
+        "orchestrator": "openai",
+        "image": "openai",
+        "video": "openai",
+        "marketing": "openai",
+        "analysis": "openai",
+        "customer": "openai",
+    }
+
 
 # Cache for model settings
 _model_settings_cache: ModelSettings | None = None
@@ -133,6 +146,59 @@ def _load_model_settings_from_firebase() -> dict[str, Any]:
     doc_client = get_document_client("settings")
     doc = doc_client.get_document("app_settings")
     return doc or {}
+
+
+# ---------------------------------------------------------------------------
+# Multi-provider helpers (Phase M2)
+# ---------------------------------------------------------------------------
+#
+# Firestore'da agentProviders alani opsiyonel. Belirtilmeyen agent'lar default
+# 'openai' kalir. Desteksiz/yanlis bir provider yazilirsa fail-safe openai'a
+# duser (sistem patlamaz, kullanici fark etmez ama log'lara warning yazariz).
+
+_DEFAULT_AGENT_PROVIDERS: dict[str, str] = {
+    "orchestrator": "openai",
+    "image": "openai",
+    "video": "openai",
+    "marketing": "openai",
+    "analysis": "openai",
+    "customer": "openai",
+}
+
+
+def _parse_agent_providers(raw: Any) -> dict[str, str]:
+    """
+    Firestore raw map'inden agent_providers dict'ini olusturur.
+
+    Bilinmeyen provider isimleri (yazim hatasi, desteksiz) → 'openai'a duser.
+    Lookup case-insensitive + whitespace-tolerant (provider rehberinden).
+    """
+    from src.infra.llm_providers import get_provider_or_none
+
+    result: dict[str, str] = dict(_DEFAULT_AGENT_PROVIDERS)
+    if not isinstance(raw, dict):
+        return result
+
+    for agent_name, provider_name in raw.items():
+        if not isinstance(provider_name, str):
+            continue
+        provider = get_provider_or_none(provider_name)
+        if provider is not None:
+            result[agent_name] = provider.name  # canonical lower-case
+        # else: bilinmeyen provider → default openai kalir
+
+    return result
+
+
+def get_agent_provider(agent_name: str) -> str:
+    """
+    Bir agent icin yapilandirilmis provider ismini doner.
+
+    Bilinmeyen agent ismi → 'openai' (guvenli default). Bu, Faz M3 ve
+    sonrasinda make_client(provider, model) cagrisinda kullanilir.
+    """
+    settings = get_model_settings()
+    return settings.agent_providers.get(agent_name, "openai")
 
 
 def get_model_settings() -> ModelSettings:
@@ -168,6 +234,7 @@ def get_model_settings() -> ModelSettings:
             video_generation_model=doc.get("videoGenerationModel", "veo-3.1-generate-preview"),
             vertex_video_model=doc.get("vertexVideoModel", "veo-2.0-generate-001"),
             kling_video_model=doc.get("klingVideoModel", "kling-v3"),
+            agent_providers=_parse_agent_providers(doc.get("agentProviders", {})),
         )
     except Exception:
         # Firebase hatasi olursa default degerleri kullan
@@ -365,4 +432,5 @@ __all__ = [
     "CustomerAgentFlags",
     "get_customer_agent_flags",
     "clear_customer_agent_flags_cache",
+    "get_agent_provider",
 ]
