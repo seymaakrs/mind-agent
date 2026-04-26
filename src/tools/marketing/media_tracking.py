@@ -2,10 +2,31 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlparse
 
 from agents import function_tool
 
 from src.infra.firebase_client import get_document_client
+
+
+def _normalize_post_url(url: str | None) -> str | None:
+    """
+    Normalize an Instagram post URL so insights and saved posts compare equal.
+
+    Strips the scheme/host (so http vs https or www. vs no-www. doesn't matter),
+    drops query strings/fragments, and removes a trailing slash. Returns the
+    raw path (e.g. "/p/ABC123") which is the part Instagram actually owns.
+    """
+    if not url:
+        return None
+    try:
+        parsed = urlparse(url.strip())
+    except (ValueError, AttributeError):
+        return None
+    path = parsed.path or ""
+    if path.endswith("/"):
+        path = path[:-1]
+    return path or None
 
 
 # =============================================================================
@@ -136,6 +157,89 @@ async def get_post_by_instagram_id(
             }
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+# =============================================================================
+# Insights ↔ Saved Post Matching
+# =============================================================================
+
+async def _match_insights_with_posts_impl(
+    business_id: str,
+    insights: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Pure async logic for match_insights_with_posts (kept undecorated for unit tests)."""
+    try:
+        doc_client = get_document_client(f"businesses/{business_id}/instagram_posts")
+        saved_posts = doc_client.list_documents(limit=200)
+
+        url_to_post: dict[str, dict[str, Any]] = {}
+        for post in saved_posts:
+            normalized = _normalize_post_url(post.get("permalink"))
+            if normalized:
+                url_to_post[normalized] = post
+
+        matched: list[dict[str, Any]] = []
+        unmatched: list[dict[str, Any]] = []
+
+        for insight in insights:
+            normalized_url = _normalize_post_url(insight.get("platform_post_url"))
+            saved = url_to_post.get(normalized_url) if normalized_url else None
+
+            if saved is not None:
+                matched.append({
+                    **insight,
+                    "saved_post": saved,
+                    "topic": saved.get("topic"),
+                    "theme": saved.get("theme"),
+                })
+            else:
+                unmatched.append(insight)
+
+        match_rate = len(matched) / len(insights) if insights else 0.0
+
+        return {
+            "success": True,
+            "matched": matched,
+            "unmatched": unmatched,
+            "match_rate": round(match_rate, 4),
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"{type(e).__name__}: {e}",
+            "matched": [],
+            "unmatched": insights,
+            "match_rate": 0.0,
+        }
+
+
+@function_tool(strict_mode=False)
+async def match_insights_with_posts(
+    business_id: str,
+    insights: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """
+    Join Late Analytics insights with Firestore-saved Instagram posts via URL.
+
+    Late Analytics returns posts identified by an internal Late ID, while our
+    Firestore records use Instagram's native media id. The reliable shared key
+    is the post URL: insight.platform_post_url ↔ saved_post.permalink. URLs
+    are normalized so trailing slashes, query params, and http/https variants
+    don't break the join.
+
+    Args:
+        business_id: Business ID whose Instagram posts to load.
+        insights: List of insight dicts from get_instagram_insights, each
+            expected to carry a "platform_post_url" field.
+
+    Returns:
+        dict with:
+        - success: bool
+        - matched: list of insights with topic/theme/saved_post fields merged in
+        - unmatched: list of insights with no matching saved post
+        - match_rate: float in [0.0, 1.0]; 0.0 if insights list is empty
+    """
+    return await _match_insights_with_posts_impl(business_id, insights)
 
 
 # =============================================================================
