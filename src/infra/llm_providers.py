@@ -56,7 +56,7 @@ SUPPORTED_PROVIDERS: dict[str, LLMProvider] = {
         name="gemini",
         # Google'in OpenAI-uyumlu kopru endpoint'i.
         base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-        env_var="GEMINI_API_KEY",
+        env_var="GOOGLE_AI_API_KEY",
         description="Google Gemini — 2.0 Flash, 1.5 Pro (OpenAI-compat).",
     ),
     "deepseek": LLMProvider(

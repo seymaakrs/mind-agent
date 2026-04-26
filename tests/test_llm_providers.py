@@ -52,7 +52,7 @@ def test_gemini_provider_metadata():
     assert p.base_url == (
         "https://generativelanguage.googleapis.com/v1beta/openai/"
     )
-    assert p.env_var == "GEMINI_API_KEY"
+    assert p.env_var == "GOOGLE_AI_API_KEY"
 
 
 def test_deepseek_provider_metadata():

@@ -1,38 +1,29 @@
 """
-Agent Model Factory — Faz M3 (Multi-Provider Migration).
+Agent Model Factory — Faz M5 (Gemini adapter aktif).
 
-Tek giris noktasi: make_agent_model(agent_name, override). Bir agent icin
-'hangi modeli, hangi provider ile' kararini buradan cikariyoruz.
+Tek giris noktasi: make_agent_model(agent_name, override).
 
-Faz M3 (su an):
-  - Tum agent'lar 'openai' provider'ini kullaniyor (Faz M2 default).
-  - make_agent_model() string model adi doner (mevcut davranis).
-  - Default OpenAI client (set_default_openai_key uzerinden) kullanilir.
-
-Faz M4 (DeepSeek key gelince):
-  - Provider 'deepseek' ise: AsyncOpenAI(base_url=..., api_key=...) ile
-    custom client + OpenAIChatCompletionsModel wrapper donulecek.
-
-Faz M5 (Gemini key gelince):
-  - Aynisi gemini icin.
-
-Onemli: Bu fonksiyon davranis-koruyucu refactor zemini. M3'te uretimde
-hicbir sey degismez; M4/M5 ile yeni return path'leri eklenir.
+Provider karar sirasi:
+  openai   → string model adi (SDK default client)
+  gemini   → AsyncOpenAI(gemini base_url) + OpenAIChatCompletionsModel
+  deepseek → key yoksa openai string fallback (M4: key gelince aktif)
+  unknown  → openai string fallback (sistem kirilmaz)
 """
 from __future__ import annotations
 
+import os
 from typing import Any
 
+from agents import OpenAIChatCompletionsModel
+from openai import AsyncOpenAI
+
 from src.app.config import ModelSettings, get_model_settings
+from src.infra.llm_providers import get_provider_or_none
 
 
 # ---------------------------------------------------------------------------
 # Agent ismi → ModelSettings field eslestirmesi
 # ---------------------------------------------------------------------------
-#
-# ModelSettings field isimlendirmesi tutarsiz (orchestrator_model,
-# image_agent_model, marketing_agent_model). Bu eslestirme tek dogru
-# kaynagi (single source of truth) olusturur.
 
 _AGENT_TO_MODEL_FIELD: dict[str, str] = {
     "orchestrator": "orchestrator_model",
@@ -40,17 +31,15 @@ _AGENT_TO_MODEL_FIELD: dict[str, str] = {
     "video": "video_agent_model",
     "marketing": "marketing_agent_model",
     "analysis": "analysis_agent_model",
-    # customer agent kendi modelini sectisi yoksa orchestrator'unkini kullanir
-    # (kucuk + ucuz model, customer agent task'lari basit).
+    # customer agent kendi modeli yoksa orchestrator'unkini kullanir
     "customer": "orchestrator_model",
 }
 
 
 def resolve_model_name(agent_name: str, settings: ModelSettings) -> str:
-    """
-    Bir agent icin ModelSettings'den model adini cikarir.
+    """Bir agent icin ModelSettings'den model adini cikarir.
 
-    Bilinmeyen agent → 'gpt-4o' (en guvenli OpenAI default).
+    Bilinmeyen agent → 'gpt-4o' (guvenli OpenAI default).
     """
     field_name = _AGENT_TO_MODEL_FIELD.get(agent_name)
     if field_name is None:
@@ -58,12 +47,32 @@ def resolve_model_name(agent_name: str, settings: ModelSettings) -> str:
     return getattr(settings, field_name, "gpt-4o") or "gpt-4o"
 
 
+def _make_custom_provider_model(
+    provider_name: str,
+    model_name: str,
+) -> OpenAIChatCompletionsModel | str:
+    """OpenAI-compatible provider icin client + wrapper olusturur.
+
+    API key env var'i set degilse sessizce string fallback yapar —
+    provider config hatasi uretimi durdurmasin.
+    """
+    provider = get_provider_or_none(provider_name)
+    if provider is None:
+        return model_name
+
+    api_key = os.environ.get(provider.env_var)
+    if not api_key:
+        return model_name
+
+    client = AsyncOpenAI(base_url=provider.base_url, api_key=api_key)
+    return OpenAIChatCompletionsModel(model=model_name, openai_client=client)
+
+
 def make_agent_model(
     agent_name: str,
     override: str | None = None,
 ) -> str | Any:
-    """
-    Bir agent icin Agent(model=...) parametresine verilecek deger.
+    """Bir agent icin Agent(model=...) parametresine verilecek deger.
 
     Args:
         agent_name: 'orchestrator', 'image', 'video', 'marketing', 'analysis',
@@ -71,28 +80,21 @@ def make_agent_model(
         override: Explicit model adi (varsa config + provider'i ezer).
 
     Returns:
-        Faz M3 (su an): string model adi (OpenAI default client kullanilir).
-        Faz M4/M5: provider 'deepseek' veya 'gemini' ise OpenAIChatCompletionsModel
-            wrapper'i (custom client'li) donecek.
-
-    Bilinmeyen provider → openai fallback (sistem kirilmaz).
+        openai provider   → string model adi (SDK default client)
+        gemini/deepseek   → OpenAIChatCompletionsModel (key varsa)
+        key yoksa/unknown → string fallback (sistem kirilmaz)
     """
     if override:
         return override
 
     settings = get_model_settings()
     model_name = resolve_model_name(agent_name, settings)
-
     provider_name = settings.agent_providers.get(agent_name, "openai")
 
     if provider_name == "openai":
-        # Mevcut davranis: string model adi → SDK default client'i kullanir.
         return model_name
 
-    # M4/M5'te genisleyecek path. Su an deepseek/gemini icin de openai
-    # default client kullanilir (yumusak fallback). Bu, M3 davranis-
-    # koruyucu refactor sayesinde uretimi etkilemez.
-    return model_name
+    return _make_custom_provider_model(provider_name, model_name)
 
 
 __all__ = [

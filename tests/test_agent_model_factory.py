@@ -1,13 +1,8 @@
 """
-make_agent_model() testleri — Faz M3.
+make_agent_model() testleri — Faz M3 + M5.
 
-Her agent icin uygun model spec'ini doner. Provider rehberi (M1) ve
-agent_providers config'i (M2) buradan kullanir. Henuz tek provider
-(openai) destekleniyor; M4/M5 ile DeepSeek/Gemini eklenecek.
-
-Faz M3'un amaci: agent factory'lerin 'kendi modelini secme' mantigini
-tek fonksiyona toplamak. Davranis BIT-BIT aynisi (string model adi
-doner, default openai client kullanilir).
+M3: Her agent icin config'den model adi secer (string, default openai client).
+M5: Gemini provider icin AsyncOpenAI + OpenAIChatCompletionsModel wrapper doner.
 """
 from __future__ import annotations
 
@@ -15,9 +10,10 @@ import os
 
 os.environ.setdefault("OPENAI_API_KEY", "test-fake-key")
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
+from agents import OpenAIChatCompletionsModel
 
 from src.app.config import (
     ModelSettings,
@@ -121,18 +117,12 @@ def test_each_agent_returns_its_own_model_with_openai():
 
 
 # ---------------------------------------------------------------------------
-# Non-openai provider — Faz M3'te yumusak fallback (M4/M5'te genisleyecek)
+# Non-openai provider — key yoksa string fallback (fail-safe)
 # ---------------------------------------------------------------------------
 
 
-def test_non_openai_provider_falls_back_to_string_for_now():
-    """
-    Faz M3'te DeepSeek/Gemini icin gercek client wrapper'i yok — fallback
-    olarak string model adi donulur (default OpenAI client kullanilir).
-
-    M4 ve M5 bu davranisi extend edecek: gercek provider client'i ile
-    bir Model wrapper donecek.
-    """
+def test_non_openai_provider_without_key_falls_back_to_string():
+    """Key env var set degilse string fallback — sistem kirilmaz."""
     fake_settings = _model_settings_with(
         agent_providers={"marketing": "deepseek", "orchestrator": "openai"}
     )
@@ -140,10 +130,81 @@ def test_non_openai_provider_falls_back_to_string_for_now():
         "src.infra.agent_model_factory.get_model_settings",
         return_value=fake_settings,
     ):
-        result = make_agent_model("marketing")
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ["OPENAI_API_KEY"] = "test-fake-key"
+            result = make_agent_model("marketing")
 
-    # M3 fallback: string. Henuz "gercek deepseek client" olusturulmuyor.
     assert isinstance(result, str)
+
+
+# ---------------------------------------------------------------------------
+# Faz M5 — Gemini adapter (gercek OpenAIChatCompletionsModel wrapper)
+# ---------------------------------------------------------------------------
+
+
+def test_gemini_provider_with_key_returns_model_wrapper():
+    """GOOGLE_AI_API_KEY varsa OpenAIChatCompletionsModel wrapper doner."""
+    fake_settings = _model_settings_with(
+        marketing_agent_model="gemini-2.0-flash",
+        agent_providers={"marketing": "gemini", "orchestrator": "openai"},
+    )
+    mock_client = MagicMock()
+    with patch("src.infra.agent_model_factory.get_model_settings", return_value=fake_settings):
+        with patch.dict(os.environ, {"GOOGLE_AI_API_KEY": "fake-gemini-key"}):
+            with patch("src.infra.agent_model_factory.AsyncOpenAI", return_value=mock_client):
+                result = make_agent_model("marketing")
+
+    assert isinstance(result, OpenAIChatCompletionsModel)
+    assert result.model == "gemini-2.0-flash"
+
+
+def test_gemini_provider_without_key_falls_back_to_string():
+    """GOOGLE_AI_API_KEY yoksa string fallback (sistem kirilmaz)."""
+    fake_settings = _model_settings_with(
+        marketing_agent_model="gemini-2.0-flash",
+        agent_providers={"marketing": "gemini", "orchestrator": "openai"},
+    )
+    with patch("src.infra.agent_model_factory.get_model_settings", return_value=fake_settings):
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ["OPENAI_API_KEY"] = "test-fake-key"
+            result = make_agent_model("marketing")
+
+    assert isinstance(result, str)
+
+
+def test_gemini_wrapper_uses_gemini_base_url():
+    """AsyncOpenAI Gemini base_url ve api_key ile olusturulur."""
+    from src.infra.llm_providers import SUPPORTED_PROVIDERS
+    expected_base_url = SUPPORTED_PROVIDERS["gemini"].base_url
+
+    fake_settings = _model_settings_with(
+        agent_providers={"orchestrator": "gemini"},
+    )
+    mock_client = MagicMock()
+    with patch("src.infra.agent_model_factory.get_model_settings", return_value=fake_settings):
+        with patch.dict(os.environ, {"GOOGLE_AI_API_KEY": "fake-key"}):
+            with patch("src.infra.agent_model_factory.AsyncOpenAI", return_value=mock_client) as mock_async_openai:
+                make_agent_model("orchestrator")
+
+    call_kwargs = mock_async_openai.call_args.kwargs
+    assert call_kwargs["base_url"] == expected_base_url
+    assert call_kwargs["api_key"] == "fake-key"
+
+
+def test_gemini_model_name_forwarded_to_wrapper():
+    """Config'deki model adi wrapper'a aktarilir."""
+    fake_settings = _model_settings_with(
+        analysis_agent_model="gemini-1.5-pro",
+        agent_providers={"analysis": "gemini"},
+    )
+    mock_client = MagicMock()
+    with patch("src.infra.agent_model_factory.get_model_settings", return_value=fake_settings):
+        with patch.dict(os.environ, {"GOOGLE_AI_API_KEY": "fake-key"}):
+            with patch("src.infra.agent_model_factory.AsyncOpenAI", return_value=mock_client):
+                result = make_agent_model("analysis")
+
+    assert isinstance(result, OpenAIChatCompletionsModel)
+    assert result.model == "gemini-1.5-pro"
 
 
 def test_provider_invalid_falls_back_to_openai_string():
