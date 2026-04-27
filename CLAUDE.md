@@ -1,5 +1,61 @@
 # Claude Session Notes
 
+> **YENI SESSION BURADAN OKU:**
+> 1. Bu bolumdeki **Aktif Durum (Apr 2026)** ve **Sirali Plan** kismini oku
+> 2. Kullanici **Beyza** — junior muhendis, ogrenerek ilerliyor (Kural 6'ya bak)
+> 3. Asagidaki TEMEL KURALLAR'a uy
+> 4. `docs/customer-integration-contract.md` — sozlesme dokumani
+
+## Aktif Durum (Apr 2026)
+
+**Branch:** `claude/integrate-customer-mind-agent-7u9Bn` | **PR:** seymaakrs/mind-agent#2 (draft)
+
+### Ekip
+- **Beyza** — Tum uygulama (mind-agent integration, n8n, NocoDB, Cloud Run deploy, customer_agent ekosistemi). Junior muhendis, ogrenerek ilerliyor — kavramlari anlat.
+- **Seyma** — Mimar (vizyon, satis kapanis). Kod yazmiyor, gorevleri Beyza yapar.
+- **Burak** — Ortakliktan ayrildi (Mart 2026). OpenAI key'i Seyma'ya aktarildi (Apr 26).
+
+### Iki Sistem, Bir Kopru
+```
+mind-agent (BU REPO — AI brain)        customer_agent (Beyza'nin kurdugu)
+  - Image/video/marketing/analysis      - NocoDB CRM (kuruldu, 7 tablo)
+  - Customer agent kopru (read-only,    - n8n workflow'lari (Meta baglantisi eksik)
+    flag arkasinda, default kapali)     - Zernio Console "akilli agent" (Seyma config)
+  - Cloud Run prod: v1.18.0             - 6 sub-agent (LinkedIn/Meta/Clay/DM/Takip/Itiraz)
+                                          — henuz yapilmadi, plan: AGENT-MIMARISI-MASTER.md
+                                            (customer_agent reposu)
+       \         /
+        \       /
+       NOCODB (single source of truth)
+       URL: http://34.26.138.196 (cred .env'de, git'te degil)
+```
+
+**Onemli:** mind-agent'taki customer agent koprusu **flag arkasinda** (`settings/app_settings.customerAgent.enabled` default false). Yani biz mind-agent'i deploy edersek mevcut akislar bozulmaz, Beyza customer_agent ekosistemini bitirince flag'i acariz.
+
+### Sirali Plan — Beyza'nin Yapacaklari
+
+| # | Adim | Durum | Detay |
+|---|---|---|---|
+| 1 | NocoDB cred .env'de | ✅ | Token: `MNhF...` (.env'de, git'te degil) |
+| 2 | NocoDB token verify | ✅ | VM'den curl test edildi, lead verisi geldi |
+| 3 | Cloud Run env var: yeni OPENAI key | ⏳ | GCP console (`instagram-post-bot-471518`) |
+| 4 | Eski OpenAI key revoke | ⏳ | platform.openai.com/api-keys |
+| 5 | Faz 4 deploy (Docker v1.19.0 + Cloud Run) | ⏳ | Yol secimi: Cloud Build (kolay) vs Docker Desktop |
+| 6 | Beyza dev environment kurulumu | ⏳ | git clone + Python + gcloud (~1 saat) |
+| 7 | Customer_agent ekosistemine devam | ⏳ | n8n + 6 agent + Console agent |
+| 8 | Customer flag aktivasyonu | ⏳ | Ekosistem hazir olunca Firestore'da `enabled=true` |
+| 9 | Git history purge (.env eski commit'lerde) | ⏳ | BFG Repo Cleaner |
+
+### Kritik Notlar (Yeni Claude'a Ipuclari)
+
+1. **Beyza'nin ISP'i port 80'i blokluyor** — `34.26.138.196` (NocoDB) tarayicidan acilmiyor; mobil hotspot/VPN gerekiyor. NocoDB sagliklh, sorun sadece Beyza'nin agi.
+2. **Sandbox dis IP'lere erisemiyor** — sandbox'tan curl `34.26.138.196` "Host not in allowlist" doner. Live test ya VM'den ya Cloud Run'dan yapilir.
+3. **`.env` git takibinde DEGIL** — `b3f43a8` commit'inde kaldirildi. Ama eski commit'lerde key'ler var (BFG purge bekliyor).
+4. **Yeni OpenAI key** `sk-proj-fGrN...` `.env`'de aktif. Eski key (`sk-proj-8j4l...`) hala revoke edilmedi — Cloud Run'da hala eski key.
+5. **Cloud Run projesi `instagram-post-bot-471518`** (mindid-lab degil; mindid-lab Seyma'nin baska projesi).
+6. **Image agent OpenAI'da kalir** — Gemini gorsel uretimi farkli sistem, swap yapilamaz.
+7. **Beyza'nin PC'sinde kod yok** — Burak yazmisti, simdi GitHub'da. Beyza dev environment kurmali (Adim 6).
+
 ## TEMEL KURALLAR
 
 1. **TEST-FIRST DEVELOPMENT**: Her kod yazmadan ONCE testi yaz. Sonra kodu yaz. Sonra testi calistir. Test gecene kadar kodu duzelt.
