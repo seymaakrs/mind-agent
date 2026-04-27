@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import os
+import secrets
 import traceback
-from typing import Any
+from typing import Annotated, Any
 
 from agents import set_default_openai_key
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -16,19 +19,135 @@ from src.app.config import get_settings
 from src.app.orchestrator_runner import run_orchestrator_async
 from src.infra.thread_manager import generate_thread_id
 
+logger = logging.getLogger(__name__)
+
 settings = get_settings()
 set_default_openai_key(settings.openai_api_key)
 
 app = FastAPI(title="Agents Orchestrator API", version="0.1.0")
 
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+# ---------------------------------------------------------------------------
+# Authentication
+# ---------------------------------------------------------------------------
+# /task endpoint MIND_AGENT_API_KEY env var ile korunur.
+#
+# Davranış:
+#   - Env var SET DEĞİL → "legacy mode": auth bypass edilir, startup'ta uyarı
+#     loglanır. Bu, deploy'dan sonra env'i set edene kadar mevcut entegrasyonların
+#     bozulmamasını sağlar.
+#   - Env var SET → Authorization: Bearer <key> zorunlu. Yanlış/eksik = 401.
+#
+# Constant-time karşılaştırma (secrets.compare_digest) timing attack'a karşı
+# koruma sağlar: doğru key'in prefix'i ile yanlış bir tahmin yapan saldırgan,
+# yanıt süresinden bilgi sızdıramaz.
+
+if not os.getenv("MIND_AGENT_API_KEY", "").strip():
+    logger.warning(
+        "MIND_AGENT_API_KEY env var is not set. /task endpoint runs in LEGACY "
+        "(unauthenticated) mode. Set the env var in production to enforce auth."
+    )
+
+
+def verify_api_key(
+    authorization: Annotated[str | None, Header()] = None,
+) -> None:
+    """
+    /task endpoint için kimlik doğrulama dependency'si.
+
+    MIND_AGENT_API_KEY env var her istekte taze okunur (testlerde monkeypatch
+    için, prod'da hot-reload için). Set değilse legacy mode — bypass.
+    """
+    expected_key = os.getenv("MIND_AGENT_API_KEY", "").strip()
+
+    if not expected_key:
+        return  # Legacy mode
+
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail="Missing or invalid Authorization header (expected 'Bearer <key>').",
+        )
+
+    provided_key = authorization[len("Bearer "):].strip()
+    if not provided_key:
+        raise HTTPException(status_code=401, detail="Empty bearer token.")
+
+    if not secrets.compare_digest(provided_key, expected_key):
+        raise HTTPException(status_code=401, detail="Invalid API key.")
+
+
+# ---------------------------------------------------------------------------
+# CORS Policy
+# ---------------------------------------------------------------------------
+# Operator CORS_ALLOWED_ORIGINS env var'ina virgul ile ayrilmis trusted
+# origin'leri yazarsa o origin'ler icin browser cookie/Authorization header
+# otomatik gonderimi (allow_credentials=True) acilir.
+#
+# Env set DEGILSE: wildcard ('*') ile her origin'den cagri kabul edilir AMA
+# allow_credentials=False olur. Bu, mevcut test/admin client'lari kirmadan
+# cookie/auth-header sizintisini kapatir.
+#
+# CORS spec'e gore allow_origins=['*'] ile allow_credentials=True kombinasyonu
+# tarayicilar tarafindan zaten reddedilir; bu yuzden wildcard durumunda
+# credentials her zaman False'a sabitlenir.
+
+
+def get_cors_config() -> dict[str, Any]:
+    """
+    CORS middleware konfigurasyonunu env'den okuyarak doner.
+
+    Returns:
+        dict: FastAPI CORSMiddleware'e verilecek kwargs.
+    """
+    raw = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
+
+    if not raw:
+        return {
+            "allow_origins": ["*"],
+            "allow_credentials": False,
+            "allow_methods": ["*"],
+            "allow_headers": ["*"],
+        }
+
+    # Comma-separated parse, whitespace trim, bos itemleri at.
+    parsed = [item.strip() for item in raw.split(",")]
+    origins = [item for item in parsed if item]
+
+    if not origins:
+        # Sadece virgul/whitespace gelmis — env yokmus gibi davran.
+        return {
+            "allow_origins": ["*"],
+            "allow_credentials": False,
+            "allow_methods": ["*"],
+            "allow_headers": ["*"],
+        }
+
+    # Wildcard explicit yazilmissa: spec geregi credentials=False zorunlu.
+    if origins == ["*"]:
+        return {
+            "allow_origins": ["*"],
+            "allow_credentials": False,
+            "allow_methods": ["*"],
+            "allow_headers": ["*"],
+        }
+
+    return {
+        "allow_origins": origins,
+        "allow_credentials": True,
+        "allow_methods": ["*"],
+        "allow_headers": ["*"],
+    }
+
+
+_cors_config = get_cors_config()
+if _cors_config["allow_origins"] == ["*"]:
+    logger.warning(
+        "CORS_ALLOWED_ORIGINS env var not set; falling back to wildcard with "
+        "allow_credentials=False. For production, set this env var to a "
+        "comma-separated list of trusted origins."
+    )
+app.add_middleware(CORSMiddleware, **_cors_config)
 
 
 class Reference(BaseModel):
@@ -86,7 +205,10 @@ class TaskRequest(BaseModel):
 
 
 @app.post("/task")
-async def run_task(payload: TaskRequest):
+async def run_task(
+    payload: TaskRequest,
+    _: None = Depends(verify_api_key),
+):
     """
     Streaming endpoint - sends progress events and heartbeats to prevent timeout.
     Final result is sent as JSON with 'type': 'result'.

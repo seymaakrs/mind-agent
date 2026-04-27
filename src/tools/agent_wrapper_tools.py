@@ -221,9 +221,52 @@ def create_analysis_agent_wrapper_tool(
     return analysis_agent_wrapper
 
 
+def create_customer_agent_wrapper_tool(
+    customer_agent: Agent,
+    hooks: Any = None,
+) -> FunctionTool:
+    """
+    Customer agent (NocoDB CRM read-only) icin wrapper tool.
+
+    Customer agent business_id zorunlu olarak almaz cunku NocoDB'deki
+    lead'ler kendi tablo schema'sinda — mind-agent'in businesses/{bid}
+    yapisindan bagimsiz. Yine de business_id contextual bilgi olarak
+    iletilir (loglar ve gelecekteki multi-tenant senaryolar icin).
+    """
+
+    @function_tool(
+        name_override="customer_agent_tool",
+        description_override=(
+            "CRM (NocoDB) lead/pipeline okuma agenti. "
+            "Lead listele, tek lead detayi, satis hunisi ozeti. "
+            "REQUIRED PARAMETERS: "
+            "- business_id: The business ID from context (logging icin) - REQUIRED! "
+            "- prompt: Ne sorduguna dair detay (lead listesi, pipeline, vb.). "
+            "Keywords: lead, leadler, musteri, crm, sicak lead, soguk lead, pipeline, "
+            "satis hunisi, kazanildi, teklif"
+        ),
+        strict_mode=False,
+    )
+    async def customer_agent_wrapper(
+        business_id: str,
+        prompt: str,
+    ) -> str:
+        effective_prompt = f"[Business ID: {business_id}]\n\n{prompt}"
+        result = await Runner.run(
+            starting_agent=customer_agent,
+            input=effective_prompt,
+            max_turns=5,
+            hooks=hooks,
+        )
+        return result.final_output
+
+    return customer_agent_wrapper
+
+
 __all__ = [
     "create_image_agent_wrapper_tool",
     "create_video_agent_wrapper_tool",
     "create_marketing_agent_wrapper_tool",
     "create_analysis_agent_wrapper_tool",
+    "create_customer_agent_wrapper_tool",
 ]

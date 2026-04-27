@@ -1,10 +1,102 @@
+from typing import Any
+
 from agents import FunctionTool, function_tool
 
 from src.app.config import get_settings, AgentInstructionConfig
 from src.infra.errors import classify_error
 from src.infra.firebase_client import get_storage_client, save_media_record, save_dry_run_log
 from src.infra.google_ai_client import get_image_generation_client
+from src.infra.path_safety import safe_path_segment
 from src.models.prompts import ImagePrompt, build_image_prompt_model
+
+
+def _validate_image_path_inputs(
+    *,
+    file_name: str,
+    business_id: str | None,
+    source_file_path: str | None,
+) -> dict[str, Any] | None:
+    """
+    file_name, business_id, source_file_path uzerinde path-traversal kontrolu.
+
+    Storage backend (Firebase Storage / GCS) nesne deposu olsa da '../' iceren
+    bir nesne yolu, baska bir business'in verisinin uzerine yazilmasina yol acar.
+    Bu nedenle her segment alfanumerik+dot+dash+underscore'la sinirli, '..'
+    icermez. source_file_path multi-segment olabilir; her '/'-ayrik segment
+    ayri ayri dogrulanir.
+
+    Returns:
+        dict (success=False, error_code=INVALID_INPUT) — gecersizse.
+        None — gecerliyse, caller normal akista devam eder.
+    """
+    try:
+        safe_path_segment(file_name)
+    except ValueError as exc:
+        return {
+            "success": False,
+            "error": f"Invalid file_name: {exc}",
+            "error_code": "INVALID_INPUT",
+            "service": "image_tools",
+            "retryable": False,
+            "user_message_tr": (
+                "Dosya adi gecersiz karakter iceriyor. Sadece harf, rakam, "
+                "nokta, tire ve alt cizgi kullanilabilir."
+            ),
+        }
+
+    if business_id is not None:
+        try:
+            safe_path_segment(business_id)
+        except ValueError as exc:
+            return {
+                "success": False,
+                "error": f"Invalid business_id: {exc}",
+                "error_code": "INVALID_INPUT",
+                "service": "image_tools",
+                "retryable": False,
+                "user_message_tr": "Business ID gecersiz karakter iceriyor.",
+            }
+
+    if source_file_path is not None:
+        # Multi-segment path: her bilesen ayri dogrulanir.
+        if source_file_path.startswith("/") or "\\" in source_file_path:
+            return {
+                "success": False,
+                "error": (
+                    f"Invalid source_file_path: absolute or backslash paths "
+                    f"not allowed: {source_file_path!r}"
+                ),
+                "error_code": "INVALID_INPUT",
+                "service": "image_tools",
+                "retryable": False,
+                "user_message_tr": "Kaynak dosya yolu gecerli formatta degil.",
+            }
+        for segment in source_file_path.split("/"):
+            if not segment:
+                # Cift slash veya bos segment — meşru bir storage path'inde olmaz
+                return {
+                    "success": False,
+                    "error": (
+                        f"Invalid source_file_path: empty segment in "
+                        f"{source_file_path!r}"
+                    ),
+                    "error_code": "INVALID_INPUT",
+                    "service": "image_tools",
+                    "retryable": False,
+                    "user_message_tr": "Kaynak dosya yolu gecerli formatta degil.",
+                }
+            try:
+                safe_path_segment(segment)
+            except ValueError as exc:
+                return {
+                    "success": False,
+                    "error": f"Invalid source_file_path segment: {exc}",
+                    "error_code": "INVALID_INPUT",
+                    "service": "image_tools",
+                    "retryable": False,
+                    "user_message_tr": "Kaynak dosya yolu gecerli formatta degil.",
+                }
+    return None
 
 
 def _count_tokens(text: str) -> int:
@@ -76,6 +168,16 @@ def _make_generate_image_tool(prompt_model: type[ImagePrompt]) -> FunctionTool:
                               If None, a completely new image will be generated.
             aspect_ratio: Image aspect ratio ("4:5", "1:1", "16:9", "9:16", "4:3"). Default is "4:5". Do NOT use "3:4" for Instagram.
         """
+        # Path-traversal koruma (SECURITY_REPORT_TR.md Madde 6).
+        # Storage cagrilmadan onceki son savunma katmani.
+        path_error = _validate_image_path_inputs(
+            file_name=file_name,
+            business_id=business_id,
+            source_file_path=source_file_path,
+        )
+        if path_error is not None:
+            return path_error
+
         settings = get_settings()
 
         # Convert structured prompt to string

@@ -50,6 +50,23 @@ class Settings(BaseModel):
     # HeyGen AI (Video Agent)
     heygen_api_key: str | None = Field(default=None, alias="HEYGEN_API_KEY")
 
+    # Mind-agent /task endpoint authentication (Bearer token)
+    mind_agent_api_key: str | None = Field(default=None, alias="MIND_AGENT_API_KEY")
+
+    # NocoDB CRM (customer_agent ekosistemi — Leadler/Pipeline/Etkilesimler)
+    # Sozlesme: docs/customer-integration-contract.md, Bolum 2.
+    nocodb_base_url: str | None = Field(default=None, alias="NOCODB_BASE_URL")
+    nocodb_api_token: str | None = Field(default=None, alias="NOCODB_API_TOKEN")
+    nocodb_base_id: str | None = Field(default=None, alias="NOCODB_BASE_ID")
+    nocodb_table_leads: str | None = Field(default=None, alias="NOCODB_TABLE_LEADS")
+    nocodb_table_pipeline: str | None = Field(default=None, alias="NOCODB_TABLE_PIPELINE")
+    nocodb_table_etkilesimler: str | None = Field(
+        default=None, alias="NOCODB_TABLE_ETKILESIMLER"
+    )
+
+    # n8n webhook base URL (customer_agent tetikleyicileri)
+    n8n_base_url: str | None = Field(default=None, alias="N8N_BASE_URL")
+
     # Dry-run mode - Google API'lerine gercek cagri yapmadan prompt'lari loglar
     dry_run: bool = Field(default=False, alias="DRY_RUN")
 
@@ -72,6 +89,14 @@ class Settings(BaseModel):
                 "kling_access_key": os.getenv("KLING_ACCESS_KEY"),
                 "kling_secret_key": os.getenv("KLING_SECRET_KEY"),
                 "heygen_api_key": os.getenv("HEYGEN_API_KEY"),
+                "mind_agent_api_key": os.getenv("MIND_AGENT_API_KEY"),
+                "nocodb_base_url": os.getenv("NOCODB_BASE_URL"),
+                "nocodb_api_token": os.getenv("NOCODB_API_TOKEN"),
+                "nocodb_base_id": os.getenv("NOCODB_BASE_ID"),
+                "nocodb_table_leads": os.getenv("NOCODB_TABLE_LEADS"),
+                "nocodb_table_pipeline": os.getenv("NOCODB_TABLE_PIPELINE"),
+                "nocodb_table_etkilesimler": os.getenv("NOCODB_TABLE_ETKILESIMLER"),
+                "n8n_base_url": os.getenv("N8N_BASE_URL"),
             }
         )
 
@@ -96,6 +121,19 @@ class ModelSettings(BaseModel):
     vertex_video_model: str = "veo-2.0-generate-001"
     kling_video_model: str = "kling-v3"
 
+    # Multi-provider migration (Phase M2): her LLM agent icin provider secimi.
+    # Default: hepsi 'openai' (mevcut davranisin aynisi). Firestore'da
+    # 'agentProviders' alani uzerinden agent bazinda override edilebilir.
+    # Desteklenen provider'lar: src/infra/llm_providers.py
+    agent_providers: dict[str, str] = {
+        "orchestrator": "openai",
+        "image": "openai",
+        "video": "openai",
+        "marketing": "openai",
+        "analysis": "openai",
+        "customer": "openai",
+    }
+
 
 # Cache for model settings
 _model_settings_cache: ModelSettings | None = None
@@ -108,6 +146,59 @@ def _load_model_settings_from_firebase() -> dict[str, Any]:
     doc_client = get_document_client("settings")
     doc = doc_client.get_document("app_settings")
     return doc or {}
+
+
+# ---------------------------------------------------------------------------
+# Multi-provider helpers (Phase M2)
+# ---------------------------------------------------------------------------
+#
+# Firestore'da agentProviders alani opsiyonel. Belirtilmeyen agent'lar default
+# 'openai' kalir. Desteksiz/yanlis bir provider yazilirsa fail-safe openai'a
+# duser (sistem patlamaz, kullanici fark etmez ama log'lara warning yazariz).
+
+_DEFAULT_AGENT_PROVIDERS: dict[str, str] = {
+    "orchestrator": "openai",
+    "image": "openai",
+    "video": "openai",
+    "marketing": "openai",
+    "analysis": "openai",
+    "customer": "openai",
+}
+
+
+def _parse_agent_providers(raw: Any) -> dict[str, str]:
+    """
+    Firestore raw map'inden agent_providers dict'ini olusturur.
+
+    Bilinmeyen provider isimleri (yazim hatasi, desteksiz) → 'openai'a duser.
+    Lookup case-insensitive + whitespace-tolerant (provider rehberinden).
+    """
+    from src.infra.llm_providers import get_provider_or_none
+
+    result: dict[str, str] = dict(_DEFAULT_AGENT_PROVIDERS)
+    if not isinstance(raw, dict):
+        return result
+
+    for agent_name, provider_name in raw.items():
+        if not isinstance(provider_name, str):
+            continue
+        provider = get_provider_or_none(provider_name)
+        if provider is not None:
+            result[agent_name] = provider.name  # canonical lower-case
+        # else: bilinmeyen provider → default openai kalir
+
+    return result
+
+
+def get_agent_provider(agent_name: str) -> str:
+    """
+    Bir agent icin yapilandirilmis provider ismini doner.
+
+    Bilinmeyen agent ismi → 'openai' (guvenli default). Bu, Faz M3 ve
+    sonrasinda make_client(provider, model) cagrisinda kullanilir.
+    """
+    settings = get_model_settings()
+    return settings.agent_providers.get(agent_name, "openai")
 
 
 def get_model_settings() -> ModelSettings:
@@ -143,6 +234,7 @@ def get_model_settings() -> ModelSettings:
             video_generation_model=doc.get("videoGenerationModel", "veo-3.1-generate-preview"),
             vertex_video_model=doc.get("vertexVideoModel", "veo-2.0-generate-001"),
             kling_video_model=doc.get("klingVideoModel", "kling-v3"),
+            agent_providers=_parse_agent_providers(doc.get("agentProviders", {})),
         )
     except Exception:
         # Firebase hatasi olursa default degerleri kullan
@@ -233,6 +325,100 @@ def clear_agent_instructions_cache() -> None:
     _agent_instructions_cache = None
 
 
+# ---------------------------------------------------------------------------
+# Customer Agent Feature Flags (Firebase: settings/app_settings.customerAgent)
+# ---------------------------------------------------------------------------
+#
+# Mind-agent'in customer_agent ekosistemine (NocoDB + n8n) entegrasyonunu
+# kontrol eden sub-flag'ler. Tasarim ilkeleri:
+#
+# 1. Master + sub-flag: enabled=False iken hicbir customer kapasitesi
+#    calismaz. Sub-flag'ler bagimsiz acilir, asamali rollout.
+# 2. Default kapali: tum bayraklar False ile baslar — yanlislikla acik kalmis
+#    bir kapasitenin riski sifir.
+# 3. Tolerant reader: Firestore'da kolon yoksa veya tip yanlissa False.
+# 4. Fail-closed: Firestore hata verirse hepsi False — sistem kirilmaz.
+#
+# Sozlesme: docs/customer-integration-contract.md, Bolum 5.
+
+
+class CustomerAgentFlags(BaseModel):
+    """customer_agent kapasitelerinin asamali acilis bayraklari."""
+
+    enabled: bool = False
+    can_read_leads: bool = False
+    can_read_pipeline: bool = False
+    can_attach_reports: bool = False
+    can_trigger_followup: bool = False
+    can_post_for_lead: bool = False
+
+    def is_capability_enabled(self, capability: str) -> bool:
+        """
+        Bir kapasitenin gercekten acik olup olmadigini doner.
+
+        Master switch (enabled) kapaliysa hicbir kapasite acik sayilmaz.
+        Bilinmeyen kapasite adi → False (sessiz fail-closed).
+        """
+        if not self.enabled:
+            return False
+        return bool(getattr(self, capability, False))
+
+
+_customer_agent_flags_cache: CustomerAgentFlags | None = None
+
+
+def _load_app_settings_from_firebase() -> dict[str, Any]:
+    """Firebase'den settings/app_settings dokumanini okur (TUM doc)."""
+    from src.infra.firebase_client import get_document_client
+
+    doc_client = get_document_client("settings")
+    doc = doc_client.get_document("app_settings")
+    return doc or {}
+
+
+def _parse_customer_agent_flags(raw: dict[str, Any]) -> CustomerAgentFlags:
+    """Firestore raw dict'inden CustomerAgentFlags olusturur (camelCase → snake_case)."""
+    section = raw.get("customerAgent", {})
+    if not isinstance(section, dict):
+        return CustomerAgentFlags()
+    return CustomerAgentFlags(
+        enabled=bool(section.get("enabled", False)),
+        can_read_leads=bool(section.get("canReadLeads", False)),
+        can_read_pipeline=bool(section.get("canReadPipeline", False)),
+        can_attach_reports=bool(section.get("canAttachReports", False)),
+        can_trigger_followup=bool(section.get("canTriggerFollowup", False)),
+        can_post_for_lead=bool(section.get("canPostForLead", False)),
+    )
+
+
+def get_customer_agent_flags() -> CustomerAgentFlags:
+    """
+    Customer agent feature flag'lerini Firestore'dan okur ve cache'ler.
+
+    Firestore path: settings/app_settings.customerAgent
+    Hata durumunda tum bayraklar False (fail-closed).
+    """
+    global _customer_agent_flags_cache
+
+    if _customer_agent_flags_cache is not None:
+        return _customer_agent_flags_cache
+
+    try:
+        raw = _load_app_settings_from_firebase()
+        _customer_agent_flags_cache = _parse_customer_agent_flags(raw)
+    except Exception:
+        # Firestore hatasi → hepsi kapali, sistem kirilmaz
+        _customer_agent_flags_cache = CustomerAgentFlags()
+
+    return _customer_agent_flags_cache
+
+
+def clear_customer_agent_flags_cache() -> None:
+    """Customer agent flags cache'ini temizler (test veya runtime reload icin)."""
+    global _customer_agent_flags_cache
+    _customer_agent_flags_cache = None
+
+
 __all__ = [
     "Settings",
     "get_settings",
@@ -243,4 +429,8 @@ __all__ = [
     "AgentInstructionConfig",
     "get_agent_instructions",
     "clear_agent_instructions_cache",
+    "CustomerAgentFlags",
+    "get_customer_agent_flags",
+    "clear_customer_agent_flags_cache",
+    "get_agent_provider",
 ]
