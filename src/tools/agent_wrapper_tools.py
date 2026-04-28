@@ -170,6 +170,49 @@ def create_marketing_agent_wrapper_tool(
     return marketing_agent_wrapper
 
 
+def create_meta_agent_wrapper_tool(
+    meta_agent: Agent,
+    hooks: Any = None,
+) -> FunctionTool:
+    """
+    Wrapper tool for the Meta Reklam Agent.
+
+    Meta agent gelen Facebook Lead Ads verisini NocoDB'ye yazar, skor hesaplar,
+    sicak leadleri Seyma'ya bildirir.
+    """
+
+    @function_tool(
+        name_override="meta_agent_tool",
+        description_override=(
+            "Meta (Facebook/Instagram) Lead Ads agent. Use when: "
+            "(a) a new lead form submission arrives via n8n webhook (extras.lead_data), "
+            "(b) the user asks for a Meta lead report or summary. "
+            "REQUIRED PARAMETERS: "
+            "- business_id: The exact business ID from context. "
+            "- prompt: Either the raw lead data (dict serialized) OR a query like 'bugunku meta leadleri'. "
+            "Keywords: meta lead, facebook lead, instagram lead, lead form, lead ads, sicak lead bildirim, lead skor"
+        ),
+        strict_mode=False,
+    )
+    async def meta_agent_wrapper(
+        business_id: str,
+        prompt: str,
+    ) -> str:
+        """Run Meta agent with explicit business_id."""
+        effective_prompt = f"[Business ID: {business_id}]\n\n{prompt}"
+
+        result = await Runner.run(
+            starting_agent=meta_agent,
+            input=effective_prompt,
+            max_turns=8,
+            hooks=hooks,
+        )
+
+        return result.final_output
+
+    return meta_agent_wrapper
+
+
 def create_analysis_agent_wrapper_tool(
     analysis_agent: Agent,
     hooks: Any = None,
@@ -226,4 +269,5 @@ __all__ = [
     "create_video_agent_wrapper_tool",
     "create_marketing_agent_wrapper_tool",
     "create_analysis_agent_wrapper_tool",
+    "create_meta_agent_wrapper_tool",
 ]

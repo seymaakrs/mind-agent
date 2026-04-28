@@ -20,18 +20,24 @@
 
 OpenAI Agents SDK uzerine kurulu multi-agent orchestrator sistemi.
 
-**Mimari:** Image Agent (Gemini) | Video Agent (Veo 3.1) | Marketing Agent (Instagram) | Analysis Agent (SWOT+SEO+Web) | Orchestrator Agent | Firebase Storage+Firestore | Late API (Instagram/YouTube)
+**Mimari:** Image Agent (Gemini) | Video Agent (Veo 3.1) | Marketing Agent (Instagram) | Analysis Agent (SWOT+SEO+Web) | **Meta Agent (Sales/Lead Ads)** | Orchestrator Agent | Firebase Storage+Firestore | Late API (Instagram/YouTube) | NocoDB CRM
 
 **NOT:** Web Agent kaldirildi. Analysis Agent direkt web tool'larina sahip.
+
+**SALES AGENTS (yeni):** `src/agents/sales/` altinda - Meta Agent ile basladi. Diger sales agentlari (LinkedIn, Clay, IG DM, Takip, Itiraz) `customer_agent/AGENT-MIMARISI-MASTER.md`'de planli, asama asama eklenecek.
 
 ## Yapi
 
 ```
 src/
 ├── agents/         orchestrator, image, video, marketing, analysis, registry
-├── infra/          firebase_client, google_ai_client, kling_client, late_client, task_logger, errors
+│   ├── sales/      meta_agent (LinkedIn/Clay/IG DM/Takip/Itiraz planli)
+│   └── instructions/  ... + sales/meta.py
+├── infra/          firebase_client, google_ai_client, kling_client, late_client,
+│                   task_logger, errors, nocodb_client
 ├── tools/          orchestrator_tools, image_tools, video_tools, instagram_tools,
 │                   marketing_tools, web_tools, analysis_tools, agent_wrapper_tools
+│   └── sales/      nocodb_tools (create_lead, update_lead, query_leads, ...)
 ├── models/         prompts.py (ImagePrompt, VideoPrompt)
 └── app/            api.py, config.py, orchestrator_runner.py
 ```
@@ -47,6 +53,11 @@ SERPER_API_KEY            # Serper.dev Google SERP arama
 KLING_ACCESS_KEY          # Kling AI Access Key (app.klingai.com)
 KLING_SECRET_KEY          # Kling AI Secret Key
 HEYGEN_API_KEY            # HeyGen AI API Key (app.heygen.com/settings)
+NOCODB_BASE_URL           # NocoDB instance URL (e.g. https://noco.example.com)
+NOCODB_API_TOKEN          # NocoDB xc-token
+NOCODB_LEADS_TABLE_ID     # leads tablosu id
+NOCODB_MESSAGES_TABLE_ID  # lead_messages tablosu id
+NOCODB_NOTIFICATIONS_TABLE_ID  # seyma_notifications tablosu id
 DRY_RUN=false             # true: API cagirmadan prompt logla
 ```
 
@@ -65,6 +76,11 @@ DRY_RUN=false             # true: API cagirmadan prompt logla
 - `check_serp_position(domain, keywords)` - SERP gorunurlugu (max 10 keyword)
 
 **Analysis:** `save_swot_report`, `save_seo_report` (v2+GEO), `save_seo_keywords`, `save_seo_summary` (v2+GEO), `get_seo_keywords`, `get_reports`, `save_instagram_report`
+
+**Sales/Meta (NocoDB CRM):** `create_lead`, `update_lead`, `get_lead`, `query_leads`, `log_lead_message`, `notify_seyma`
+- Wrapper: `meta_agent_tool` (orchestrator routing)
+- Trigger: n8n Facebook Lead Ads -> POST /task with extras.lead_data
+- Akis: lead parse -> skor hesapla -> create_lead -> log_lead_message -> sicaksa notify_seyma
 
 ## Kritik Akislar
 
@@ -186,6 +202,8 @@ start-dev.bat  # Docker
 
 1. Firebase Model Ayarlari Guncelleme (settings/app_settings)
 2. Video SDK Gecisi (ASKIDA) - google-genai SDK
+3. **Sales Agent Genisletme:** customer_agent/AGENT-MIMARISI-MASTER.md'deki diger 5 agent (LinkedIn, Clay, IG DM, Takip, Itiraz). Her biri `src/agents/sales/` altinda Meta agent ornegini takip edecek.
+4. **Meta Agent Genisletme:** Facebook Ads Manager API (CTR/CPC/CPL izleme, A/B test, gunluk rapor) - su anki tools sadece NocoDB CRUD.
 
 ## Notlar
 
