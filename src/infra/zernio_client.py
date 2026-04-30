@@ -370,9 +370,51 @@ class ZernioClient:
         await self._async_client.aclose()
 
 
+_singleton: ZernioClient | None = None
+
+
+def get_zernio_client() -> ZernioClient:
+    """Process-wide singleton Zernio client built from settings.
+
+    Raises:
+        RuntimeError: when ZERNIO_API_KEY is missing. Tools should catch this
+            and return a structured error.
+    """
+    global _singleton
+    if _singleton is not None:
+        return _singleton
+
+    from src.app.config import get_settings
+
+    s = get_settings()
+    if not s.zernio_api_key:
+        raise RuntimeError(
+            "Zernio is not configured. Set ZERNIO_API_KEY env var."
+        )
+
+    _singleton = ZernioClient(
+        ZernioConfig(
+            api_key=s.zernio_api_key,
+            base_url=s.zernio_base_url,
+            inbox_enabled=s.zernio_inbox_enabled,
+            ads_enabled=s.zernio_ads_enabled,
+            analytics_enabled=s.zernio_analytics_enabled,
+        )
+    )
+    return _singleton
+
+
+def reset_zernio_client() -> None:
+    """Reset the singleton — used by tests."""
+    global _singleton
+    _singleton = None
+
+
 __all__ = [
     "ZernioClient",
     "ZernioConfig",
     "ZernioPlatform",
     "ZernioFeatureNotEnabledError",
+    "get_zernio_client",
+    "reset_zernio_client",
 ]

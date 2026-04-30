@@ -269,4 +269,63 @@ class NocoDBClient:
         await self._async_client.aclose()
 
 
-__all__ = ["NocoDBClient", "NocoDBConfig"]
+_singleton: NocoDBClient | None = None
+
+
+def get_nocodb_client() -> NocoDBClient:
+    """Process-wide singleton NocoDB client built from settings.
+
+    Raises:
+        RuntimeError: when required env vars are missing. Tools should catch
+            this and return a structured error to the agent.
+    """
+    global _singleton
+    if _singleton is not None:
+        return _singleton
+
+    # Imported here to avoid circular imports at module load time.
+    from src.app.config import get_settings
+
+    s = get_settings()
+    if not (
+        s.nocodb_base_url
+        and s.nocodb_api_token
+        and s.nocodb_leads_table_id
+        and s.nocodb_messages_table_id
+        and s.nocodb_notifications_table_id
+    ):
+        raise RuntimeError(
+            "NocoDB is not configured. Required env: NOCODB_BASE_URL, "
+            "NOCODB_API_TOKEN, NOCODB_LEADS_TABLE_ID, NOCODB_MESSAGES_TABLE_ID, "
+            "NOCODB_NOTIFICATIONS_TABLE_ID."
+        )
+
+    _singleton = NocoDBClient(
+        NocoDBConfig(
+            base_url=s.nocodb_base_url,
+            api_token=s.nocodb_api_token,
+            leads_table_id=s.nocodb_leads_table_id,
+            messages_table_id=s.nocodb_messages_table_id,
+            notifications_table_id=s.nocodb_notifications_table_id,
+            campaigns_table_id=s.nocodb_campaigns_table_id,
+            daily_metrics_table_id=s.nocodb_daily_metrics_table_id,
+            decisions_log_table_id=s.nocodb_decisions_log_table_id,
+            objections_log_table_id=s.nocodb_objections_log_table_id,
+            agent_health_table_id=s.nocodb_agent_health_table_id,
+        )
+    )
+    return _singleton
+
+
+def reset_nocodb_client() -> None:
+    """Reset the singleton — used by tests to inject fresh state."""
+    global _singleton
+    _singleton = None
+
+
+__all__ = [
+    "NocoDBClient",
+    "NocoDBConfig",
+    "get_nocodb_client",
+    "reset_nocodb_client",
+]
