@@ -16,6 +16,11 @@ from src.tools.agent_wrapper_tools import (
     create_video_agent_wrapper_tool,
     create_marketing_agent_wrapper_tool,
     create_analysis_agent_wrapper_tool,
+    create_sales_query_agent_wrapper_tool,
+    create_clay_agent_wrapper_tool,
+    create_ig_dm_agent_wrapper_tool,
+    create_linkedin_agent_wrapper_tool,
+    create_meta_lead_agent_wrapper_tool,
 )
 from src.agents.instructions import build_orchestrator_instructions
 
@@ -68,6 +73,19 @@ def create_orchestrator_agent(
     # Orchestrator tools (Firebase storage/firestore/instagram)
     orchestrator_tools = get_orchestrator_tools()
 
+    # Sales sub-agent tools — gated behind SALES_AGENTS_ENABLED feature flag.
+    # When disabled (default) the orchestrator behaves exactly like before; when
+    # enabled, sales/CRM/lead questions are routed to the customer-agent layer.
+    sales_tools: list[Any] = []
+    if settings.sales_agents_enabled:
+        sales_tools = [
+            create_sales_query_agent_wrapper_tool(hooks=hooks),
+            create_clay_agent_wrapper_tool(hooks=hooks),
+            create_ig_dm_agent_wrapper_tool(hooks=hooks),
+            create_linkedin_agent_wrapper_tool(hooks=hooks),
+            create_meta_lead_agent_wrapper_tool(hooks=hooks),
+        ]
+
     # Get current date for dynamic injection
     today_date = datetime.now().strftime("%Y-%m-%d")
 
@@ -75,7 +93,15 @@ def create_orchestrator_agent(
         name="orchestrator",
         handoff_description="Alt agentlari yoneten orchestrator.",
         instructions=build_orchestrator_instructions(today_date),
-        tools=[image_tool, video_tool, marketing_tool, analysis_tool, fetch_business, *orchestrator_tools],
+        tools=[
+            image_tool,
+            video_tool,
+            marketing_tool,
+            analysis_tool,
+            fetch_business,
+            *orchestrator_tools,
+            *sales_tools,
+        ],
         tool_use_behavior="run_llm_again",
         output_type=str,
         model=model or model_settings.orchestrator_model or settings.openai_model,

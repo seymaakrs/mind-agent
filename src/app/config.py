@@ -50,6 +50,29 @@ class Settings(BaseModel):
     # HeyGen AI (Video Agent)
     heygen_api_key: str | None = Field(default=None, alias="HEYGEN_API_KEY")
 
+    # NocoDB CRM (Sales Customer Agent)
+    nocodb_base_url: str | None = Field(default=None, alias="NOCODB_BASE_URL")
+    nocodb_api_token: str | None = Field(default=None, alias="NOCODB_API_TOKEN")
+    nocodb_leads_table_id: str | None = Field(default=None, alias="NOCODB_LEADS_TABLE_ID")
+    nocodb_messages_table_id: str | None = Field(default=None, alias="NOCODB_MESSAGES_TABLE_ID")
+    nocodb_notifications_table_id: str | None = Field(default=None, alias="NOCODB_NOTIFICATIONS_TABLE_ID")
+    nocodb_campaigns_table_id: str | None = Field(default=None, alias="NOCODB_CAMPAIGNS_TABLE_ID")
+    nocodb_daily_metrics_table_id: str | None = Field(default=None, alias="NOCODB_DAILY_METRICS_TABLE_ID")
+    nocodb_decisions_log_table_id: str | None = Field(default=None, alias="NOCODB_DECISIONS_LOG_TABLE_ID")
+    nocodb_objections_log_table_id: str | None = Field(default=None, alias="NOCODB_OBJECTIONS_LOG_TABLE_ID")
+    nocodb_agent_health_table_id: str | None = Field(default=None, alias="NOCODB_AGENT_HEALTH_TABLE_ID")
+
+    # Zernio Social Media Unified API (15 platforms)
+    zernio_api_key: str | None = Field(default=None, alias="ZERNIO_API_KEY")
+    zernio_base_url: str = Field(default="https://api.zernio.com", alias="ZERNIO_BASE_URL")
+    zernio_inbox_enabled: bool = Field(default=False, alias="ZERNIO_INBOX_ENABLED")
+    zernio_ads_enabled: bool = Field(default=False, alias="ZERNIO_ADS_ENABLED")
+    zernio_analytics_enabled: bool = Field(default=True, alias="ZERNIO_ANALYTICS_ENABLED")
+
+    # Sales feature flags (default OFF - safe rollout)
+    sales_agents_enabled: bool = Field(default=False, alias="SALES_AGENTS_ENABLED")
+    sales_seyma_email: str | None = Field(default=None, alias="SALES_SEYMA_EMAIL")
+
     # Dry-run mode - Google API'lerine gercek cagri yapmadan prompt'lari loglar
     dry_run: bool = Field(default=False, alias="DRY_RUN")
 
@@ -72,6 +95,23 @@ class Settings(BaseModel):
                 "kling_access_key": os.getenv("KLING_ACCESS_KEY"),
                 "kling_secret_key": os.getenv("KLING_SECRET_KEY"),
                 "heygen_api_key": os.getenv("HEYGEN_API_KEY"),
+                "nocodb_base_url": os.getenv("NOCODB_BASE_URL"),
+                "nocodb_api_token": os.getenv("NOCODB_API_TOKEN"),
+                "nocodb_leads_table_id": os.getenv("NOCODB_LEADS_TABLE_ID"),
+                "nocodb_messages_table_id": os.getenv("NOCODB_MESSAGES_TABLE_ID"),
+                "nocodb_notifications_table_id": os.getenv("NOCODB_NOTIFICATIONS_TABLE_ID"),
+                "nocodb_campaigns_table_id": os.getenv("NOCODB_CAMPAIGNS_TABLE_ID"),
+                "nocodb_daily_metrics_table_id": os.getenv("NOCODB_DAILY_METRICS_TABLE_ID"),
+                "nocodb_decisions_log_table_id": os.getenv("NOCODB_DECISIONS_LOG_TABLE_ID"),
+                "nocodb_objections_log_table_id": os.getenv("NOCODB_OBJECTIONS_LOG_TABLE_ID"),
+                "nocodb_agent_health_table_id": os.getenv("NOCODB_AGENT_HEALTH_TABLE_ID"),
+                "zernio_api_key": os.getenv("ZERNIO_API_KEY"),
+                "zernio_base_url": os.getenv("ZERNIO_BASE_URL", "https://api.zernio.com"),
+                "zernio_inbox_enabled": os.getenv("ZERNIO_INBOX_ENABLED", "").lower() in ("true", "1", "yes"),
+                "zernio_ads_enabled": os.getenv("ZERNIO_ADS_ENABLED", "").lower() in ("true", "1", "yes"),
+                "zernio_analytics_enabled": os.getenv("ZERNIO_ANALYTICS_ENABLED", "true").lower() in ("true", "1", "yes"),
+                "sales_agents_enabled": os.getenv("SALES_AGENTS_ENABLED", "").lower() in ("true", "1", "yes"),
+                "sales_seyma_email": os.getenv("SALES_SEYMA_EMAIL"),
             }
         )
 

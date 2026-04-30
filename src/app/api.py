@@ -31,6 +31,15 @@ app.add_middleware(
 )
 
 
+# Customer Agent (sales) webhook routes — gated behind feature flag so disabled
+# deployments expose nothing extra. When SALES_AGENTS_ENABLED=true the routes
+# /sales/webhook/zernio and /sales/webhook/meta-lead become available.
+if settings.sales_agents_enabled:
+    from src.app.sales_webhooks import router as _sales_webhook_router
+
+    app.include_router(_sales_webhook_router)
+
+
 class Reference(BaseModel):
     """A Firebase item (document or file) the user has selected in the frontend."""
 
