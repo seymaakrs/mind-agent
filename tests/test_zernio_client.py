@@ -124,11 +124,59 @@ class TestSendDM:
             )
             assert result["id"] == "msg_123"
             url = fake_client.post.await_args.args[0]
-            assert "/dms" in url or "/messages" in url
+            # Documented Zernio endpoint:
+            assert "/v1/inbox/conversations/" in url
+            assert "/messages" in url
             body = fake_client.post.await_args.kwargs["json"]
             assert body["platform"] == "instagram"
             assert body["account_id"] == "acc_ig_1"
             assert body["text"] == "Merhaba!"
+
+    @pytest.mark.asyncio
+    async def test_send_dm_uses_thread_id_in_url_when_provided(
+        self, cfg_full: ZernioClient
+    ) -> None:
+        """If thread_id given (e.g. from prior webhook) it MUST go into the URL,
+        not just the body — Zernio routes by path conversationId."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json = MagicMock(return_value={"id": "x"})
+        mock_response.raise_for_status = MagicMock()
+        with patch.object(
+            cfg_full, "_async_client", new_callable=lambda: MagicMock()
+        ) as fake_client:
+            fake_client.post = AsyncMock(return_value=mock_response)
+            await cfg_full.send_dm(
+                platform=ZernioPlatform.INSTAGRAM,
+                account_id="acc",
+                recipient_id="user",
+                text="hi",
+                thread_id="conv_xyz",
+            )
+            url = fake_client.post.await_args.args[0]
+            assert "conv_xyz" in url
+            assert url.endswith("/messages")
+
+    @pytest.mark.asyncio
+    async def test_send_dm_falls_back_to_recipient_when_no_thread_id(
+        self, cfg_full: ZernioClient
+    ) -> None:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json = MagicMock(return_value={"id": "x"})
+        mock_response.raise_for_status = MagicMock()
+        with patch.object(
+            cfg_full, "_async_client", new_callable=lambda: MagicMock()
+        ) as fake_client:
+            fake_client.post = AsyncMock(return_value=mock_response)
+            await cfg_full.send_dm(
+                platform=ZernioPlatform.INSTAGRAM,
+                account_id="acc",
+                recipient_id="user_42",
+                text="hi",
+            )
+            url = fake_client.post.await_args.args[0]
+            assert "user_42" in url
 
     @pytest.mark.asyncio
     async def test_send_dm_rejects_when_inbox_disabled(self) -> None:
@@ -178,7 +226,7 @@ class TestSendDM:
 
 class TestListDMThreads:
     @pytest.mark.asyncio
-    async def test_list_threads_returns_data_field(
+    async def test_list_threads_uses_documented_endpoint(
         self, cfg_full: ZernioClient
     ) -> None:
         mock_response = MagicMock()
@@ -199,6 +247,48 @@ class TestListDMThreads:
             )
             assert len(threads) == 2
             assert threads[0]["id"] == "th_1"
+            url = fake_client.get.await_args.args[0]
+            assert url.endswith("/v1/inbox/conversations")
+            params = fake_client.get.await_args.kwargs["params"]
+            assert params["platform"] == "instagram"
+
+    @pytest.mark.asyncio
+    async def test_list_threads_tolerates_conversations_field(
+        self, cfg_full: ZernioClient
+    ) -> None:
+        """Zernio response shape may use ``conversations`` instead of ``data``."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json = MagicMock(
+            return_value={"conversations": [{"id": "c1"}]}
+        )
+        mock_response.raise_for_status = MagicMock()
+        with patch.object(
+            cfg_full, "_async_client", new_callable=lambda: MagicMock()
+        ) as fake_client:
+            fake_client.get = AsyncMock(return_value=mock_response)
+            threads = await cfg_full.list_dm_threads(
+                platform=ZernioPlatform.INSTAGRAM, account_id="acc"
+            )
+            assert threads == [{"id": "c1"}]
+
+    @pytest.mark.asyncio
+    async def test_list_threads_tolerates_top_level_list(
+        self, cfg_full: ZernioClient
+    ) -> None:
+        """If Zernio ever returns a bare array, we must not crash."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json = MagicMock(return_value=[{"id": "c1"}])
+        mock_response.raise_for_status = MagicMock()
+        with patch.object(
+            cfg_full, "_async_client", new_callable=lambda: MagicMock()
+        ) as fake_client:
+            fake_client.get = AsyncMock(return_value=mock_response)
+            threads = await cfg_full.list_dm_threads(
+                platform=ZernioPlatform.INSTAGRAM, account_id="acc"
+            )
+            assert threads == [{"id": "c1"}]
 
 
 # ---------------------------------------------------------------------------

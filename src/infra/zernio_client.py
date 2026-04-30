@@ -149,6 +149,13 @@ class ZernioClient:
     ) -> dict[str, Any]:
         """Send a DM through Zernio Inbox addon.
 
+        API docs: https://docs.zernio.com — Inbox API uses
+        ``POST /v1/inbox/conversations/{conversationId}/messages`` to reply
+        within an existing conversation. When ``thread_id`` is omitted we
+        treat the recipient as the conversation key (Zernio resolves it
+        per platform); pass ``thread_id`` when you already have it from a
+        prior ``message.received`` webhook.
+
         Raises:
             ZernioFeatureNotEnabledError: if ``inbox_enabled=False``.
             ServiceError: on HTTP/transport errors.
@@ -159,18 +166,22 @@ class ZernioClient:
                 "and set ZERNIO_INBOX_ENABLED=true."
             )
 
+        # Conversation key: prefer the explicit thread_id (returned in webhooks),
+        # otherwise pass the recipient_id and Zernio resolves it per platform.
+        conversation_key = thread_id or recipient_id
+
         body: dict[str, Any] = {
             "platform": platform.value,
             "account_id": account_id,
             "recipient_id": recipient_id,
             "text": text,
         }
-        if thread_id:
-            body["thread_id"] = thread_id
 
         try:
             resp = await self._async_client.post(
-                self._url("/v1/dms"), headers=self._headers(), json=body
+                self._url(f"/v1/inbox/conversations/{conversation_key}/messages"),
+                headers=self._headers(),
+                json=body,
             )
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
@@ -192,7 +203,11 @@ class ZernioClient:
         limit: int = 25,
         cursor: str | None = None,
     ) -> list[dict[str, Any]]:
-        """List recent DM threads for an account."""
+        """List recent DM conversations for an account.
+
+        Uses the documented ``GET /v1/inbox/conversations`` endpoint with
+        ``platform`` filter.
+        """
         if not self.config.inbox_enabled:
             raise ZernioFeatureNotEnabledError(
                 "Zernio inbox addon is not enabled."
@@ -208,7 +223,7 @@ class ZernioClient:
 
         try:
             resp = await self._async_client.get(
-                self._url("/v1/dms/threads"),
+                self._url("/v1/inbox/conversations"),
                 headers=self._headers(),
                 params=params,
             )
@@ -224,7 +239,10 @@ class ZernioClient:
 
         data = resp.json()
         if isinstance(data, dict):
-            return list(data.get("data", []))
+            # Zernio returns either {"data": [...]} or just a list — be tolerant.
+            return list(data.get("data", data.get("conversations", [])))
+        if isinstance(data, list):
+            return data
         return []
 
     # ------------------------------------------------------------------ Ads

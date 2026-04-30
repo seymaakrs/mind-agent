@@ -12,7 +12,7 @@ the query agent must never write so it can be safely exposed to humans.
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from typing import Any
 
 from agents import function_tool
