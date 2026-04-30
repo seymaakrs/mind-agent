@@ -221,9 +221,148 @@ def create_analysis_agent_wrapper_tool(
     return analysis_agent_wrapper
 
 
+# ---------------------------------------------------------------------------
+# Sales (Customer Agent) wrapper tools — Mind-Agent SDK Köprüsü
+#
+# These wire each sales sub-agent (clay, ig_dm, linkedin, meta_lead, query)
+# into the main orchestrator. The orchestrator picks the right sub-agent
+# based on the keywords in each tool's description.
+# ---------------------------------------------------------------------------
+
+
+def create_sales_query_agent_wrapper_tool(hooks: Any = None) -> FunctionTool:
+    """Read-only natural-language query interface to the CRM."""
+    from src.agents.sales import create_sales_query_agent
+
+    @function_tool(
+        name_override="sales_query_agent_tool",
+        description_override=(
+            "Satış / lead / pipeline / CRM verileri hakkında SORU SORMAK için. "
+            "Read-only — veri DEĞİŞTİRMEZ. "
+            "Keywords: kaç sıcak lead, pipeline, CAC, CPL, funnel, "
+            "hangi kanal, satış raporu, hot leads, agent health, "
+            "otonom karar logları."
+        ),
+        strict_mode=False,
+    )
+    async def sales_query_wrapper(prompt: str) -> str:
+        agent = create_sales_query_agent()
+        result = await Runner.run(
+            starting_agent=agent,
+            input=prompt,
+            max_turns=8,
+            hooks=hooks,
+        )
+        return result.final_output
+
+    return sales_query_wrapper
+
+
+def create_clay_agent_wrapper_tool(hooks: Any = None) -> FunctionTool:
+    """Bodrum/Muğla yerel işletme avı."""
+    from src.agents.sales import create_clay_agent
+
+    @function_tool(
+        name_override="clay_agent_tool",
+        description_override=(
+            "Bodrum / Muğla yerel işletmeleri keşfeder, skorlar ve outreach mesajı "
+            "hazırlar. Otel, restoran, cafe, butik, perakende, turizm, e-ticaret. "
+            "Keywords: yerel işletme, bodrum tara, otel listesi, restoran ara, "
+            "lead skor, outreach mesajı, soğuk e-posta, prospecting, b2b yerel."
+        ),
+        strict_mode=False,
+    )
+    async def clay_wrapper(prompt: str) -> str:
+        agent = create_clay_agent()
+        result = await Runner.run(
+            starting_agent=agent, input=prompt, max_turns=15, hooks=hooks
+        )
+        return result.final_output
+
+    return clay_wrapper
+
+
+def create_ig_dm_agent_wrapper_tool(hooks: Any = None) -> FunctionTool:
+    """Instagram DM otomasyonu (Zernio Inbox webhook'undan tetiklenir)."""
+    from src.agents.sales import create_ig_dm_agent
+
+    @function_tool(
+        name_override="ig_dm_agent_tool",
+        description_override=(
+            "Instagram DM yönetimi. Gelen DM'leri yorumlar, CBO-uyumlu "
+            "otomatik yanıt verir, sıcak lead'leri Şeyma'ya iletir. "
+            "Keywords: instagram dm, ig mesaj, gelen mesaj, otomatik yanıt, "
+            "instagram lead."
+        ),
+        strict_mode=False,
+    )
+    async def ig_dm_wrapper(prompt: str) -> str:
+        agent = create_ig_dm_agent()
+        result = await Runner.run(
+            starting_agent=agent, input=prompt, max_turns=10, hooks=hooks
+        )
+        return result.final_output
+
+    return ig_dm_wrapper
+
+
+def create_linkedin_agent_wrapper_tool(hooks: Any = None) -> FunctionTool:
+    """LinkedIn outreach (Zernio LinkedIn DM)."""
+    from src.agents.sales import create_linkedin_agent
+
+    @function_tool(
+        name_override="linkedin_agent_tool",
+        description_override=(
+            "LinkedIn B2B outreach. Karar verici profillere (CEO, GM, Pazarlama "
+            "Müdürü) bağlantı isteği + kişiselleştirilmiş mesaj dizisi gönderir. "
+            "Keywords: linkedin outreach, profesyonel ağ, bağlantı isteği, "
+            "linkedin mesaj, b2b satış, karar verici."
+        ),
+        strict_mode=False,
+    )
+    async def linkedin_wrapper(prompt: str) -> str:
+        agent = create_linkedin_agent()
+        result = await Runner.run(
+            starting_agent=agent, input=prompt, max_turns=10, hooks=hooks
+        )
+        return result.final_output
+
+    return linkedin_wrapper
+
+
+def create_meta_lead_agent_wrapper_tool(hooks: Any = None) -> FunctionTool:
+    """Meta (Facebook + Instagram) reklam ve lead form takibi."""
+    from src.agents.sales import create_meta_lead_agent
+
+    @function_tool(
+        name_override="meta_lead_agent_tool",
+        description_override=(
+            "Facebook + Instagram reklam takibi. Otonom kampanya yönetimi "
+            "(CTR<%1 durdur, CPL>50 dondur). Lead form akışı şu an PARK "
+            "(FB App Review beklemede). "
+            "Keywords: meta reklam, facebook ads, instagram reklam, kampanya, "
+            "ctr, cpl, lead form, reklam metriği, facebook lead."
+        ),
+        strict_mode=False,
+    )
+    async def meta_lead_wrapper(prompt: str) -> str:
+        agent = create_meta_lead_agent()
+        result = await Runner.run(
+            starting_agent=agent, input=prompt, max_turns=10, hooks=hooks
+        )
+        return result.final_output
+
+    return meta_lead_wrapper
+
+
 __all__ = [
     "create_image_agent_wrapper_tool",
     "create_video_agent_wrapper_tool",
     "create_marketing_agent_wrapper_tool",
     "create_analysis_agent_wrapper_tool",
+    "create_sales_query_agent_wrapper_tool",
+    "create_clay_agent_wrapper_tool",
+    "create_ig_dm_agent_wrapper_tool",
+    "create_linkedin_agent_wrapper_tool",
+    "create_meta_lead_agent_wrapper_tool",
 ]

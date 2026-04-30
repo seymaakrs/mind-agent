@@ -1,6 +1,11 @@
 """Sales (Customer Agent) tool exports."""
 from __future__ import annotations
 
+from src.tools.sales.clay_tools import (
+    discover_local_businesses,
+    generate_outreach_message,
+    score_business_presence,
+)
 from src.tools.sales.nocodb_tools import (
     create_lead,
     get_lead,
@@ -18,6 +23,13 @@ from src.tools.sales.sales_query_tools import (
     get_recent_decisions,
     get_today_funnel,
     get_total_leads_count,
+)
+from src.tools.sales.zernio_tools import (
+    get_zernio_account_analytics,
+    get_zernio_campaign_metrics,
+    list_zernio_dm_threads,
+    pause_zernio_campaign,
+    send_zernio_dm,
 )
 
 
@@ -70,4 +82,12 @@ __all__ = [
     "get_cac_by_channel",
     "get_recent_decisions",
     "get_agent_health_summary",
+    "discover_local_businesses",
+    "generate_outreach_message",
+    "score_business_presence",
+    "send_zernio_dm",
+    "list_zernio_dm_threads",
+    "pause_zernio_campaign",
+    "get_zernio_campaign_metrics",
+    "get_zernio_account_analytics",
 ]
