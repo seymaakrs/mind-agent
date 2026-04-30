@@ -195,12 +195,45 @@ _SERPER_MAP: dict[int, tuple[ErrorCode, bool, int | None]] = {
     500: (ErrorCode.SERVER_ERROR, True, 30),
 }
 
+# NocoDB v2 REST API status codes
+_NOCODB_MAP: dict[int, tuple[ErrorCode, bool, int | None]] = {
+    400: (ErrorCode.INVALID_INPUT, False, None),
+    401: (ErrorCode.AUTH_ERROR, False, None),
+    403: (ErrorCode.PERMISSION_DENIED, False, None),
+    404: (ErrorCode.NOT_FOUND, False, None),
+    409: (ErrorCode.INVALID_INPUT, False, None),  # duplicate / version conflict
+    422: (ErrorCode.INVALID_INPUT, False, None),  # validation
+    429: (ErrorCode.RATE_LIMIT, True, 60),
+    500: (ErrorCode.SERVER_ERROR, True, 30),
+    502: (ErrorCode.SERVER_ERROR, True, 30),
+    503: (ErrorCode.SERVER_ERROR, True, 30),
+    504: (ErrorCode.TIMEOUT, True, 15),
+}
+
+# Zernio unified social media API status codes
+_ZERNIO_MAP: dict[int, tuple[ErrorCode, bool, int | None]] = {
+    400: (ErrorCode.INVALID_INPUT, False, None),
+    401: (ErrorCode.AUTH_ERROR, False, None),
+    402: (ErrorCode.INSUFFICIENT_BALANCE, False, None),  # add-on not enabled
+    403: (ErrorCode.PERMISSION_DENIED, False, None),
+    404: (ErrorCode.NOT_FOUND, False, None),
+    409: (ErrorCode.INVALID_INPUT, False, None),
+    422: (ErrorCode.INVALID_INPUT, False, None),
+    429: (ErrorCode.RATE_LIMIT, True, 60),
+    500: (ErrorCode.SERVER_ERROR, True, 30),
+    502: (ErrorCode.SERVER_ERROR, True, 30),
+    503: (ErrorCode.SERVER_ERROR, True, 30),
+    504: (ErrorCode.TIMEOUT, True, 15),
+}
+
 _SERVICE_MAPS: dict[str, dict] = {
     "google_ai": _GOOGLE_AI_MAP,
     "kling": _KLING_MAP,
     "late": _LATE_MAP,
     "fal_ai": _FAL_MAP,
     "serper": _SERPER_MAP,
+    "nocodb": _NOCODB_MAP,
+    "zernio": _ZERNIO_MAP,
     # firebase uses class-name based map, handled separately
 }
 
