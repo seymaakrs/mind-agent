@@ -5,14 +5,16 @@ Verifies that the live NocoDB instance matches the contract defined in
 or its uniqueness changes, this test fails — preventing silent breakage of
 n8n workflows and mind-agent code that depend on the schema.
 
+Field names are Turkish to match `src/tools/sales/nocodb_tools.py`.
+
 Skipped automatically when NocoDB credentials are not configured (e.g. in
 local dev or CI without secrets) so it does not block the existing 87-test
 suite.
 
 Run manually:
     NOCODB_BASE_URL=... NOCODB_API_TOKEN_READ=... \\
-    NOCODB_LEADS_TABLE_ID=... NOCODB_LEAD_MESSAGES_TABLE_ID=... \\
-    NOCODB_SEYMA_NOTIFICATIONS_TABLE_ID=... \\
+    NOCODB_LEADS_TABLE_ID=... NOCODB_MESSAGES_TABLE_ID=... \\
+    NOCODB_NOTIFICATIONS_TABLE_ID=... \\
     pytest tests/test_nocodb_schema_contract.py -v
 """
 from __future__ import annotations
@@ -28,23 +30,22 @@ except ImportError:  # pragma: no cover
     httpx = None  # type: ignore[assignment]
 
 
-# Expected schema — must mirror customer_agent/docs/NOCODB-SCHEMA-V2.md
+# Expected schema — mirrors customer_agent/docs/NOCODB-SCHEMA-V2.md
 EXPECTED_LEADS = {
     "required": {
-        "external_id", "source", "source_workflow_id", "name",
-        "stage", "created_at", "updated_at",
+        "external_id", "kaynak", "source_workflow_id", "isim",
+        "asama", "takip_sayisi", "seyma_bildirildi",
     },
     "optional": {
-        "leadgen_id", "company", "email", "phone", "lead_score",
-        "temperature", "notes", "assigned_to",
+        "leadgen_id", "sirket", "email", "telefon", "sektor",
+        "skor", "not", "son_iletisim",
     },
     "unique": {"external_id", "leadgen_id"},
 }
 
 EXPECTED_LEAD_MESSAGES = {
     "required": {
-        "lead_id", "direction", "channel", "body",
-        "source_workflow_id", "created_at",
+        "lead_id", "yon", "kanal", "icerik", "source_workflow_id",
     },
     "optional": {"external_message_id", "meta"},
     "unique": {"external_message_id"},
@@ -52,20 +53,25 @@ EXPECTED_LEAD_MESSAGES = {
 
 EXPECTED_SEYMA_NOTIFICATIONS = {
     "required": {
-        "kind", "title", "source_workflow_id",
-        "is_read", "priority", "created_at",
+        "tur", "baslik", "source_workflow_id", "okundu", "oncelik",
     },
-    "optional": {"lead_id", "body", "read_at"},
+    "optional": {"lead_id", "icerik", "okundu_at"},
     "unique": set(),
 }
 
 TABLES = {
     "leads": ("NOCODB_LEADS_TABLE_ID", EXPECTED_LEADS),
-    "lead_messages": ("NOCODB_LEAD_MESSAGES_TABLE_ID", EXPECTED_LEAD_MESSAGES),
+    "lead_messages": ("NOCODB_MESSAGES_TABLE_ID", EXPECTED_LEAD_MESSAGES),
     "seyma_notifications": (
-        "NOCODB_SEYMA_NOTIFICATIONS_TABLE_ID",
+        "NOCODB_NOTIFICATIONS_TABLE_ID",
         EXPECTED_SEYMA_NOTIFICATIONS,
     ),
+}
+
+# NocoDB system columns that should be tolerated as "extra"
+SYSTEM_COLUMNS = {
+    "Id", "id", "ID", "CreatedAt", "UpdatedAt", "ncRecordId", "ncRecordHash",
+    "nc_created_by", "nc_updated_by",
 }
 
 
@@ -120,13 +126,10 @@ def test_table_has_required_columns(table_name: str) -> None:
 
 @pytest.mark.parametrize("table_name", list(TABLES.keys()))
 def test_table_has_no_unexpected_extra_columns(table_name: str) -> None:
-    """Soft check — allows NocoDB system columns but flags unknown business columns."""
     env_var, expected = TABLES[table_name]
     meta = _fetch_table_meta(os.environ[env_var])
     actual = _column_names(meta)
-    known = expected["required"] | expected["optional"] | {
-        "id", "Id", "ID", "CreatedAt", "UpdatedAt", "ncRecordId", "ncRecordHash",
-    }
+    known = expected["required"] | expected["optional"] | SYSTEM_COLUMNS
     extras = actual - known
     assert not extras, (
         f"NocoDB table '{table_name}' has columns not in NOCODB-SCHEMA-V2.md: {extras}. "
