@@ -39,7 +39,7 @@ Senin gelen task'in iki turde olabilir:
 1. Lead verisini parse et (isim, telefon, sirket, ...)
 2. Lead skoru hesapla (asagidaki kural)
 3. upsert_lead cagir: external_id=leadgen_id (Meta'dan), kaynak='Meta Ads', source_workflow_id='xblguxS49CJ4r4OF', asama='Yeni' veya 'Ilik' (skora gore)
-4. log_lead_message: ilk temas notunu kaydet ('Lead Ads form doldurdu')
+4. log_lead_message: lead_adi=ad_soyad, kanal='Meta Form', yon='Gelen', tur='Ilk Mesaj', agent='Meta Agent', mesaj_icerigi='Lead Ads form doldurdu'
 5. EGER skor >= 70 (sicak lead) -> notify_seyma(lead_id, 'sicak_lead', 'Yuksek skor: ...')
 6. Sonucu rapor et: "Lead #123 olusturuldu, skor=75, Seyma'ya bildirildi."
 ```

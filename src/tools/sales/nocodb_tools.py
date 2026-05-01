@@ -308,9 +308,11 @@ async def query_leads(
         "Append a message to Etkilesimler tablosu (Beyza'nin live schema). "
         "REQUIRED: lead_adi (Leadler.ad_soyad ile string match), kanal, yon, mesaj_icerigi. "
         "OPTIONAL: external_message_id (idempotency, ornegin WhatsApp wamid), tur, sonuc, agent, notlar. "
-        "kanal: 'LinkedIn' | 'IG' | 'WhatsApp' | 'Email' | 'Meta' | 'SMS'. "
-        "yon: 'giden' | 'gelen'. "
-        "agent: 'meta' | 'takip' | 'itiraz' | 'upsell' | 'referans' | 'manuel'."
+        "kanal: 'LinkedIn' | 'Email' | 'WhatsApp' | 'IG DM' | 'TikTok DM' | 'Telefon' | 'Meta Form' | 'Yuz Yuze'. "
+        "yon: 'Giden' | 'Gelen'. "
+        "tur: 'Baglanti Istegi' | 'Ilk Mesaj' | 'Takip Mesaji' | 'Itiraz Karsilama' | 'Discovery Call' | 'Teklif' | 'Yanit'. "
+        "sonuc: 'Yanit Bekleniyor' | 'Olumlu Yanit' | 'Olumsuz Yanit' | 'Itiraz' | 'Soru Sordu' | 'Gorusme Planlandi'. "
+        "agent: 'LinkedIn Agent' | 'Meta Agent' | 'Clay Agent' | 'DM Bot' | 'Takip Agent' | 'Itiraz Agent' | 'Seyma'."
     ),
     strict_mode=False,
 )
@@ -371,51 +373,53 @@ async def log_lead_message(
 @function_tool(
     name_override="notify_seyma",
     description_override=(
-        "Send a Seyma notification by writing a 'bildirim' row to Etkilesimler. "
-        "Beyza'nin n8n 'Send Hot Lead Alert (Gmail)' node'u sicak lead'leri "
-        "Seyma'ya zaten Gmail ile bildiriyor — bu tool ek olarak CRM trail birakir. "
-        "REQUIRED: lead_adi, tetikleyici. "
-        "Side-effect: tetikleyici='sicak_lead' ise Leadler.asama='Sicak' yapilir."
+        "Flag a lead for Seyma's attention. Implementation: Leadler.atanan_kisi='Seyma' "
+        "+ notlar'a timestamp'li bildirim notu append edilir; tetikleyici='sicak_lead' "
+        "ise asama='Sicak' yapilir. Beyza'nin n8n 'Send Hot Lead Alert (Gmail)' "
+        "workflow'u Seyma'ya zaten Gmail ile alert atiyor — bu tool CRM uzerinde "
+        "kalici audit trail birakir, kanal cakismasi olmaz. "
+        "REQUIRED: lead_id, tetikleyici. "
+        "tetikleyici: 'sicak_lead' | '2_itiraz' | 'teklif_zamani' | 'manuel'."
     ),
     strict_mode=False,
 )
 async def notify_seyma(
-    lead_adi: str,
+    lead_id: int,
     tetikleyici: str,
     not_metni: str | None = None,
-    lead_id: int | None = None,
 ) -> dict[str, Any]:
-    """Log a Seyma notification to Etkilesimler + optionally update Leadler.asama."""
-    etk_table = _resolve_messages_table()
-    if not etk_table:
-        return _missing_table_error("lead_messages")
+    """Flag lead for Seyma — updates Leadler row (atanan_kisi + notlar + asama)."""
+    leads_table = _resolve_leads_table()
+    if not leads_table:
+        return _missing_table_error("leads")
 
-    fields: dict[str, Any] = {
-        "lead_adi": lead_adi,
-        "tarih": datetime.utcnow().isoformat(),
-        "kanal": "Internal",
-        "yon": "giden",
-        "tur": "bildirim",
-        "agent": "meta",
-        "otomatik_mi": True,
-        "mesaj_icerigi": f"Seyma bildirimi: {tetikleyici}" + (f" — {not_metni}" if not_metni else ""),
-    }
+    timestamp = datetime.utcnow().isoformat(timespec="seconds")
+    note_line = f"[{timestamp}] Seyma'ya yonlendirildi (tetikleyici={tetikleyici})"
+    if not_metni:
+        note_line += f": {not_metni}"
 
     try:
         client = get_nocodb_client()
-        record = client.create_record(etk_table, fields)
+        existing = client.get_record(leads_table, lead_id)
+        old_notlar = existing.get("notlar") if isinstance(existing, dict) else None
+        new_notlar = (
+            f"{old_notlar}\n{note_line}".strip() if old_notlar else note_line
+        )
 
-        # Sicak lead ise Leadler tablosunda asama'yi guncelle
-        if tetikleyici == "sicak_lead" and lead_id:
-            leads_table = _resolve_leads_table()
-            if leads_table:
-                client.update_record(
-                    leads_table,
-                    lead_id,
-                    {"asama": "Sicak"},
-                )
+        update_fields: dict[str, Any] = {
+            "atanan_kisi": "Seyma",
+            "notlar": new_notlar,
+        }
+        if tetikleyici == "sicak_lead":
+            update_fields["asama"] = "Sicak"
 
-        return {"success": True, "notification_id": record.get("Id"), "record": record}
+        record = client.update_record(leads_table, lead_id, update_fields)
+        return {
+            "success": True,
+            "lead_id": lead_id,
+            "atanan_kisi": "Seyma",
+            "record": record,
+        }
     except Exception as exc:
         return classify_error(exc, "nocodb")
 
