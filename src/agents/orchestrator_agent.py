@@ -10,12 +10,14 @@ from src.app.config import get_settings, get_model_settings
 from src.app.logging_hooks import CliLoggingHooks
 from src.agents.marketing_agent import create_marketing_agent
 from src.agents.analysis_agent import create_analysis_agent
+from src.agents.sales.meta_agent import create_meta_agent
 from src.tools.orchestrator_tools import fetch_business, get_orchestrator_tools
 from src.tools.agent_wrapper_tools import (
     create_image_agent_wrapper_tool,
     create_video_agent_wrapper_tool,
     create_marketing_agent_wrapper_tool,
     create_analysis_agent_wrapper_tool,
+    create_meta_agent_wrapper_tool,
 )
 from src.agents.instructions import build_orchestrator_instructions
 
@@ -65,6 +67,13 @@ def create_orchestrator_agent(
         hooks=hooks,
     )
 
+    # Meta (Facebook Lead Ads) agent - sales acquisition
+    meta_agent = create_meta_agent()
+    meta_tool = create_meta_agent_wrapper_tool(
+        meta_agent=meta_agent,
+        hooks=hooks,
+    )
+
     # Orchestrator tools (Firebase storage/firestore/instagram)
     orchestrator_tools = get_orchestrator_tools()
 
@@ -75,7 +84,7 @@ def create_orchestrator_agent(
         name="orchestrator",
         handoff_description="Alt agentlari yoneten orchestrator.",
         instructions=build_orchestrator_instructions(today_date),
-        tools=[image_tool, video_tool, marketing_tool, analysis_tool, fetch_business, *orchestrator_tools],
+        tools=[image_tool, video_tool, marketing_tool, analysis_tool, meta_tool, fetch_business, *orchestrator_tools],
         tool_use_behavior="run_llm_again",
         output_type=str,
         model=model or model_settings.orchestrator_model or settings.openai_model,

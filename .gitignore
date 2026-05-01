@@ -4,9 +4,6 @@ logs/
 .env
 /.claude
 .claude/settings.local.json
-.claude/settings.local.json
-.claude/settings.local.json
-.claude/settings.local.json
-CLAUDE.md
-.claude/settings.local.json
-.claude/settings.local.json
+__pycache__/
+*.py[cod]
+.pytest_cache/
