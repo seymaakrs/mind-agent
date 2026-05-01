@@ -47,6 +47,12 @@ MindBot tek bir agent değil, bir **orchestrator** + altında 5 alt-agent + tool
 
 **Mevcut işletmeler:** MindID, Slowdays (UI'daki sağ üst dropdown).
 
+**Lead sorguları kaynak ayrımı (önemli):**
+- "kaç sıcak lead var" → **tüm kaynaklardan** sıcak leadler (Meta + Clay + LinkedIn + manuel)
+- "Meta'dan gelen sıcak leadler" → sadece Meta Ads kaynaklı
+- "Clay'den gelen leadler" → sadece Clay kaynaklı
+- Yani genel sorularda kaynak filtresi yok, kaynak adı geçince filtre devreye girer.
+
 **Önemli:** `business_id="satis_dashboard"` test için kullanılan **fake** ID — Firestore'da yok. Sadece NocoDB'ye direkt giden lead testlerinde işe yarar (NocoDB business_id kullanmıyor). UI'dan gönderdiğinde gerçek işletme ID'si gider.
 
 ---

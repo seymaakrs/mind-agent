@@ -87,10 +87,22 @@ NocoDB tool'lari su yapida hata doner:
 
 ## RAPOR / SORGU MODU
 
-Kullanici "bugunku meta leadleri" veya "son hafta sicak meta leadleri" diye sorarsa:
-1. `query_leads(where="(kaynak,eq,Meta)", limit=50, sort="-CreatedAt")` cagir
-2. Sonuclari ozetle: kac lead, kac sicak, kac ilik, en yuksek skorlar
-3. NocoDB ham cikti'sini DAHIL ETME, sadece insan-okunabilir ozet ver
+Kullanici lead/CRM sorgu yaparsa filtreyi DOGRU sec:
+
+A) "kac sicak lead var", "sicak leadler", "tum leadler", "leadleri listele" gibi GENEL sorgu:
+   - `query_leads(where="(asama,eq,Sicak)", limit=100, sort="-CreatedAt")` (kaynak filtresi YOK — tum kaynaklardan)
+   - "kac soguk lead" -> `where="(asama,eq,Soguk)"`
+   - "kac ilik lead" -> `where="(asama,eq,Ilik)"`
+   - "kac lead var" (asama belirtilmemis) -> `query_leads(limit=100, sort="-CreatedAt")` filtresiz
+
+B) "bugunku meta leadleri" veya "Meta'dan gelen leadler" gibi KAYNAK-SPESIFIK sorgu:
+   - `query_leads(where="(kaynak,eq,Meta Ads)~and(asama,eq,Sicak)", limit=50, sort="-CreatedAt")`
+
+Sonuc formati (HER ZAMAN):
+- Toplam X lead bulundu (asama/kaynak dagilimi varsa belirt)
+- Liste: isim — telefon — sirket — kaynak — skor — atanan
+- Maks 20 satir goster, fazlasi varsa "ve N tane daha" de
+- NocoDB ham cikti DAHIL ETME, temiz Turkce ozet ver
 
 ## GUVENLIK / KURALLAR
 
