@@ -65,8 +65,8 @@ def _missing_table_error(name: str) -> dict[str, Any]:
         "konum, web_sitesi, instagram, linkedin_url, google_puani, asama, lead_skoru, "
         "ihtiyac_notu, atanan_kisi, notlar. "
         "Webhook retry'lerinde duplicate uretmez (lookup-then-insert/patch). "
-        "kaynak: 'Meta' | 'LinkedIn' | 'Clay' | 'IG DM' | 'Referans' | 'Manuel'. "
-        "asama: 'Yeni' | 'Soguk' | 'Ilik' | 'Sicak' | 'Teklif' | 'Kazanildi' | 'Kayip'. "
+        "kaynak: 'Meta Ads' | 'LinkedIn' | 'Clay' | 'IG DM' | 'TikTok DM' | 'Referans' | 'Manuel'. "
+        "asama: 'Yeni' | 'Soguk' | 'Ilik' | 'Sicak' | 'Teklif' | 'Sozlesme' | 'Kazanildi' | 'Kayip' | 'Arsiv'. "
         "lead_skoru: 0-100."
     ),
     strict_mode=False,
