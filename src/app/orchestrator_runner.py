@@ -132,11 +132,19 @@ async def run_orchestrator_async(
     task_logger = TaskLogger(business_id=business_id, task_id=task_id)
     task_logger.start(user_input)
 
-    # Create orchestrator with task_logger for sub-agent Firebase logging
-    orchestrator = create_orchestrator(
-        task_logger=task_logger,
-        progress_queue=progress_queue,
-    )
+    # Hard bypass: if user input is a lead/CRM query, run meta_agent DIRECTLY
+    # instead of orchestrator. Prompt-level routing on gpt-4.1-mini was unreliable
+    # (model ignored CAPS/emoji/hard rules and chose query_documents).
+    # This guarantees correct routing without depending on LLM decisions.
+    if _is_lead_query(user_input):
+        from src.agents.sales.meta_agent import create_meta_agent
+        orchestrator = create_meta_agent()
+    else:
+        # Create orchestrator with task_logger for sub-agent Firebase logging
+        orchestrator = create_orchestrator(
+            task_logger=task_logger,
+            progress_queue=progress_queue,
+        )
 
     hooks = CliLoggingHooks(
         echo=False,
