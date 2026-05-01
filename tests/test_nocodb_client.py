@@ -27,20 +27,25 @@ def _mock_response(status: int, json_body=None, text_body: str = ""):
 class TestNocoDBClientCRUD:
     def test_create_record_success(self, client: NocoDBClient):
         with patch("httpx.Client") as MockClient:
-            MockClient.return_value.__enter__.return_value.request.return_value = (
-                _mock_response(200, {"Id": 42, "isim": "Ali"})
+            mock_request = MockClient.return_value.__enter__.return_value.request
+            mock_request.return_value = (
+                _mock_response(200, [{"Id": 42}])
             )
             result = client.create_record("tbl1", {"isim": "Ali"})
-            assert result == {"Id": 42, "isim": "Ali"}
+            assert result == {"Id": 42}
+            # NocoDB v2 expects POST body as ARRAY of records
+            kwargs = mock_request.call_args.kwargs
+            assert kwargs["json"] == [{"isim": "Ali"}]
 
     def test_update_record_includes_id_in_body(self, client: NocoDBClient):
         with patch("httpx.Client") as MockClient:
             mock_request = MockClient.return_value.__enter__.return_value.request
-            mock_request.return_value = _mock_response(200, {"Id": 7})
+            mock_request.return_value = _mock_response(200, [{"Id": 7}])
             client.update_record("tbl1", 7, {"asama": "Sicak"})
             args, kwargs = mock_request.call_args
             assert args[0] == "PATCH"
-            assert kwargs["json"] == {"Id": 7, "asama": "Sicak"}
+            # NocoDB v2 expects PATCH body as ARRAY of {Id, ...fields}
+            assert kwargs["json"] == [{"Id": 7, "asama": "Sicak"}]
 
     def test_list_records_passes_where_filter(self, client: NocoDBClient):
         with patch("httpx.Client") as MockClient:
@@ -88,7 +93,7 @@ class TestNocoDBClientUpsert:
             mock_request = MockClient.return_value.__enter__.return_value.request
             mock_request.side_effect = [
                 _mock_response(200, {"list": []}),  # lookup → empty
-                _mock_response(200, {"Id": 11, "external_id": "ext-9"}),  # POST
+                _mock_response(200, [{"Id": 11, "external_id": "ext-9"}]),  # POST array
             ]
             result = client.upsert_record(
                 "tbl1", "external_id", {"external_id": "ext-9", "isim": "X"}
@@ -104,7 +109,7 @@ class TestNocoDBClientUpsert:
             mock_request = MockClient.return_value.__enter__.return_value.request
             mock_request.side_effect = [
                 _mock_response(200, {"list": [{"Id": 7, "external_id": "ext-9"}]}),
-                _mock_response(200, {"Id": 7}),  # PATCH
+                _mock_response(200, [{"Id": 7}]),  # PATCH array
             ]
             result = client.upsert_record(
                 "tbl1", "external_id", {"external_id": "ext-9", "skor": 90}
@@ -113,9 +118,9 @@ class TestNocoDBClientUpsert:
             assert result["record"]["Id"] == 7
             methods = [call.args[0] for call in mock_request.call_args_list]
             assert methods == ["GET", "PATCH"]
-            # PATCH body must include the existing Id
+            # PATCH body must include the existing Id (as array of records)
             patch_body = mock_request.call_args_list[1].kwargs["json"]
-            assert patch_body["Id"] == 7
+            assert patch_body == [{"Id": 7, "external_id": "ext-9", "skor": 90}]
 
     def test_upsert_record_raises_if_unique_field_missing(self, client: NocoDBClient):
         with pytest.raises(ValueError, match="external_id"):

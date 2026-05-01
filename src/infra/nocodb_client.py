@@ -84,16 +84,29 @@ class NocoDBClient:
         return response.json()
 
     def create_record(self, table_id: str, fields: dict[str, Any]) -> dict[str, Any]:
-        """Insert one row. Returns the created record (with auto Id)."""
-        result = self._request("POST", self._records_url(table_id), json=fields)
+        """Insert one row. Returns the created record (with auto Id).
+
+        NocoDB v2 records API expects body as an ARRAY of records (even for one row).
+        Sending a single object yields 422 ERR_INVALID_PK_VALUE.
+        """
+        result = self._request("POST", self._records_url(table_id), json=[fields])
+        if isinstance(result, list) and result:
+            first = result[0]
+            return first if isinstance(first, dict) else {"raw": first}
         return result if isinstance(result, dict) else {"raw": result}
 
     def update_record(
         self, table_id: str, record_id: int | str, fields: dict[str, Any]
     ) -> dict[str, Any]:
-        """Update an existing row. Body must include the primary key (Id)."""
-        body = {"Id": record_id, **fields}
+        """Update an existing row. Body must include the primary key (Id).
+
+        NocoDB v2 expects PATCH body as ARRAY of {Id, ...fields}.
+        """
+        body = [{"Id": record_id, **fields}]
         result = self._request("PATCH", self._records_url(table_id), json=body)
+        if isinstance(result, list) and result:
+            first = result[0]
+            return first if isinstance(first, dict) else {"raw": first}
         return result if isinstance(result, dict) else {"raw": result}
 
     def get_record(self, table_id: str, record_id: int | str) -> dict[str, Any]:
