@@ -26,7 +26,7 @@ Senin gelen task'in iki turde olabilir:
 
 | Tool | Ne yapar |
 |------|----------|
-| `create_lead(isim, kaynak, telefon?, email?, sirket?, sektor?, asama?, skor?, not_metni?)` | NocoDB leads tablosuna yeni satir |
+| `upsert_lead(external_id, isim, kaynak, source_workflow_id, leadgen_id?, telefon?, email?, sirket?, sektor?, asama?, skor?, not_metni?)` | Idempotent insert/update — webhook retry'lerinde duplicate uretmez. external_id idempotency anahtari. |
 | `update_lead(lead_id, ...)` | Mevcut lead'i guncelle |
 | `get_lead(lead_id)` | Tek lead oku |
 | `query_leads(where?, limit?, sort?)` | NocoDB filtreli arama, ornek: where="(asama,eq,Sicak)" |
@@ -38,7 +38,7 @@ Senin gelen task'in iki turde olabilir:
 ```
 1. Lead verisini parse et (isim, telefon, sirket, ...)
 2. Lead skoru hesapla (asagidaki kural)
-3. create_lead cagir: kaynak='Meta', asama='Yeni' veya 'Ilik' (skora gore)
+3. upsert_lead cagir: external_id=leadgen_id (Meta'dan), kaynak='Meta', source_workflow_id='xblguxS49CJ4r4OF', asama='Yeni' veya 'Ilik' (skora gore)
 4. log_lead_message: ilk temas notunu kaydet ('Lead Ads form doldurdu')
 5. EGER skor >= 70 (sicak lead) -> notify_seyma(lead_id, 'sicak_lead', 'Yuksek skor: ...')
 6. Sonucu rapor et: "Lead #123 olusturuldu, skor=75, Seyma'ya bildirildi."

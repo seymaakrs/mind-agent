@@ -61,6 +61,67 @@ class TestNocoDBClientCRUD:
             assert args[1].endswith("/tbl1/records/5")
 
 
+class TestNocoDBClientUpsert:
+    """Idempotent upsert: lookup by unique field, then INSERT or PATCH."""
+
+    def test_find_by_field_returns_first_match(self, client: NocoDBClient):
+        with patch("httpx.Client") as MockClient:
+            mock_request = MockClient.return_value.__enter__.return_value.request
+            mock_request.return_value = _mock_response(
+                200, {"list": [{"Id": 9, "external_id": "ext-1"}]}
+            )
+            result = client.find_by_field("tbl1", "external_id", "ext-1")
+            assert result == {"Id": 9, "external_id": "ext-1"}
+            kwargs = mock_request.call_args.kwargs
+            assert kwargs["params"]["where"] == "(external_id,eq,ext-1)"
+            assert kwargs["params"]["limit"] == 1
+
+    def test_find_by_field_returns_none_when_empty(self, client: NocoDBClient):
+        with patch("httpx.Client") as MockClient:
+            MockClient.return_value.__enter__.return_value.request.return_value = (
+                _mock_response(200, {"list": []})
+            )
+            assert client.find_by_field("tbl1", "external_id", "missing") is None
+
+    def test_upsert_record_inserts_when_not_found(self, client: NocoDBClient):
+        with patch("httpx.Client") as MockClient:
+            mock_request = MockClient.return_value.__enter__.return_value.request
+            mock_request.side_effect = [
+                _mock_response(200, {"list": []}),  # lookup → empty
+                _mock_response(200, {"Id": 11, "external_id": "ext-9"}),  # POST
+            ]
+            result = client.upsert_record(
+                "tbl1", "external_id", {"external_id": "ext-9", "isim": "X"}
+            )
+            assert result["created"] is True
+            assert result["record"]["Id"] == 11
+            # Two HTTP calls: GET then POST
+            methods = [call.args[0] for call in mock_request.call_args_list]
+            assert methods == ["GET", "POST"]
+
+    def test_upsert_record_patches_when_found(self, client: NocoDBClient):
+        with patch("httpx.Client") as MockClient:
+            mock_request = MockClient.return_value.__enter__.return_value.request
+            mock_request.side_effect = [
+                _mock_response(200, {"list": [{"Id": 7, "external_id": "ext-9"}]}),
+                _mock_response(200, {"Id": 7}),  # PATCH
+            ]
+            result = client.upsert_record(
+                "tbl1", "external_id", {"external_id": "ext-9", "skor": 90}
+            )
+            assert result["created"] is False
+            assert result["record"]["Id"] == 7
+            methods = [call.args[0] for call in mock_request.call_args_list]
+            assert methods == ["GET", "PATCH"]
+            # PATCH body must include the existing Id
+            patch_body = mock_request.call_args_list[1].kwargs["json"]
+            assert patch_body["Id"] == 7
+
+    def test_upsert_record_raises_if_unique_field_missing(self, client: NocoDBClient):
+        with pytest.raises(ValueError, match="external_id"):
+            client.upsert_record("tbl1", "external_id", {"isim": "no key"})
+
+
 class TestNocoDBClientErrors:
     def test_http_500_raises_service_error_with_status(self, client: NocoDBClient):
         with patch("httpx.Client") as MockClient:

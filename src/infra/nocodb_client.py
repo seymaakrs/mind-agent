@@ -117,6 +117,44 @@ class NocoDBClient:
             params["sort"] = sort
         return self._request("GET", self._records_url(table_id), params=params)
 
+    def find_by_field(
+        self, table_id: str, field: str, value: Any
+    ) -> dict[str, Any] | None:
+        """Lookup the first record matching field=value. Returns None if not found.
+
+        Used as the first step of an idempotent upsert: check if a record with a
+        unique key (e.g. external_id, leadgen_id) already exists.
+        """
+        where = f"({field},eq,{value})"
+        result = self.list_records(table_id, where=where, limit=1)
+        rows = result.get("list", []) if isinstance(result, dict) else []
+        return rows[0] if rows else None
+
+    def upsert_record(
+        self, table_id: str, unique_field: str, fields: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Idempotent upsert keyed by `unique_field`.
+
+        Looks up the row by `fields[unique_field]`. If it exists, PATCHes the
+        remaining fields onto it; otherwise POSTs a new row. Returns:
+            {"created": bool, "record": dict}
+
+        Raises ValueError if `unique_field` is not present in `fields`.
+        Protects against duplicate INSERTs from webhook retries (P0 idempotency
+        — see customer_agent/docs/NOCODB-SCHEMA-V2.md).
+        """
+        if unique_field not in fields or fields[unique_field] in (None, ""):
+            raise ValueError(
+                f"upsert_record: '{unique_field}' must be present in fields"
+            )
+        existing = self.find_by_field(table_id, unique_field, fields[unique_field])
+        if existing is None:
+            record = self.create_record(table_id, fields)
+            return {"created": True, "record": record}
+        record_id = existing.get("Id") or existing.get("id")
+        record = self.update_record(table_id, record_id, fields)
+        return {"created": False, "record": record}
+
     def delete_record(self, table_id: str, record_id: int | str) -> dict[str, Any]:
         """Delete one row by primary key."""
         body = {"Id": record_id}

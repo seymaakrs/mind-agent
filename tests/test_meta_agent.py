@@ -17,7 +17,7 @@ class TestMetaAgentWiring:
         tool_names = [t.name for t in agent.tools]
         assert agent.name == "meta"
         assert set(tool_names) == {
-            "create_lead",
+            "upsert_lead",
             "update_lead",
             "get_lead",
             "query_leads",

@@ -54,13 +54,83 @@ def _missing_table_error(name: str) -> dict[str, Any]:
 
 
 @function_tool(
-    name_override="create_lead",
+    name_override="upsert_lead",
     description_override=(
-        "Create a new lead in NocoDB CRM (leads tablosu). "
-        "REQUIRED: isim. RECOMMENDED: telefon, email, sirket, sektor, kaynak, asama, skor, not. "
+        "Idempotent upsert: insert OR update by external_id (idempotency key). "
+        "REQUIRED: external_id, isim, kaynak, source_workflow_id. "
+        "OPTIONAL: leadgen_id (Meta retry guard), telefon, email, sirket, sektor, asama, skor, not. "
+        "Webhook retry'lerinde duplicate uretmez — schema UNIQUE(external_id) ile birlikte calisir. "
         "kaynak: 'Meta' | 'LinkedIn' | 'Clay' | 'IG DM' | 'Referans'. "
         "asama: 'Yeni' | 'Soguk' | 'Ilik' | 'Sicak' | 'Teklif' | 'Kazanildi' | 'Kayip'. "
-        "skor: 0-100 lead score (yuksek = sicak)."
+        "skor: 0-100 lead score."
+    ),
+    strict_mode=False,
+)
+async def upsert_lead(
+    external_id: str,
+    isim: str,
+    kaynak: str,
+    source_workflow_id: str,
+    leadgen_id: str | None = None,
+    telefon: str | None = None,
+    email: str | None = None,
+    sirket: str | None = None,
+    sektor: str | None = None,
+    asama: str = "Yeni",
+    skor: int = 50,
+    not_metni: str | None = None,
+) -> dict[str, Any]:
+    """Upsert a lead row keyed by external_id (idempotency).
+
+    See customer_agent/docs/NOCODB-SCHEMA-V2.md for the schema contract and
+    docs/ADR-001-database-boundaries.md for why CRM data lives only in NocoDB.
+    """
+    table_id = _resolve_leads_table()
+    if not table_id:
+        return _missing_table_error("leads")
+
+    fields: dict[str, Any] = {
+        "external_id": external_id,
+        "isim": isim,
+        "kaynak": kaynak,
+        "source_workflow_id": source_workflow_id,
+        "asama": asama,
+        "skor": skor,
+        "takip_sayisi": 0,
+        "seyma_bildirildi": False,
+    }
+    if leadgen_id:
+        fields["leadgen_id"] = leadgen_id
+    if telefon:
+        fields["telefon"] = telefon
+    if email:
+        fields["email"] = email
+    if sirket:
+        fields["sirket"] = sirket
+    if sektor:
+        fields["sektor"] = sektor
+    if not_metni:
+        fields["not"] = not_metni
+
+    try:
+        result = get_nocodb_client().upsert_record(table_id, "external_id", fields)
+        record = result["record"]
+        return {
+            "success": True,
+            "created": result["created"],
+            "lead_id": record.get("Id"),
+            "record": record,
+        }
+    except Exception as exc:
+        return classify_error(exc, "nocodb")
+
+
+@function_tool(
+    name_override="create_lead",
+    description_override=(
+        "DEPRECATED — use upsert_lead. Plain INSERT without idempotency, kept "
+        "only for legacy callers. New code MUST use upsert_lead to avoid "
+        "duplicate rows on webhook retries."
     ),
     strict_mode=False,
 )
@@ -75,7 +145,7 @@ async def create_lead(
     skor: int = 50,
     not_metni: str | None = None,
 ) -> dict[str, Any]:
-    """Insert a lead row into NocoDB."""
+    """Insert a lead row into NocoDB. DEPRECATED — prefer upsert_lead."""
     table_id = _resolve_leads_table()
     if not table_id:
         return _missing_table_error("leads")
@@ -289,7 +359,7 @@ async def notify_seyma(
 def get_nocodb_tools() -> list:
     """All NocoDB tools sales agentlari icin tek listede."""
     return [
-        create_lead,
+        upsert_lead,
         update_lead,
         get_lead,
         query_leads,
@@ -299,7 +369,8 @@ def get_nocodb_tools() -> list:
 
 
 __all__ = [
-    "create_lead",
+    "upsert_lead",
+    "create_lead",  # deprecated, kept for legacy callers
     "update_lead",
     "get_lead",
     "query_leads",
