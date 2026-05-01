@@ -16,6 +16,13 @@ _settings = get_settings()
 set_default_openai_key(_settings.openai_api_key)
 
 
+def _is_lead_query(text: str) -> bool:
+    """Detect if a user message is a lead/CRM query that must route to meta_agent_tool."""
+    import re
+    # Match 'lead' as a whole word or with common Turkish suffixes
+    return bool(re.search(r"\blead(s|ler|leri|lerin|lerden|lere)?\b", text, re.IGNORECASE))
+
+
 def _build_effective_input(user_input: str, ctx: dict[str, Any]) -> str:
     """Build effective input with business_id, references and extras injected."""
     business_id = ctx.get("business_id")
@@ -23,6 +30,18 @@ def _build_effective_input(user_input: str, ctx: dict[str, Any]) -> str:
     extras = ctx.get("extras")
 
     effective_input = user_input
+    # Pre-router: lead/CRM queries get a hard directive injected into the user message
+    # so the orchestrator LLM cannot ignore the routing rule.
+    if _is_lead_query(user_input):
+        effective_input = (
+            "[ROUTING DIRECTIVE — MANDATORY]\n"
+            "This message is a lead/CRM query. You MUST call meta_agent_tool directly. "
+            "DO NOT call query_documents, get_document, fetch_business, analysis_agent_tool, "
+            "or marketing_agent_tool. meta_agent_tool is the ONLY correct tool for this request. "
+            "Pass the user's question and business_id to meta_agent_tool, then return its result.\n"
+            "[/ROUTING DIRECTIVE]\n\n"
+            f"{effective_input}"
+        )
     if business_id:
         effective_input = f"[Business ID: {business_id}]\n{effective_input}"
     if references:
