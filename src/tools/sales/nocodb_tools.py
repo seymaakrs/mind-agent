@@ -26,15 +26,17 @@ from src.infra.nocodb_client import get_nocodb_client
 
 
 def _resolve_leads_table() -> str | None:
+    """Leadler tablosu (Beyza'nin live schema). NOCODB_LEADS_TABLE_ID env'inden okur."""
     return get_settings().nocodb_leads_table_id
 
 
 def _resolve_messages_table() -> str | None:
+    """Etkilesimler tablosu (mesajlar + bildirimler ortak). NOCODB_MESSAGES_TABLE_ID."""
     return get_settings().nocodb_messages_table_id
 
 
-def _resolve_notifications_table() -> str | None:
-    return get_settings().nocodb_notifications_table_id
+# notify_seyma artik Etkilesimler'e yaziyor (tur='bildirim'),
+# ayri seyma_notifications tablosu kullanilmiyor.
 
 
 def _missing_table_error(name: str) -> dict[str, Any]:
@@ -57,33 +59,43 @@ def _missing_table_error(name: str) -> dict[str, Any]:
     name_override="upsert_lead",
     description_override=(
         "Idempotent upsert: insert OR update by external_id (idempotency key). "
-        "REQUIRED: external_id, isim, kaynak, source_workflow_id. "
-        "OPTIONAL: leadgen_id (Meta retry guard), telefon, email, sirket, sektor, asama, skor, not. "
-        "Webhook retry'lerinde duplicate uretmez — schema UNIQUE(external_id) ile birlikte calisir. "
-        "kaynak: 'Meta' | 'LinkedIn' | 'Clay' | 'IG DM' | 'Referans'. "
+        "Yazdigi tablo: NocoDB 'Leadler' (Beyza'nin n8n workflow'larinin yazdigi tablo). "
+        "REQUIRED: external_id, ad_soyad, kaynak, source_workflow_id. "
+        "OPTIONAL: leadgen_id (Meta retry guard), telefon, email, sirket_adi, sektor, "
+        "konum, web_sitesi, instagram, linkedin_url, google_puani, asama, lead_skoru, "
+        "ihtiyac_notu, atanan_kisi, notlar. "
+        "Webhook retry'lerinde duplicate uretmez (lookup-then-insert/patch). "
+        "kaynak: 'Meta' | 'LinkedIn' | 'Clay' | 'IG DM' | 'Referans' | 'Manuel'. "
         "asama: 'Yeni' | 'Soguk' | 'Ilik' | 'Sicak' | 'Teklif' | 'Kazanildi' | 'Kayip'. "
-        "skor: 0-100 lead score."
+        "lead_skoru: 0-100."
     ),
     strict_mode=False,
 )
 async def upsert_lead(
     external_id: str,
-    isim: str,
+    ad_soyad: str,
     kaynak: str,
     source_workflow_id: str,
     leadgen_id: str | None = None,
     telefon: str | None = None,
     email: str | None = None,
-    sirket: str | None = None,
+    sirket_adi: str | None = None,
     sektor: str | None = None,
+    konum: str | None = None,
+    web_sitesi: str | None = None,
+    instagram: str | None = None,
+    linkedin_url: str | None = None,
+    google_puani: int | None = None,
     asama: str = "Yeni",
-    skor: int = 50,
-    not_metni: str | None = None,
+    lead_skoru: int = 50,
+    ihtiyac_notu: str | None = None,
+    atanan_kisi: str | None = None,
+    notlar: str | None = None,
 ) -> dict[str, Any]:
-    """Upsert a lead row keyed by external_id (idempotency).
+    """Upsert a lead row in 'Leadler' keyed by external_id (idempotency).
 
-    See customer_agent/docs/NOCODB-SCHEMA-V2.md for the schema contract and
-    docs/ADR-001-database-boundaries.md for why CRM data lives only in NocoDB.
+    Aligns with Beyza's NocoDB schema (n8n workflows write to the same table).
+    See customer_agent/docs/NOCODB-SCHEMA-V2.md for the live contract.
     """
     table_id = _resolve_leads_table()
     if not table_id:
@@ -91,13 +103,11 @@ async def upsert_lead(
 
     fields: dict[str, Any] = {
         "external_id": external_id,
-        "isim": isim,
+        "ad_soyad": ad_soyad,
         "kaynak": kaynak,
         "source_workflow_id": source_workflow_id,
         "asama": asama,
-        "skor": skor,
-        "takip_sayisi": 0,
-        "seyma_bildirildi": False,
+        "lead_skoru": lead_skoru,
     }
     if leadgen_id:
         fields["leadgen_id"] = leadgen_id
@@ -105,12 +115,26 @@ async def upsert_lead(
         fields["telefon"] = telefon
     if email:
         fields["email"] = email
-    if sirket:
-        fields["sirket"] = sirket
+    if sirket_adi:
+        fields["sirket_adi"] = sirket_adi
     if sektor:
         fields["sektor"] = sektor
-    if not_metni:
-        fields["not"] = not_metni
+    if konum:
+        fields["konum"] = konum
+    if web_sitesi:
+        fields["web_sitesi"] = web_sitesi
+    if instagram:
+        fields["instagram"] = instagram
+    if linkedin_url:
+        fields["linkedin_url"] = linkedin_url
+    if google_puani is not None:
+        fields["google_puani"] = google_puani
+    if ihtiyac_notu:
+        fields["ihtiyac_notu"] = ihtiyac_notu
+    if atanan_kisi:
+        fields["atanan_kisi"] = atanan_kisi
+    if notlar:
+        fields["notlar"] = notlar
 
     try:
         result = get_nocodb_client().upsert_record(table_id, "external_id", fields)
@@ -129,45 +153,42 @@ async def upsert_lead(
     name_override="create_lead",
     description_override=(
         "DEPRECATED — use upsert_lead. Plain INSERT without idempotency, kept "
-        "only for legacy callers. New code MUST use upsert_lead to avoid "
-        "duplicate rows on webhook retries."
+        "only for legacy callers. New code MUST use upsert_lead."
     ),
     strict_mode=False,
 )
 async def create_lead(
-    isim: str,
+    ad_soyad: str,
     kaynak: str,
     telefon: str | None = None,
     email: str | None = None,
-    sirket: str | None = None,
+    sirket_adi: str | None = None,
     sektor: str | None = None,
     asama: str = "Yeni",
-    skor: int = 50,
-    not_metni: str | None = None,
+    lead_skoru: int = 50,
+    notlar: str | None = None,
 ) -> dict[str, Any]:
-    """Insert a lead row into NocoDB. DEPRECATED — prefer upsert_lead."""
+    """DEPRECATED — Insert a lead row into Leadler. Prefer upsert_lead."""
     table_id = _resolve_leads_table()
     if not table_id:
         return _missing_table_error("leads")
 
     fields: dict[str, Any] = {
-        "isim": isim,
+        "ad_soyad": ad_soyad,
         "kaynak": kaynak,
         "asama": asama,
-        "skor": skor,
-        "takip_sayisi": 0,
-        "seyma_bildirildi": False,
+        "lead_skoru": lead_skoru,
     }
     if telefon:
         fields["telefon"] = telefon
     if email:
         fields["email"] = email
-    if sirket:
-        fields["sirket"] = sirket
+    if sirket_adi:
+        fields["sirket_adi"] = sirket_adi
     if sektor:
         fields["sektor"] = sektor
-    if not_metni:
-        fields["not"] = not_metni
+    if notlar:
+        fields["notlar"] = notlar
 
     try:
         record = get_nocodb_client().create_record(table_id, fields)
@@ -179,21 +200,26 @@ async def create_lead(
 @function_tool(
     name_override="update_lead",
     description_override=(
-        "Update an existing lead. REQUIRED: lead_id. "
-        "Pass any subset of: asama, skor, son_iletisim, takip_sayisi, seyma_bildirildi, not_metni."
+        "Update an existing lead in Leadler. REQUIRED: lead_id. "
+        "Pass any subset of: asama, lead_skoru, ihtiyac_notu, atanan_kisi, notlar, "
+        "konum, web_sitesi, instagram, linkedin_url, google_puani."
     ),
     strict_mode=False,
 )
 async def update_lead(
     lead_id: int,
     asama: str | None = None,
-    skor: int | None = None,
-    son_iletisim: str | None = None,
-    takip_sayisi: int | None = None,
-    seyma_bildirildi: bool | None = None,
-    not_metni: str | None = None,
+    lead_skoru: int | None = None,
+    ihtiyac_notu: str | None = None,
+    atanan_kisi: str | None = None,
+    notlar: str | None = None,
+    konum: str | None = None,
+    web_sitesi: str | None = None,
+    instagram: str | None = None,
+    linkedin_url: str | None = None,
+    google_puani: int | None = None,
 ) -> dict[str, Any]:
-    """Patch fields on a lead row. Only non-None args are sent."""
+    """Patch fields on a Leadler row. Only non-None args are sent."""
     table_id = _resolve_leads_table()
     if not table_id:
         return _missing_table_error("leads")
@@ -201,16 +227,24 @@ async def update_lead(
     fields: dict[str, Any] = {}
     if asama is not None:
         fields["asama"] = asama
-    if skor is not None:
-        fields["skor"] = skor
-    if son_iletisim is not None:
-        fields["son_iletisim"] = son_iletisim
-    if takip_sayisi is not None:
-        fields["takip_sayisi"] = takip_sayisi
-    if seyma_bildirildi is not None:
-        fields["seyma_bildirildi"] = seyma_bildirildi
-    if not_metni is not None:
-        fields["not"] = not_metni
+    if lead_skoru is not None:
+        fields["lead_skoru"] = lead_skoru
+    if ihtiyac_notu is not None:
+        fields["ihtiyac_notu"] = ihtiyac_notu
+    if atanan_kisi is not None:
+        fields["atanan_kisi"] = atanan_kisi
+    if notlar is not None:
+        fields["notlar"] = notlar
+    if konum is not None:
+        fields["konum"] = konum
+    if web_sitesi is not None:
+        fields["web_sitesi"] = web_sitesi
+    if instagram is not None:
+        fields["instagram"] = instagram
+    if linkedin_url is not None:
+        fields["linkedin_url"] = linkedin_url
+    if google_puani is not None:
+        fields["google_puani"] = google_puani
 
     if not fields:
         return {"success": False, "error": "No fields to update."}
@@ -271,31 +305,64 @@ async def query_leads(
 @function_tool(
     name_override="log_lead_message",
     description_override=(
-        "Append a message to lead_messages tablosu. "
-        "REQUIRED: lead_id, kanal, yon, mesaj. "
-        "kanal: 'LinkedIn' | 'IG' | 'WhatsApp' | 'Email' | 'Meta'. "
-        "yon: 'giden' | 'gelen'."
+        "Append a message to Etkilesimler tablosu (Beyza'nin live schema). "
+        "REQUIRED: lead_adi (Leadler.ad_soyad ile string match), kanal, yon, mesaj_icerigi. "
+        "OPTIONAL: external_message_id (idempotency, ornegin WhatsApp wamid), tur, sonuc, agent, notlar. "
+        "kanal: 'LinkedIn' | 'IG' | 'WhatsApp' | 'Email' | 'Meta' | 'SMS'. "
+        "yon: 'giden' | 'gelen'. "
+        "agent: 'meta' | 'takip' | 'itiraz' | 'upsell' | 'referans' | 'manuel'."
     ),
     strict_mode=False,
 )
 async def log_lead_message(
-    lead_id: int,
+    lead_adi: str,
     kanal: str,
     yon: str,
-    mesaj: str,
+    mesaj_icerigi: str,
+    external_message_id: str | None = None,
+    tur: str | None = None,
+    sonuc: str | None = None,
+    agent: str | None = None,
+    notlar: str | None = None,
+    otomatik_mi: bool = True,
 ) -> dict[str, Any]:
+    """Append a row to Etkilesimler. Aligns with Beyza's n8n workflow schema."""
     table_id = _resolve_messages_table()
     if not table_id:
         return _missing_table_error("lead_messages")
 
-    fields = {
-        "lead_id": lead_id,
+    fields: dict[str, Any] = {
+        "lead_adi": lead_adi,
+        "tarih": datetime.utcnow().isoformat(),
         "kanal": kanal,
         "yon": yon,
-        "mesaj": mesaj,
+        "mesaj_icerigi": mesaj_icerigi,
+        "otomatik_mi": otomatik_mi,
     }
+    if external_message_id:
+        fields["external_message_id"] = external_message_id
+    if tur:
+        fields["tur"] = tur
+    if sonuc:
+        fields["sonuc"] = sonuc
+    if agent:
+        fields["agent"] = agent
+    if notlar:
+        fields["notlar"] = notlar
+
     try:
-        record = get_nocodb_client().create_record(table_id, fields)
+        # Idempotency: external_message_id varsa upsert, yoksa duz insert
+        client = get_nocodb_client()
+        if external_message_id:
+            result = client.upsert_record(table_id, "external_message_id", fields)
+            record = result["record"]
+            return {
+                "success": True,
+                "created": result["created"],
+                "message_id": record.get("Id"),
+                "record": record,
+            }
+        record = client.create_record(table_id, fields)
         return {"success": True, "message_id": record.get("Id"), "record": record}
     except Exception as exc:
         return classify_error(exc, "nocodb")
@@ -304,46 +371,48 @@ async def log_lead_message(
 @function_tool(
     name_override="notify_seyma",
     description_override=(
-        "Push a Seyma notification (seyma_notifications tablosu). "
-        "REQUIRED: lead_id, tetikleyici. "
-        "tetikleyici: 'sicak_lead' | '2_itiraz' | 'teklif_zamani' | 'manuel'. "
-        "Side-effect: also marks the lead as seyma_bildirildi=True if tetikleyici='sicak_lead'."
+        "Send a Seyma notification by writing a 'bildirim' row to Etkilesimler. "
+        "Beyza'nin n8n 'Send Hot Lead Alert (Gmail)' node'u sicak lead'leri "
+        "Seyma'ya zaten Gmail ile bildiriyor — bu tool ek olarak CRM trail birakir. "
+        "REQUIRED: lead_adi, tetikleyici. "
+        "Side-effect: tetikleyici='sicak_lead' ise Leadler.asama='Sicak' yapilir."
     ),
     strict_mode=False,
 )
 async def notify_seyma(
-    lead_id: int,
+    lead_adi: str,
     tetikleyici: str,
     not_metni: str | None = None,
+    lead_id: int | None = None,
 ) -> dict[str, Any]:
-    table_id = _resolve_notifications_table()
-    if not table_id:
-        return _missing_table_error("seyma_notifications")
+    """Log a Seyma notification to Etkilesimler + optionally update Leadler.asama."""
+    etk_table = _resolve_messages_table()
+    if not etk_table:
+        return _missing_table_error("lead_messages")
 
     fields: dict[str, Any] = {
-        "lead_id": lead_id,
-        "tetikleyici": tetikleyici,
-        "durum": "bekliyor",
+        "lead_adi": lead_adi,
+        "tarih": datetime.utcnow().isoformat(),
+        "kanal": "Internal",
+        "yon": "giden",
+        "tur": "bildirim",
+        "agent": "meta",
+        "otomatik_mi": True,
+        "mesaj_icerigi": f"Seyma bildirimi: {tetikleyici}" + (f" — {not_metni}" if not_metni else ""),
     }
-    if not_metni:
-        fields["not"] = not_metni
 
     try:
         client = get_nocodb_client()
-        record = client.create_record(table_id, fields)
+        record = client.create_record(etk_table, fields)
 
-        # Sicak lead ise leads tablosunda da bayragi kaldir
-        if tetikleyici == "sicak_lead":
+        # Sicak lead ise Leadler tablosunda asama'yi guncelle
+        if tetikleyici == "sicak_lead" and lead_id:
             leads_table = _resolve_leads_table()
             if leads_table:
                 client.update_record(
                     leads_table,
                     lead_id,
-                    {
-                        "seyma_bildirildi": True,
-                        "asama": "Sicak",
-                        "son_iletisim": datetime.utcnow().isoformat(),
-                    },
+                    {"asama": "Sicak"},
                 )
 
         return {"success": True, "notification_id": record.get("Id"), "record": record}
