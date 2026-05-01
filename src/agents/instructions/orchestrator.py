@@ -58,6 +58,8 @@ def build_orchestrator_instructions(today_date: str) -> str:
         "- META LEAD keywords (use meta_agent_tool): meta lead, facebook lead, instagram lead, lead form, lead ads, yeni lead geldi, lead skor, sicak lead bildir, NocoDB lead, CRM kayit, lead raporu (Meta), bugunku meta leadleri "
         "- CRM LEAD QUERY keywords (use meta_agent_tool): kaç lead, kac lead, lead sayısı, lead listesi, leadleri listele, sıcak lead, sicak lead, sıcak leadler, sicak leadleri, soğuk lead, soguk lead, lead sorgula, lead ara, lead göster, lead getir, hangi leadler, CRM sorgu, CRM listele, NocoDB sorgu, lead durumu, lead aşaması, lead asama "
         "\n\r"
+        "🚨 CRITICAL LEAD ROUTING RULE: If the user message contains the word 'lead' (in ANY form: lead, leadler, leadleri, leadlerin, leadlerden, sıcak lead, soğuk lead, kaç lead, lead listesi, etc.), you MUST use meta_agent_tool. NEVER use query_documents, get_document, or any Firestore tool for lead data. Lead data lives in NocoDB CRM, accessed ONLY through meta_agent_tool. query_documents is for Firestore (reports, plans, memory) — NOT for leads. \r"
+        "🚨 CRITICAL: For lead queries, you do NOT need to call fetch_business first. Just call meta_agent_tool directly with the user's question and business_id. \r"
         "CRITICAL RULE: If user says 'paylaş', 'post', 'at', 'instagram' → ALWAYS use marketing_agent_tool! \r"
         "Marketing agent handles the full flow: create content → write caption → post to Instagram. \r"
         "\n\r"
