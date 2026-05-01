@@ -77,10 +77,12 @@ DRY_RUN=false             # true: API cagirmadan prompt logla
 
 **Analysis:** `save_swot_report`, `save_seo_report` (v2+GEO), `save_seo_keywords`, `save_seo_summary` (v2+GEO), `get_seo_keywords`, `get_reports`, `save_instagram_report`
 
-**Sales/Meta (NocoDB CRM):** `create_lead`, `update_lead`, `get_lead`, `query_leads`, `log_lead_message`, `notify_seyma`
+**Sales/Meta (NocoDB CRM):** `upsert_lead` (idempotent, ana tool), `update_lead`, `get_lead`, `query_leads`, `log_lead_message`, `notify_seyma`
+- `create_lead` DEPRECATED (kod tabanında duruyor ama agent listesinde yok — webhook retry'lerinde duplicate üretiyordu)
 - Wrapper: `meta_agent_tool` (orchestrator routing)
 - Trigger: n8n Facebook Lead Ads -> POST /task with extras.lead_data
-- Akis: lead parse -> skor hesapla -> create_lead -> log_lead_message -> sicaksa notify_seyma
+- Akis: lead parse -> skor hesapla -> **upsert_lead (external_id ile idempotent)** -> log_lead_message -> sicaksa notify_seyma
+- Live idempotency kanıtlandı (2026-05-01): aynı external_id ile 2 task → NocoDB'de 1 kayıt
 
 ## Kritik Akislar
 
@@ -96,10 +98,21 @@ DRY_RUN=false             # true: API cagirmadan prompt logla
 
 ## Docker Deployment
 
-**Guncel Versiyon:** `v1.18.0`
+**Guncel Versiyon:** `v1.20.0` (2026-05-01 — production)
+**Cloud Run Revision:** `agents-sdk-api-00009-667`
+**Cloud Run URL:** `https://agents-sdk-api-704233028546.us-central1.run.app`
 **GCP Project:** `instagram-post-bot-471518`
 **Registry:** Artifact Registry (us-central1)
-**Image:** `us-central1-docker.pkg.dev/instagram-post-bot-471518/agents-sdk/agents-sdk-api:v1.18.0`
+**Image:** `us-central1-docker.pkg.dev/instagram-post-bot-471518/agents-sdk/agents-sdk-api:v1.20.0`
+
+**v1.20.0 Yenilikler:**
+- Sales Agent (Meta) + NocoDB CRM tools entegre
+- `upsert_lead` idempotent tool (external_id key)
+- `nocodb_client` array body fix (NocoDB v2 records API requirement)
+- Firebase Secret Manager üzerinden okunuyor (env var değil)
+
+**Secrets (Cloud Run env'de değil, Secret Manager'da):**
+- `FIREBASE_CREDENTIALS_FILE` → secret `firebase-credentials:latest` (key id 52b2405d, mindid-75079 SA)
 
 ```bash
 docker build -t agents-sdk-api:v1.16.1 .
