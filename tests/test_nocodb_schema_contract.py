@@ -31,41 +31,35 @@ except ImportError:  # pragma: no cover
 
 
 # Expected schema — mirrors customer_agent/docs/NOCODB-SCHEMA-V2.md
+# Beyza'nin canli production schemasi (Leadler + Etkilesimler).
 EXPECTED_LEADS = {
     "required": {
-        "external_id", "kaynak", "source_workflow_id", "isim",
-        "asama", "takip_sayisi", "seyma_bildirildi",
+        "ad_soyad", "kaynak", "asama",
     },
     "optional": {
-        "leadgen_id", "sirket", "email", "telefon", "sektor",
-        "skor", "not", "son_iletisim",
+        "external_id", "leadgen_id", "source_workflow_id",
+        "email", "telefon", "sirket_adi", "pozisyon", "sektor",
+        "konum", "web_sitesi", "instagram", "linkedin_url",
+        "google_puani", "lead_skoru", "ihtiyac_notu",
+        "atanan_kisi", "notlar",
     },
     "unique": {"external_id", "leadgen_id"},
 }
 
 EXPECTED_LEAD_MESSAGES = {
     "required": {
-        "lead_id", "yon", "kanal", "icerik", "source_workflow_id",
+        "lead_adi", "tarih", "kanal", "yon",
+        "mesaj_icerigi", "otomatik_mi",
     },
-    "optional": {"external_message_id", "meta"},
+    "optional": {
+        "external_message_id", "tur", "sonuc", "agent", "notlar",
+    },
     "unique": {"external_message_id"},
 }
 
-EXPECTED_SEYMA_NOTIFICATIONS = {
-    "required": {
-        "tur", "baslik", "source_workflow_id", "okundu", "oncelik",
-    },
-    "optional": {"lead_id", "icerik", "okundu_at"},
-    "unique": set(),
-}
-
 TABLES = {
-    "leads": ("NOCODB_LEADS_TABLE_ID", EXPECTED_LEADS),
-    "lead_messages": ("NOCODB_MESSAGES_TABLE_ID", EXPECTED_LEAD_MESSAGES),
-    "seyma_notifications": (
-        "NOCODB_NOTIFICATIONS_TABLE_ID",
-        EXPECTED_SEYMA_NOTIFICATIONS,
-    ),
+    "Leadler": ("NOCODB_LEADS_TABLE_ID", EXPECTED_LEADS),
+    "Etkilesimler": ("NOCODB_MESSAGES_TABLE_ID", EXPECTED_LEAD_MESSAGES),
 }
 
 # NocoDB system columns that should be tolerated as "extra"
@@ -83,6 +77,11 @@ def _nocodb_configured() -> bool:
     if not (os.getenv("NOCODB_API_TOKEN_READ") or os.getenv("NOCODB_API_TOKEN")):
         return False
     return all(os.getenv(env) for env, _ in TABLES.values())
+
+
+# Etkilesimler tablosu hem mesajlar hem bildirimler icin ortak kullaniliyor
+# (notify_seyma 'tur=bildirim' satiri yaziyor). Bu yuzden seyma_notifications
+# ayri tablo yok — kontract test sadece Leadler + Etkilesimler kapsiyor.
 
 
 pytestmark = pytest.mark.skipif(
