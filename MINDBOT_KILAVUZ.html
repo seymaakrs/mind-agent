@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>MindBot Kullanım Kılavuzu — Şeyma için</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, system-ui, "Segoe UI", sans-serif;
+    background: #0e1116; color: #e6edf3;
+    line-height: 1.6; padding: 40px 20px;
+  }
+  .container { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 2.2em; margin-bottom: 8px; color: #58a6ff; }
+  .subtitle { color: #8b949e; margin-bottom: 32px; font-size: 1.1em; }
+  h2 {
+    font-size: 1.5em; margin: 36px 0 12px; padding-bottom: 8px;
+    border-bottom: 2px solid #30363d; color: #58a6ff;
+  }
+  h3 { font-size: 1.15em; margin: 20px 0 10px; color: #f0883e; }
+  p, li { margin-bottom: 8px; }
+  ul, ol { padding-left: 24px; margin-bottom: 16px; }
+  code {
+    background: #161b22; padding: 2px 6px; border-radius: 4px;
+    font-size: 0.9em; color: #ff7b72;
+  }
+  .card {
+    background: #161b22; border: 1px solid #30363d;
+    border-radius: 10px; padding: 20px; margin: 16px 0;
+  }
+  .good { border-left: 4px solid #3fb950; }
+  .bad { border-left: 4px solid #f85149; }
+  .info { border-left: 4px solid #58a6ff; }
+  .warning { border-left: 4px solid #d29922; }
+  .label {
+    display: inline-block; padding: 2px 10px; border-radius: 12px;
+    font-size: 0.8em; font-weight: 600; margin-bottom: 8px;
+  }
+  .label-good { background: #1a4d2e; color: #3fb950; }
+  .label-bad { background: #4d1a1a; color: #f85149; }
+  .label-info { background: #1a3a5d; color: #58a6ff; }
+  .label-warn { background: #4d3a1a; color: #d29922; }
+  table {
+    width: 100%; border-collapse: collapse; margin: 16px 0;
+    background: #161b22; border-radius: 8px; overflow: hidden;
+  }
+  th, td { padding: 12px; text-align: left; border-bottom: 1px solid #30363d; }
+  th { background: #0d1117; color: #58a6ff; font-weight: 600; }
+  .emoji { font-size: 1.4em; vertical-align: middle; }
+  .flow {
+    display: flex; align-items: center; justify-content: space-around;
+    margin: 24px 0; flex-wrap: wrap; gap: 12px;
+  }
+  .flow-step {
+    background: #161b22; border: 2px solid #30363d;
+    padding: 16px; border-radius: 10px; text-align: center;
+    min-width: 130px; flex: 1;
+  }
+  .flow-step .num {
+    background: #58a6ff; color: #0e1116;
+    width: 28px; height: 28px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 700; margin-bottom: 8px;
+  }
+  .flow-arrow { color: #8b949e; font-size: 1.5em; }
+  .agent-box {
+    background: #161b22; border: 1px solid #30363d;
+    border-radius: 8px; padding: 16px; margin: 8px 0;
+    display: grid; grid-template-columns: auto 1fr; gap: 16px;
+    align-items: center;
+  }
+  .agent-icon {
+    font-size: 2em; width: 60px; text-align: center;
+  }
+  .footer {
+    margin-top: 48px; padding-top: 24px;
+    border-top: 1px solid #30363d; color: #8b949e; font-size: 0.9em;
+  }
+  .highlight {
+    background: linear-gradient(120deg, #1a3a5d 0%, #1a4d2e 100%);
+    padding: 16px; border-radius: 8px; margin: 16px 0;
+  }
+  .example {
+    background: #0d1117; border-left: 3px solid #58a6ff;
+    padding: 12px 16px; margin: 8px 0; border-radius: 4px;
+    font-style: italic;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>🤖 MindBot Kullanım Kılavuzu</h1>
+<p class="subtitle">Şeyma için sade anlatım — 5 dakikada her şeyi öğren</p>
+
+<div class="highlight">
+  <strong>👋 Selam Şeyma!</strong> Bu kılavuzu MindBot'u sorunsuz kullanasın diye hazırladık.
+  Teknik detay yok, sadece "bu nasıl çalışır, nasıl kullanırım" anlatıyor.
+</div>
+
+<h2>🏠 MindBot Nedir?</h2>
+
+<p>MindBot, sana yardım eden bir yapay zeka asistanı. Ama tek bir robot değil — <strong>arka planda 5 farklı uzman robot</strong> var, sen bir şey sorduğunda merkezdeki "yönetici robot" hangi uzmana götüreceğine karar veriyor.</p>
+
+<div class="card info">
+  <span class="label label-info">RESTORAN BENZETMESİ 🍽️</span>
+  <p>MindBot bir restoran gibi:</p>
+  <ul>
+    <li><strong>Sen müşterisin</strong> — siparişi veriyorsun (mesaj yazıyorsun)</li>
+    <li><strong>Garson = Orchestrator</strong> — siparişi alıp doğru aşçıya götürüyor</li>
+    <li><strong>5 aşçı = Alt-agent'lar</strong> — her biri farklı yemek yapıyor</li>
+    <li><strong>Mutfak malzemeleri = Tool'lar</strong> — NocoDB, Firestore, Instagram API</li>
+  </ul>
+</div>
+
+<h2>👥 5 Uzman Robot</h2>
+
+<div class="agent-box">
+  <div class="agent-icon">📊</div>
+  <div>
+    <strong>Meta Agent</strong> — Lead/CRM işleri<br>
+    <span style="color:#8b949e;font-size:0.9em">"kaç sıcak lead var", "leadleri listele", "lead durumu"</span>
+  </div>
+</div>
+
+<div class="agent-box">
+  <div class="agent-icon">📱</div>
+  <div>
+    <strong>Marketing Agent</strong> — Instagram paylaşım, plan, takvim<br>
+    <span style="color:#8b949e;font-size:0.9em">"Instagram'a paylaş", "haftalık plan yap", "metrik göster"</span>
+  </div>
+</div>
+
+<div class="agent-box">
+  <div class="agent-icon">🔍</div>
+  <div>
+    <strong>Analysis Agent</strong> — SEO, SWOT, web araştırma<br>
+    <span style="color:#8b949e;font-size:0.9em">"SEO analizi yap", "rakip incele", "trend araştır"</span>
+  </div>
+</div>
+
+<div class="agent-box">
+  <div class="agent-icon">🎨</div>
+  <div>
+    <strong>Image Agent</strong> — Görsel üretimi<br>
+    <span style="color:#8b949e;font-size:0.9em">"şu konuda görsel oluştur", "poster hazırla"</span>
+  </div>
+</div>
+
+<div class="agent-box">
+  <div class="agent-icon">🎬</div>
+  <div>
+    <strong>Video Agent</strong> — Video + ses üretimi<br>
+    <span style="color:#8b949e;font-size:0.9em">"video oluştur", "ses ekle", "müzik koy"</span>
+  </div>
+</div>
+
+<h2>🎯 Komut Yazmanın Sırrı</h2>
+
+<p>MindBot'a ne kadar net konuşursan o kadar net cevap alırsın. İşte örnekler:</p>
+
+<h3>✅ İYİ Komutlar</h3>
+
+<div class="card good">
+  <span class="label label-good">LEAD/CRM</span>
+  <div class="example">"kaç sıcak lead var, listele"</div>
+  <div class="example">"bugün gelen leadleri göster"</div>
+  <div class="example">"Meta'dan gelen son 10 lead'i listele"</div>
+  <div class="example">"+90 555 numaralı lead'i bul"</div>
+</div>
+
+<div class="card good">
+  <span class="label label-good">INSTAGRAM</span>
+  <div class="example">"MindID için yarın sabaha bir post hazırla, konu: yapay zeka eğitimi"</div>
+  <div class="example">"bu hafta planlanmış postları göster"</div>
+  <div class="example">"bu görseli Instagram'a paylaş, caption: ..."</div>
+</div>
+
+<div class="card good">
+  <span class="label label-good">ANALİZ</span>
+  <div class="example">"MindID websitesinin SEO analizini yap"</div>
+  <div class="example">"Slowdays için SWOT analizi hazırla"</div>
+  <div class="example">"OpenAI'ın son güncellemesini araştır, kısa rapor yaz"</div>
+</div>
+
+<h3>❌ KÖTÜ Komutlar</h3>
+
+<table>
+  <tr><th>Yazma ❌</th><th>Yaz ✅</th><th>Neden?</th></tr>
+  <tr>
+    <td>"leadler ne durumda"</td>
+    <td>"kaç aktif lead var, durumlarına göre grupla"</td>
+    <td>Çok belirsiz, robot tahmin edemiyor</td>
+  </tr>
+  <tr>
+    <td>"şuna bak"</td>
+    <td>[Referans Ekle] + "bunu Instagram'a paylaş"</td>
+    <td>"Şu" neyi gösteriyor belli değil</td>
+  </tr>
+  <tr>
+    <td>"post at"</td>
+    <td>"MindID için 'AI eğitim kayıtları' postu hazırla ve paylaş"</td>
+    <td>Hangi içerik, hangi işletme?</td>
+  </tr>
+  <tr>
+    <td>"rapor hazırla"</td>
+    <td>"MindID için Mayıs SEO raporunu hazırla"</td>
+    <td>Ne raporu, hangi konuda?</td>
+  </tr>
+</table>
+
+<h2>🧭 Kullanım Akışı</h2>
+
+<div class="flow">
+  <div class="flow-step">
+    <div class="num">1</div>
+    <div>İşletme seç</div>
+    <small style="color:#8b949e">Sağ üst dropdown</small>
+  </div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step">
+    <div class="num">2</div>
+    <div>Komut yaz</div>
+    <small style="color:#8b949e">Net ve spesifik</small>
+  </div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step">
+    <div class="num">3</div>
+    <div>Sağdaki akış</div>
+    <small style="color:#8b949e">Hangi robotun çalıştığı</small>
+  </div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step">
+    <div class="num">4</div>
+    <div>Cevabı al</div>
+    <small style="color:#8b949e">Sol panelde sonuç</small>
+  </div>
+</div>
+
+<h2>💡 Pro İpuçları</h2>
+
+<div class="card info">
+  <ol>
+    <li><strong>İşletme seçimini kontrol et</strong> — Sağ üstteki dropdown ("MindID" / "Slowdays") doğru mu? Yanlış işletme → yanlış cevap.</li>
+    <li><strong>Lead sorgularında "lead" kelimesini kullan</strong> — "müşteri", "kişi" deme. "Lead" kelimesi var ise robot otomatik doğru yere gider.</li>
+    <li><strong>Lead sorularında kaynak ayrımı</strong>:
+      <ul>
+        <li>"kaç sıcak lead var" → <em>tüm kaynaklardan</em> (Meta + Clay + LinkedIn + manuel)</li>
+        <li>"Meta'dan gelen sıcak leadler" → sadece Meta Ads</li>
+        <li>"Clay'den gelen leadler" → sadece Clay</li>
+      </ul>
+    </li>
+    <li><strong>Karmaşık konu değişiminde yeni thread aç</strong> — Üstteki "Geçmiş" → yeni başlat. Eski sohbet bağlamı yeni konuyu karıştırır.</li>
+    <li><strong>Cevap "yok/bulamadım" derse</strong> — Komutu daha spesifik yaz, ya da ekibe haber ver. Sistem bozuk olabilir.</li>
+  </ol>
+</div>
+
+<h2>⚠️ YAPMA Listesi</h2>
+
+<div class="card bad">
+  <ul>
+    <li>❌ Aynı komutu arka arkaya 3 kez gönderme — robot takılabilir, "Geçmiş"ten temizle.</li>
+    <li>❌ "lead" ve "Instagram'a paylaş"ı aynı cümlede karıştırma — önce leadleri sorgula, sonra ayrı komutla paylaş.</li>
+    <li>❌ Aynı sohbet içinde işletme değiştirme — yeni thread aç.</li>
+    <li>❌ Çok genel araştırma sorularını lead/CRM ile karıştırma.</li>
+  </ul>
+</div>
+
+<h2>🚨 Sorun Olursa</h2>
+
+<div class="card warning">
+  <span class="label label-warn">DURUM 1</span>
+  <p><strong>Yanlış cevap geldi:</strong> Komutu daha spesifik yazıp tekrar dene. Hâlâ yanlışsa ekibe haber ver — orchestrator ayarı gerekiyor olabilir.</p>
+</div>
+
+<div class="card warning">
+  <span class="label label-warn">DURUM 2</span>
+  <p><strong>Cevap hiç gelmiyor (3+ dk):</strong> Sayfayı yenile (Ctrl+Shift+R), aynı komutu tekrar yaz. Hâlâ takılırsa ekibe haber ver.</p>
+</div>
+
+<div class="card warning">
+  <span class="label label-warn">DURUM 3</span>
+  <p><strong>"Bağlantı yok" yazıyor:</strong> Cloud Run servisi çökmüş veya endpoint ayarı bozulmuş. Doğrudan ekibe haber ver — production sorunu.</p>
+</div>
+
+<h2>📊 Bizim Bağlam (kısa)</h2>
+
+<table>
+  <tr><th>Ne?</th><th>Nerede?</th></tr>
+  <tr><td>Production servisi</td><td>Cloud Run (us-central1)</td></tr>
+  <tr><td>Lead veritabanı</td><td>NocoDB (global, herkes aynı tabloyu görür)</td></tr>
+  <tr><td>İşletme profilleri</td><td>Firestore (mindid-75079 projesi)</td></tr>
+  <tr><td>Instagram paylaşımı</td><td>Late API üzerinden</td></tr>
+  <tr><td>Mevcut işletmeler</td><td>MindID, Slowdays</td></tr>
+</table>
+
+<h2>🎓 Özet</h2>
+
+<div class="highlight">
+  <p><strong>Üç altın kural:</strong></p>
+  <ol>
+    <li>Net konuş — robot insan değil, "şu" diyemezsin.</li>
+    <li>Doğru işletmeyi seç — yanlış dropdown = yanlış cevap.</li>
+    <li>Yeni konu = yeni thread — eski bağlam karıştırır.</li>
+  </ol>
+</div>
+
+<div class="footer">
+  <p><strong>Versiyon:</strong> v1.20.5 (2026-05-01)</p>
+  <p><strong>Production URL:</strong> <code>https://agents-sdk-api-704233028546.us-central1.run.app</code></p>
+  <p><strong>UI:</strong> <code>https://mindid.netlify.app/</code></p>
+  <p>Sorun veya geri bildirim için ekibe ulaş.</p>
+</div>
+
+</div>
+</body>
+</html>

@@ -16,6 +16,13 @@ _settings = get_settings()
 set_default_openai_key(_settings.openai_api_key)
 
 
+def _is_lead_query(text: str) -> bool:
+    """Detect if a user message is a lead/CRM query that must route to meta_agent_tool."""
+    import re
+    # Match 'lead' as a whole word or with common Turkish suffixes
+    return bool(re.search(r"\blead(s|ler|leri|lerin|lerden|lere)?\b", text, re.IGNORECASE))
+
+
 def _build_effective_input(user_input: str, ctx: dict[str, Any]) -> str:
     """Build effective input with business_id, references and extras injected."""
     business_id = ctx.get("business_id")
@@ -23,6 +30,18 @@ def _build_effective_input(user_input: str, ctx: dict[str, Any]) -> str:
     extras = ctx.get("extras")
 
     effective_input = user_input
+    # Pre-router: lead/CRM queries get a hard directive injected into the user message
+    # so the orchestrator LLM cannot ignore the routing rule.
+    if _is_lead_query(user_input):
+        effective_input = (
+            "[ROUTING DIRECTIVE — MANDATORY]\n"
+            "This message is a lead/CRM query. You MUST call meta_agent_tool directly. "
+            "DO NOT call query_documents, get_document, fetch_business, analysis_agent_tool, "
+            "or marketing_agent_tool. meta_agent_tool is the ONLY correct tool for this request. "
+            "Pass the user's question and business_id to meta_agent_tool, then return its result.\n"
+            "[/ROUTING DIRECTIVE]\n\n"
+            f"{effective_input}"
+        )
     if business_id:
         effective_input = f"[Business ID: {business_id}]\n{effective_input}"
     if references:
@@ -113,11 +132,19 @@ async def run_orchestrator_async(
     task_logger = TaskLogger(business_id=business_id, task_id=task_id)
     task_logger.start(user_input)
 
-    # Create orchestrator with task_logger for sub-agent Firebase logging
-    orchestrator = create_orchestrator(
-        task_logger=task_logger,
-        progress_queue=progress_queue,
-    )
+    # Hard bypass: if user input is a lead/CRM query, run meta_agent DIRECTLY
+    # instead of orchestrator. Prompt-level routing on gpt-4.1-mini was unreliable
+    # (model ignored CAPS/emoji/hard rules and chose query_documents).
+    # This guarantees correct routing without depending on LLM decisions.
+    if _is_lead_query(user_input):
+        from src.agents.sales.meta_agent import create_meta_agent
+        orchestrator = create_meta_agent()
+    else:
+        # Create orchestrator with task_logger for sub-agent Firebase logging
+        orchestrator = create_orchestrator(
+            task_logger=task_logger,
+            progress_queue=progress_queue,
+        )
 
     hooks = CliLoggingHooks(
         echo=False,

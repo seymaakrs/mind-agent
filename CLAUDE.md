@@ -173,7 +173,7 @@ Akis: `generate_video` → `add_audio_to_video` → `post_on_instagram/youtube`
 
 | Alan | Model |
 |------|-------|
-| imageGenerationModel | gemini-2.0-flash-image-generation |
+| imageGenerationModel | gemini-2.5-flash-image |
 | orchestratorModel | gpt-4o-mini |
 | image/video/marketing/analysisModel | gpt-4o |
 | videoGenerationModel | veo-3.1-generate-preview |
