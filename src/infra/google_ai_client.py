@@ -144,20 +144,50 @@ class ImageGenerationClient:
         return self._extract_images(data)
 
     def _extract_images(self, response_data: dict) -> list[bytes]:
-        """Response'dan gorsel verilerini cikarir."""
+        """Response'dan gorsel verilerini cikarir.
+
+        Gemini bazen 200 dondurur ama gorsel uretmez (content policy block,
+        SAFETY, IMAGE_OTHER). Bu durumda finishReason'a bakip kullaniciya
+        net hata mesaji ver.
+        """
         images = []
 
         candidates = response_data.get("candidates", [])
         if not candidates:
-            return images
+            raise ServiceError(
+                "Gorsel uretilemedi: API hic candidate dondurmedi.",
+                service="google_ai",
+            )
 
-        parts = candidates[0].get("content", {}).get("parts", [])
+        candidate = candidates[0]
+        finish_reason = candidate.get("finishReason", "")
+        finish_message = candidate.get("finishMessage", "")
+
+        parts = candidate.get("content", {}).get("parts", [])
         for part in parts:
             # API camelCase donduruyor: inlineData
             inline_data = part.get("inlineData")
             if inline_data and inline_data.get("data"):
                 image_bytes = base64.b64decode(inline_data["data"])
                 images.append(image_bytes)
+
+        if not images:
+            # Content policy / safety block: 200 OK ama gorsel yok
+            block_reasons = {"IMAGE_OTHER", "SAFETY", "PROHIBITED_CONTENT", "RECITATION"}
+            if finish_reason in block_reasons:
+                user_msg = (
+                    "Gemini bu prompt'la gorsel uretmeyi reddetti "
+                    f"(finishReason={finish_reason}). Sebep: gercek tanınmıs kişi, "
+                    "telif hakli icerik veya guvenlik politikasi olabilir. "
+                    "Prompt'u yeniden yazip dene: gercek isim yerine 'Meksikalı kadın "
+                    "ressam', 'fizikci dahi' gibi tanimlama kullan."
+                )
+            else:
+                user_msg = (
+                    f"Gorsel uretilemedi. finishReason={finish_reason or 'bilinmiyor'}. "
+                    f"{finish_message or 'API mesaj vermedi.'}"
+                )
+            raise ServiceError(user_msg, service="google_ai")
 
         return images
 
