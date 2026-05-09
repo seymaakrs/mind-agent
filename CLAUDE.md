@@ -162,6 +162,38 @@ DRY_RUN=false             # true: API cagirmadan prompt logla
 - **n8n API token** uret (Adim 3 icin)
 - **Whatsapp Business hangi araç?** sorusu artik gereksiz — Zernio kullaniliyor (Seyma'nin handoff'undan netlesti)
 
+---
+
+### YARIN DEVAM (2026-05-10) — kaldigimiz yer
+
+**Bugun bitenler (2026-05-09):**
+- Adim 1: mind-id PR #10 (portal-beyin koprusu) — onceki session
+- Adim 2: Zernio client + 4 tool — commit `25f75eb`
+- Adim 3: n8n payload mapping fix + smoke test (NocoDB Id=66 verified, sonra silindi)
+- Adim 4: Outreach Agent — commit `1bb86af` (24 test gecti)
+- Adim 5: Zernio webhook listener — commit `ce37bf5` (27 test gecti)
+
+**Su an aktif branch (3 repo):** `claude/add-hot-leads-count-LJNi7`
+
+**SIRADA (oncelik sirasi):**
+1. **Deploy + import** (kullanicinin manuel isleri — kod tarafi hazir):
+   - Cloud Run image rebuild (v1.22.0): API'da `/zernio/webhook` route, ayrica yeni Cloud Run **job** (entry `python -m src.agents.outreach.runner`)
+   - Cloud Run job env: `NOCODB_*`, `ZERNIO_API_KEY`, `OUTREACH_*` overrides, **ilk start `DRY_RUN=true`**
+   - Zernio panel webhook URL'i n8n yerine `https://...run.app/zernio/webhook` + secret set
+   - 331 otel NocoDB'ye import: `source_workflow_id=outreach_agent_v1`, `asama=Yeni`, `kaynak=Manuel`, `telefon` E.164 (Adim 9 ile birlesir)
+2. **Adim 6 — Auto-reply Agent** (`lead_monitor.py` muadili). Adim 5 webhook'u inbound mesaji `Sicak`'a flag'liyor; Adim 6 LLM ile rephrase'lenmis takip atar. NocoDB `message_templates` tablosu okur (UTF-8). Onkosul: Adim 5 (HAZIR).
+3. **Adim 7** — Guardrail (reply rate <%5 / quality YELLOW pause + Seyma bildirim)
+4. **Adim 8** — Reporting dashboard (mind-id sekmesi)
+
+**Aciklik gerektiren karar (yarin Beyza'ya sor):**
+- Adim 6'da intent siniflandirici (LLM ile "olumlu/olumsuz/soru") koyalim mi, yoksa basit keyword mu? Seyma'nin scriptindeki 3 random varyant yaklasimi yeterli mi?
+
+**Tasarim kararlari hatirlatma (degistirmemek icin not):**
+- Adim 4'te `kaynak` degil `source_workflow_id='outreach_agent_v1'` ile filter — kaynak "lead nereden geldi" anlamini korur, workflow_id "hangi agent sahip"
+- Adim 5 webhook HMAC: `ZERNIO_WEBHOOK_SECRET` set degilse soft mode (log warning, accept) — Zernio panel switch'i sirasinda kullanici break olmasin diye
+- Adim 4 long-running worker (cron yerine) — jitter + batch break Meta spam filtresine karsi
+
+
 ### Karar verilmis seyler (degismez)
 - Vercel canonical (Netlify ~3 gun backup)
 - mind-agent Python + OpenAI Agents SDK
