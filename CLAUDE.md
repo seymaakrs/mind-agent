@@ -88,7 +88,7 @@ DRY_RUN=false             # true: API cagirmadan prompt logla
 - Akis: lead parse -> skor hesapla -> **upsert_lead (external_id ile idempotent)** -> log_lead_message -> sicaksa notify_seyma
 - Live idempotency kanıtlandı (2026-05-01): aynı external_id ile 2 task → NocoDB'de 1 kayıt
 
-**Sales/Zernio (WhatsApp + Inbox):** `list_contacts`, `find_conversation`, `send_message`, `tag_contact`
+**Sales/Zernio (WhatsApp + Inbox):** `list_contacts`, `find_conversation`, `send_message`, `send_whatsapp_template`, `tag_contact`
 - Client: `src/infra/zernio/` (mixin pattern: WhatsApp + Inbox; Late paterni)
 - Tools: `src/tools/sales/zernio_tools.py` (henuz hicbir agent'a bagli degil — Adim 4/5'te Outreach + Webhook agent'larina baglanacak)
 - `send_message` SADECE free-form (24h CS window). Cold outreach template'i `/whatsapp/bulk` Adim 4'te eklenecek.
@@ -148,7 +148,7 @@ DRY_RUN=false             # true: API cagirmadan prompt logla
 | 1 | Portal <-> Beyin koprusu (mind-id chat -> mind-agent /task) | — | done | **PR #10 acik, CI bekleniyor** |
 | 2 | Zernio client paketi (`src/infra/zernio/`) + 4 tool (list_contacts/find_conversation/send_message/tag_contact) | 1 | 3-4 saat | **DONE 2026-05-09** — `src/infra/zernio/` (base + whatsapp + inbox mixins), `src/tools/sales/zernio_tools.py`, 19 test gecti, `_ZERNIO_MAP` errors.py'a eklendi. Agent'a henüz bağlı değil (Adım 4/5). |
 | 3 | n8n "Lead Toplama Agent" payload bug fix (Calculate Lead Score code node Zernio payload mapping) | — | 1 saat | n8n API token gerekir |
-| 4 | Outreach Agent (Cloud Run'da 7/24, otel_gonderim.py muadili, NocoDB'den hedef listesi) | 2 | 1 gun | bekliyor |
+| 4 | Outreach Agent (Cloud Run'da 7/24, otel_gonderim.py muadili, NocoDB'den hedef listesi) | 2 | 1 gun | **DONE 2026-05-09** — `src/agents/outreach/{policy,targeting,runner}.py`, `send_whatsapp_template` tool eklendi (Zernio /whatsapp/bulk). Cloud Run job entry: `python -m src.agents.outreach.runner`. NocoDB filter: `source_workflow_id=outreach_agent_v1 AND asama=Yeni AND telefon!=''`. DRY_RUN env'i ile guvenli test. 24 yeni test gecti. **Eksik:** Cloud Run job spec deploy + Beyza'nin 331 otel'inin NocoDB'ye `source_workflow_id=outreach_agent_v1` ile import edilmesi (Adim 9). |
 | 5 | Zernio webhook listener (`/zernio/webhook` endpoint, 60sn polling biter) | 2 | 4 saat | **DONE 2026-05-09** — `src/app/zernio_webhook.py` (HMAC verify soft mode + payload mapping + idempotent upsert + Etkilesimler log), `POST /zernio/webhook` route eklendi, 27 test gecti. n8n by-pass kod tarafi hazir; Zernio panel'inden webhook URL switch manuel is. |
 | 6 | Auto-reply Agent (NocoDB `message_templates` tablosu, UTF-8 dogru, intent siniflandirici opsiyonel) | 5 | 1 gun | bekliyor |
 | 7 | Guardrail (reply rate <%5 -> pause, quality YELLOW -> pause) + Seyma bildirim | 6 | 4 saat | bekliyor |

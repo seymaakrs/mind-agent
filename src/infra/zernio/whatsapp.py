@@ -28,3 +28,28 @@ class _WhatsAppMixin:
         ``oto_yanit_gonderildi``, ``bolge_bodrum``, ...
         """
         return await self._patch(f"/contacts/{contact_id}", json={"tags": tags})
+
+    async def send_template(
+        self,
+        phone: str,
+        template_name: str,
+        variables: list[str] | None = None,
+        language: str = "tr",
+    ) -> dict[str, Any]:
+        """Send a Meta-approved WhatsApp template message via Zernio bulk endpoint.
+
+        Required for cold outreach — free-form ``send_message`` only works
+        inside the 24h customer service window. Templates can break that
+        window because Meta has pre-approved the wording.
+
+        Zernio bulk endpoint accepts batches; this convenience wrapper sends
+        a single recipient. Caller composes phone in E.164 (e.g. ``+9054...``).
+        """
+        body = {
+            "accountId": self.account_id,
+            "template": {"name": template_name, "language": language},
+            "recipients": [
+                {"phone": phone, "variables": list(variables or [])}
+            ],
+        }
+        return await self._post("/whatsapp/bulk", json=body)

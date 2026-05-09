@@ -153,6 +153,44 @@ async def _send_message_impl(conversation_id: str, message: str) -> dict[str, An
         return classify_error(exc, "zernio")
 
 
+async def _send_whatsapp_template_impl(
+    phone: str,
+    template_name: str,
+    variables: list[str] | None = None,
+    language: str = "tr",
+) -> dict[str, Any]:
+    """Send a Meta-approved WhatsApp template (cold outreach via /whatsapp/bulk).
+
+    Unlike ``send_message`` (free-form, 24h window), templates can initiate
+    conversations. Slowdays kampanyasi: ``ege_otel_yaz_sezon_v1`` template,
+    ``variables=[otel_adi]``.
+    """
+    if not phone or not phone.strip():
+        return _invalid_input(
+            "Telefon numarasi gerekli.", "phone is required"
+        )
+    if not template_name or not template_name.strip():
+        return _invalid_input(
+            "template_name gerekli.", "template_name is required"
+        )
+    try:
+        client = _get_client()
+        data = await client.send_template(
+            phone=phone.strip(),
+            template_name=template_name.strip(),
+            variables=variables or [],
+            language=language,
+        )
+        return {
+            "success": True,
+            "phone": phone.strip(),
+            "template": template_name,
+            "raw": data,
+        }
+    except Exception as exc:
+        return classify_error(exc, "zernio")
+
+
 async def _tag_contact_impl(contact_id: str, tags: list[str]) -> dict[str, Any]:
     """Replace tag set on a Zernio contact (CRM segmentation)."""
     if not contact_id:
@@ -213,6 +251,20 @@ send_message = function_tool(
 )(_send_message_impl)
 
 
+send_whatsapp_template = function_tool(
+    name_override="send_whatsapp_template",
+    description_override=(
+        "Send a Meta-approved WhatsApp template message via Zernio /whatsapp/bulk. "
+        "Used for cold outreach — initiates conversations outside the 24h CS window. "
+        "Args: phone (E.164), template_name (Meta-approved), variables (list[str], "
+        "ordered by template body), language (default 'tr'). Slowdays kampanyasi "
+        "ornek: phone='+90...', template_name='ege_otel_yaz_sezon_v1', "
+        "variables=['Otel Adi']."
+    ),
+    strict_mode=False,
+)(_send_whatsapp_template_impl)
+
+
 tag_contact = function_tool(
     name_override="tag_contact",
     description_override=(
@@ -226,19 +278,21 @@ tag_contact = function_tool(
 
 def get_zernio_tools() -> list:
     """All Zernio WhatsApp/Inbox tools (Outreach + Webhook agents will use)."""
-    return [list_contacts, find_conversation, send_message, tag_contact]
+    return [list_contacts, find_conversation, send_message, send_whatsapp_template, tag_contact]
 
 
 __all__ = [
     "list_contacts",
     "find_conversation",
     "send_message",
+    "send_whatsapp_template",
     "tag_contact",
     "get_zernio_tools",
     # Exposed for direct testing
     "_list_contacts_impl",
     "_find_conversation_impl",
     "_send_message_impl",
+    "_send_whatsapp_template_impl",
     "_tag_contact_impl",
     "_get_client",
 ]
