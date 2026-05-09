@@ -87,7 +87,7 @@ async def test_count_leads_passes_filter_and_returns_total(monkeypatch):
     client = _make_client(rows)
     monkeypatch.setattr(rt, "get_nocodb_client", lambda: client)
 
-    result = await _inner(rt.count_leads)(asama="Sicak", kaynak="Meta Ads")
+    result = await rt._count_leads_impl(asama="Sicak", kaynak="Meta Ads")
 
     assert result["success"] is True
     assert result["count"] == 7
@@ -102,7 +102,7 @@ async def test_count_leads_no_filters(monkeypatch):
     client = _make_client([{"Id": 1}, {"Id": 2}])
     monkeypatch.setattr(rt, "get_nocodb_client", lambda: client)
 
-    result = await _inner(rt.count_leads)()
+    result = await rt._count_leads_impl()
 
     assert result["success"] is True
     assert result["count"] == 2
@@ -136,7 +136,7 @@ async def test_list_leads_clamps_limit_and_slims_payload(monkeypatch):
     client = _make_client(rows)
     monkeypatch.setattr(rt, "get_nocodb_client", lambda: client)
 
-    result = await _inner(rt.list_leads)(asama="Ilik", limit=99999)
+    result = await rt._list_leads_impl(asama="Ilik", limit=99999)
 
     assert result["success"] is True
     assert result["count"] == 1
@@ -165,7 +165,7 @@ async def test_lead_funnel_orders_canonical_stages(monkeypatch):
     client = _make_client(rows)
     monkeypatch.setattr(rt, "get_nocodb_client", lambda: client)
 
-    result = await _inner(rt.lead_funnel)()
+    result = await rt._lead_funnel_impl()
 
     assert result["success"] is True
     by_stage = {row["asama"]: row["count"] for row in result["data"]}
@@ -197,7 +197,7 @@ async def test_channel_breakdown_aggregates_count_and_avg(monkeypatch):
     client = _make_client(rows)
     monkeypatch.setattr(rt, "get_nocodb_client", lambda: client)
 
-    result = await _inner(rt.channel_breakdown)()
+    result = await rt._channel_breakdown_impl()
 
     assert result["success"] is True
     by_ch = {row["kaynak"]: row for row in result["data"]}
@@ -227,7 +227,7 @@ async def test_stale_leads_filters_by_age(monkeypatch):
     client = _make_client(rows)
     monkeypatch.setattr(rt, "get_nocodb_client", lambda: client)
 
-    result = await _inner(rt.stale_leads)(asama="Sicak", days=3)
+    result = await rt._stale_leads_impl(asama="Sicak", days=3)
 
     assert result["success"] is True
     assert result["count"] == 1
@@ -256,7 +256,7 @@ async def test_lead_timeline_uses_lead_adi_filter(monkeypatch):
     client = _make_client(rows)
     monkeypatch.setattr(rt, "get_nocodb_client", lambda: client)
 
-    result = await _inner(rt.lead_timeline)(ad_soyad="Ali Demir", limit=5)
+    result = await rt._lead_timeline_impl(ad_soyad="Ali Demir", limit=5)
 
     assert result["success"] is True
     assert result["lead"] == "Ali Demir"
@@ -305,7 +305,7 @@ async def test_daily_digest_returns_metrics(monkeypatch):
     client.list_records.side_effect = list_records
     monkeypatch.setattr(rt, "get_nocodb_client", lambda: client)
 
-    result = await _inner(rt.daily_digest)(date="2026-05-09")
+    result = await rt._daily_digest_impl(date="2026-05-09")
 
     assert result["success"] is True
     data = result["data"]

@@ -7,6 +7,9 @@ can either narrate or hand the structured payload to the portal renderer.
 All tools are READ-ONLY — they never write to the CRM, so they can never
 corrupt Beyza's live schema or interfere with n8n workflows.
 
+Pattern: each tool has a pure-async `_impl` (testable directly) plus a
+`function_tool`-wrapped public name registered with the agent SDK.
+
 Schema reference: customer_agent/docs/NOCODB-SCHEMA-V2.md (v2.1)
 """
 from __future__ import annotations
@@ -82,6 +85,12 @@ def _clamp_limit(limit: int | None) -> int:
     return min(limit, MAX_LIMIT)
 
 
+def asama_field() -> str:
+    """The Leadler stage column name (kept as a function so the rare schema
+    rename happens in one spot)."""
+    return "asama"
+
+
 def _build_where(
     asama: str | None = None,
     kaynak: str | None = None,
@@ -110,12 +119,6 @@ def _build_where(
     return "~and".join(parts)
 
 
-def asama_field() -> str:
-    """The Leadler stage column name (kept as a function so the rare schema
-    rename happens in one spot)."""
-    return "asama"
-
-
 def _fetch_all(
     table_id: str,
     *,
@@ -127,7 +130,6 @@ def _fetch_all(
     """Page through NocoDB until exhausted (or hard cap)."""
     client = get_nocodb_client()
     out: list[dict[str, Any]] = []
-    offset = 0
     while len(out) < hard_cap:
         result = client.list_records(
             table_id, where=where, limit=page_size, sort=sort
@@ -142,7 +144,6 @@ def _fetch_all(
         is_last = page_info.get("isLastPage")
         if is_last is True or len(rows) < page_size:
             break
-        offset += page_size
     return out[:hard_cap]
 
 
@@ -161,24 +162,11 @@ def _now_utc() -> datetime:
 
 
 # ---------------------------------------------------------------------------
-# Tools
+# Tool implementations (pure async — testable directly)
 # ---------------------------------------------------------------------------
 
 
-@function_tool(
-    name_override="count_leads",
-    description_override=(
-        "Count leads in NocoDB Leadler with optional filters. "
-        "Filters (all optional, all eq-match): "
-        "asama (Yeni|Soguk|Ilik|Sicak|Teklif|Sozlesme|Kazanildi|Kayip|Arsiv), "
-        "kaynak (Meta Ads|LinkedIn|Clay|IG DM|TikTok DM|Referans|Manuel), "
-        "atanan_kisi (e.g. 'Seyma'), "
-        "date_from / date_to (ISO date YYYY-MM-DD; filters Leadler.CreatedAt). "
-        "Returns {count, filters, summary_tr}."
-    ),
-    strict_mode=False,
-)
-async def count_leads(
+async def _count_leads_impl(
     asama: str | None = None,
     kaynak: str | None = None,
     atanan_kisi: str | None = None,
@@ -212,18 +200,7 @@ async def count_leads(
         return classify_error(exc, "nocodb")
 
 
-@function_tool(
-    name_override="list_leads",
-    description_override=(
-        "List leads from Leadler (read-only). Filters: asama, kaynak, atanan_kisi. "
-        "sort: NocoDB sort string, e.g. '-lead_skoru' (DESC) or 'CreatedAt'. "
-        "limit: default 10, max 500. "
-        "Returns {data: [...], count, summary_tr}. "
-        "Use this for 'son N lead', 'en yuksek skorlu', 'X kanalindaki lead'ler' tarzi sorular."
-    ),
-    strict_mode=False,
-)
-async def list_leads(
+async def _list_leads_impl(
     asama: str | None = None,
     kaynak: str | None = None,
     atanan_kisi: str | None = None,
@@ -268,16 +245,7 @@ async def list_leads(
         return classify_error(exc, "nocodb")
 
 
-@function_tool(
-    name_override="lead_funnel",
-    description_override=(
-        "Funnel breakdown: count of leads per asama (Yeni->...->Kazanildi). "
-        "Optional date_from / date_to (ISO YYYY-MM-DD) filter on CreatedAt. "
-        "Returns {data: [{asama, count}...], total, summary_tr}."
-    ),
-    strict_mode=False,
-)
-async def lead_funnel(
+async def _lead_funnel_impl(
     date_from: str | None = None,
     date_to: str | None = None,
 ) -> dict[str, Any]:
@@ -291,7 +259,6 @@ async def lead_funnel(
         for r in rows:
             stage = r.get("asama") or "Yeni"
             counter[stage] += 1
-        # Ordered by canonical funnel stages first, then anything else
         ordered: list[dict[str, Any]] = []
         seen: set[str] = set()
         for stage in FUNNEL_STAGES:
@@ -317,17 +284,7 @@ async def lead_funnel(
         return classify_error(exc, "nocodb")
 
 
-@function_tool(
-    name_override="channel_breakdown",
-    description_override=(
-        "Per-channel (kaynak) breakdown of leads: count + average lead_skoru. "
-        "Optional date_from / date_to (ISO YYYY-MM-DD). "
-        "Returns {data: [{kaynak, count, avg_skor}...], total, summary_tr}. "
-        "Use for 'hangi kanal en cok dondurdu', 'kaynak dagilimi' tarzi sorular."
-    ),
-    strict_mode=False,
-)
-async def channel_breakdown(
+async def _channel_breakdown_impl(
     date_from: str | None = None,
     date_to: str | None = None,
 ) -> dict[str, Any]:
@@ -359,24 +316,13 @@ async def channel_breakdown(
             "schema": "channel",
             "data": data,
             "total": total,
-            "summary_tr": (
-                f"Toplam {total} lead; en cok '{top}' kanalindan."
-            ),
+            "summary_tr": f"Toplam {total} lead; en cok '{top}' kanalindan.",
         }
     except Exception as exc:
         return classify_error(exc, "nocodb")
 
 
-@function_tool(
-    name_override="stale_leads",
-    description_override=(
-        "Find leads stuck in a stage longer than `days` (based on Leadler.UpdatedAt "
-        "if present, else CreatedAt). Default asama='Sicak', days=3. "
-        "Returns {data: [{Id, ad_soyad, asama, son_guncelleme, gun}...], count, summary_tr}."
-    ),
-    strict_mode=False,
-)
-async def stale_leads(
+async def _stale_leads_impl(
     asama: str = "Sicak",
     days: int = 3,
     limit: int = DEFAULT_LIMIT,
@@ -425,16 +371,7 @@ async def stale_leads(
         return classify_error(exc, "nocodb")
 
 
-@function_tool(
-    name_override="lead_timeline",
-    description_override=(
-        "All Etkilesimler rows for a lead (matched on lead_adi string match). "
-        "Sorted newest first. limit default 20, max 500. "
-        "Returns {data: [{tarih, kanal, yon, tur, mesaj_icerigi, sonuc, agent}...], count, summary_tr}."
-    ),
-    strict_mode=False,
-)
-async def lead_timeline(
+async def _lead_timeline_impl(
     ad_soyad: str,
     limit: int = 20,
 ) -> dict[str, Any]:
@@ -473,33 +410,20 @@ async def lead_timeline(
         return classify_error(exc, "nocodb")
 
 
-@function_tool(
-    name_override="daily_digest",
-    description_override=(
-        "Daily snapshot for a given ISO date (default: today UTC). "
-        "Returns yeni_lead_count, sicak_count, kazanildi_count, "
-        "seyma_assigned_count, top_channel, summary_tr."
-    ),
-    strict_mode=False,
-)
-async def daily_digest(date: str | None = None) -> dict[str, Any]:
+async def _daily_digest_impl(date: str | None = None) -> dict[str, Any]:
     table_id = _leads_table()
     if not table_id:
         return _missing_table_error("leads")
     try:
         target = date or _now_utc().date().isoformat()
-        # day window
         day_from = f"{target}T00:00:00Z"
         day_to = f"{target}T23:59:59Z"
         client = get_nocodb_client()
 
-        # New today
         new_where = _build_where(date_from=day_from, date_to=day_to)
         new_rows = _fetch_all(table_id, where=new_where)
-        # Currently Sicak
-        sicak = client.list_records(
-            table_id, where="(asama,eq,Sicak)", limit=1
-        )
+
+        sicak = client.list_records(table_id, where="(asama,eq,Sicak)", limit=1)
         sicak_total = (
             sicak.get("pageInfo", {}).get("totalRows")
             if isinstance(sicak, dict)
@@ -507,17 +431,16 @@ async def daily_digest(date: str | None = None) -> dict[str, Any]:
         )
         if sicak_total is None:
             sicak_total = len(_fetch_all(table_id, where="(asama,eq,Sicak)"))
-        # Kazanildi today
+
         won_where = (
             f"(asama,eq,Kazanildi)~and(UpdatedAt,ge,{day_from})~and(UpdatedAt,le,{day_to})"
         )
         won_rows = _fetch_all(table_id, where=won_where)
-        # Seyma assigned (waiting)
+
         seyma_rows = _fetch_all(
             table_id, where="(atanan_kisi,eq,Seyma)~and(asama,neq,Kazanildi)"
         )
 
-        # Top channel today
         ch_counter: Counter[str] = Counter()
         for r in new_rows:
             ch_counter[r.get("kaynak") or "Bilinmeyen"] += 1
@@ -543,6 +466,95 @@ async def daily_digest(date: str | None = None) -> dict[str, Any]:
         }
     except Exception as exc:
         return classify_error(exc, "nocodb")
+
+
+# ---------------------------------------------------------------------------
+# Tool registrations (function_tool wrappers — exposed to the SDK)
+# ---------------------------------------------------------------------------
+
+
+count_leads = function_tool(
+    name_override="count_leads",
+    description_override=(
+        "Count leads in NocoDB Leadler with optional filters. "
+        "Filters (all optional, all eq-match): "
+        "asama (Yeni|Soguk|Ilik|Sicak|Teklif|Sozlesme|Kazanildi|Kayip|Arsiv), "
+        "kaynak (Meta Ads|LinkedIn|Clay|IG DM|TikTok DM|Referans|Manuel), "
+        "atanan_kisi (e.g. 'Seyma'), "
+        "date_from / date_to (ISO date YYYY-MM-DD; filters Leadler.CreatedAt). "
+        "Returns {count, filters, summary_tr}."
+    ),
+    strict_mode=False,
+)(_count_leads_impl)
+
+
+list_leads = function_tool(
+    name_override="list_leads",
+    description_override=(
+        "List leads from Leadler (read-only). Filters: asama, kaynak, atanan_kisi. "
+        "sort: NocoDB sort string, e.g. '-lead_skoru' (DESC) or 'CreatedAt'. "
+        "limit: default 10, max 500. "
+        "Returns {data: [...], count, summary_tr}. "
+        "Use this for 'son N lead', 'en yuksek skorlu', 'X kanalindaki lead'ler' tarzi sorular."
+    ),
+    strict_mode=False,
+)(_list_leads_impl)
+
+
+lead_funnel = function_tool(
+    name_override="lead_funnel",
+    description_override=(
+        "Funnel breakdown: count of leads per asama (Yeni->...->Kazanildi). "
+        "Optional date_from / date_to (ISO YYYY-MM-DD) filter on CreatedAt. "
+        "Returns {data: [{asama, count}...], total, summary_tr}."
+    ),
+    strict_mode=False,
+)(_lead_funnel_impl)
+
+
+channel_breakdown = function_tool(
+    name_override="channel_breakdown",
+    description_override=(
+        "Per-channel (kaynak) breakdown of leads: count + average lead_skoru. "
+        "Optional date_from / date_to (ISO YYYY-MM-DD). "
+        "Returns {data: [{kaynak, count, avg_skor}...], total, summary_tr}. "
+        "Use for 'hangi kanal en cok dondurdu', 'kaynak dagilimi' tarzi sorular."
+    ),
+    strict_mode=False,
+)(_channel_breakdown_impl)
+
+
+stale_leads = function_tool(
+    name_override="stale_leads",
+    description_override=(
+        "Find leads stuck in a stage longer than `days` (based on Leadler.UpdatedAt "
+        "if present, else CreatedAt). Default asama='Sicak', days=3. "
+        "Returns {data: [{Id, ad_soyad, asama, son_guncelleme, gun}...], count, summary_tr}."
+    ),
+    strict_mode=False,
+)(_stale_leads_impl)
+
+
+lead_timeline = function_tool(
+    name_override="lead_timeline",
+    description_override=(
+        "All Etkilesimler rows for a lead (matched on lead_adi string match). "
+        "Sorted newest first. limit default 20, max 500. "
+        "Returns {data: [{tarih, kanal, yon, tur, mesaj_icerigi, sonuc, agent}...], count, summary_tr}."
+    ),
+    strict_mode=False,
+)(_lead_timeline_impl)
+
+
+daily_digest = function_tool(
+    name_override="daily_digest",
+    description_override=(
+        "Daily snapshot for a given ISO date (default: today UTC). "
+        "Returns yeni_lead_count, sicak_count, kazanildi_count, "
+        "seyma_assigned_count, top_channel, summary_tr."
+    ),
+    strict_mode=False,
+)(_daily_digest_impl)
 
 
 # ---------------------------------------------------------------------------
@@ -572,4 +584,12 @@ __all__ = [
     "lead_timeline",
     "daily_digest",
     "get_reporting_tools",
+    # Implementation functions exposed for direct testing
+    "_count_leads_impl",
+    "_list_leads_impl",
+    "_lead_funnel_impl",
+    "_channel_breakdown_impl",
+    "_stale_leads_impl",
+    "_lead_timeline_impl",
+    "_daily_digest_impl",
 ]
