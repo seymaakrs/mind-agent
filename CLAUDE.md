@@ -96,6 +96,68 @@ DRY_RUN=false             # true: API cagirmadan prompt logla
 - **Posting:** `instagram_id` (acc_xxxxx) | **Analytics:** `late_profile_id` (raw ObjectId)
 - **Metrik Eslistirme:** `platform_post_url` ↔ `permalink` (Late ID degil!)
 
+## SESSION DEVIR — 2026-05-09 (Beyza, Slowdays kampanyasi)
+
+> **Yeni session: ONCE BU BOLUMU OKU.** Beyza kod bilmez, sade dil + tablo + emoji. Asagidaki "Plan" tablosu yapilacaklar listesidir, sirayla gidilir.
+
+### Mevcut durum (snapshot)
+- **Portal sorunu (CRM erisilemiyor):** mind-id chat route'lari mind-agent /task'e ZATEN baglandi — **PR #10** (mind-id, branch `claude/add-hot-leads-count-LJNi7`). Netlify CI'i bekliyor; Vercel'de `CHAT_API_URL=https://agents-sdk-api-704233028546.us-central1.run.app` set edilmesi gerek (set edilmese de hardcoded default ayni).
+- **Persistent thread/mesaj history yok** (Firestore-backed store ayri PR'a birakildi).
+
+### Mimari haritasi (3 ev)
+| Ev | Repo | Rol | Teknoloji |
+|---|---|---|---|
+| Vitrin | `mind-id` | Portal (MindBot, dashboard) | Next.js, Vercel (Netlify backup, ~3 gun sonra kaldirilacak) |
+| Beyin | `mind-agent` | Agent orchestrator | Python + OpenAI Agents SDK, Cloud Run |
+| Defter | `mindid-nocodb` | Lead CRM | NocoDB |
+| n8n akislari | `customer_agent` | Webhook/cron orkestrasyon | n8n.cloud |
+
+### Seyma'nin canli sistemi (Slowdays kampanyasi)
+- Google Places ile 331 otel cekildi -> Zernio (WhatsApp Cloud API wrapper, `https://api.zernio.com/v1`).
+- `otel_gonderim.py`: 25-90sn random delay, 240/24h limit, onayli template `ege_otel_yaz_sezon_v1`.
+- `lead_monitor.py`: 60sn polling, yanit verene 30-60sn sonra 3 random varyanttan biri (samimi, yuz yuze gorusme onerili).
+- Scriptler **Seyma'nin Windows PC'sinde** arka planda — kapaninca durur. **Cloud Run'a tasinmali.**
+- Tum dosyalar: `docs/from-seyma/HANDOFF.md`, `lead_monitor.py`, `otel_gonderim.py`, `zernio-api-openapi.yaml` (19000 satir tam OpenAPI).
+- `WA_ACCOUNT_ID = 69ecc2273a63baf2053dfc21`, `ZERNIO_API_KEY = sk_bbd6...` (Secret Manager'a alinacak).
+
+### Zernio (= Late) ne ise yariyor?
+- **Sosyal medya posting** (zaten `src/infra/late/` paketinde aktif: IG/FB/LinkedIn/TikTok/YouTube)
+- **WhatsApp Business + Inbox** (yeni keşif, `docs/from-seyma/HANDOFF.md`'de listelenmis 7 endpoint — henuz mind-agent'a entegre degil)
+- **Comment-to-DM otomasyonu** (Instagram yorumdan DM'e — entegre degil)
+- **Yapamadigi:** WhatsApp disinda outbound DM yok zaten (IG DM Zernio uzerinden var)
+
+### Plan (sirali)
+| # | Adim | Onkosul | Sure | Durum |
+|---|---|---|---|---|
+| 1 | Portal <-> Beyin koprusu (mind-id chat -> mind-agent /task) | — | done | **PR #10 acik, CI bekleniyor** |
+| 2 | Zernio client paketi (`src/infra/zernio/`) + 4 tool (list_contacts/find_conversation/send_message/tag_contact) | 1 | 3-4 saat | **Sirada — onaylandi, baslanacak** |
+| 3 | n8n "Lead Toplama Agent" payload bug fix (Calculate Lead Score code node Zernio payload mapping) | — | 1 saat | n8n API token gerekir |
+| 4 | Outreach Agent (Cloud Run'da 7/24, otel_gonderim.py muadili, NocoDB'den hedef listesi) | 2 | 1 gun | bekliyor |
+| 5 | Zernio webhook listener (`/zernio/webhook` endpoint, 60sn polling biter) | 2 | 4 saat | bekliyor |
+| 6 | Auto-reply Agent (NocoDB `message_templates` tablosu, UTF-8 dogru, intent siniflandirici opsiyonel) | 5 | 1 gun | bekliyor |
+| 7 | Guardrail (reply rate <%5 -> pause, quality YELLOW -> pause) + Seyma bildirim | 6 | 4 saat | bekliyor |
+| 8 | Reporting dashboard (mind-id sekmesi, gonderim/reply/quality/CPL) | 7 | 1 gun | bekliyor |
+| 9 | Seyma'nin local scriptlerini emekliye ayir + 331 oteli NocoDB'ye tasi | 4-7 | 2 saat | bekliyor |
+| 10 | NocoDB test verisi temizligi (is_test=true flag, dev/prod ayrim) | 9 | 2 saat | bekliyor |
+
+### Bekleyen kullanici aksiyonlari
+- **Vercel'de** `CHAT_API_URL` env'ini Cloud Run URL'ine set et (PR #10 merge sonrasi)
+- **Cloud Run Secret Manager'a** `ZERNIO_API_KEY` ekle (Adim 2 deploy oncesi)
+- **n8n API token** uret (Adim 3 icin)
+- **Whatsapp Business hangi araç?** sorusu artik gereksiz — Zernio kullaniliyor (Seyma'nin handoff'undan netlesti)
+
+### Karar verilmis seyler (degismez)
+- Vercel canonical (Netlify ~3 gun backup)
+- mind-agent Python + OpenAI Agents SDK
+- Branch (her 3 repo): `claude/add-hot-leads-count-LJNi7`
+- Yol A (mimari dogru, thread API ileride Firestore-backed) tercih edildi — Yol B (hizli stateless) elendi
+- Beyza kod bilmez: sade dil, tablo, emoji renk; teknik soru yok; A/B sec sor
+
+### Ilgili PR'lar
+- mind-id #10 (chat bridge, draft, CI bekliyor)
+
+---
+
 ## Docker Deployment
 
 **Guncel Versiyon:** `v1.21.0` (2026-05-09 — production, Sales Analyst eklendi)
