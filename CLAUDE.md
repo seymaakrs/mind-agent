@@ -98,12 +98,22 @@ DRY_RUN=false             # true: API cagirmadan prompt logla
 
 ## Docker Deployment
 
-**Guncel Versiyon:** `v1.20.0` (2026-05-01 — production)
-**Cloud Run Revision:** `agents-sdk-api-00009-667`
+**Guncel Versiyon:** `v1.21.0` (2026-05-09 — production, Sales Analyst eklendi)
+**Cloud Run Revision:** `agents-sdk-api-00025-rnw`
 **Cloud Run URL:** `https://agents-sdk-api-704233028546.us-central1.run.app`
+**Portal URL (mind-id, Vercel):** `https://mind-id-gray.vercel.app`
 **GCP Project:** `instagram-post-bot-471518`
 **Registry:** Artifact Registry (us-central1)
-**Image:** `us-central1-docker.pkg.dev/instagram-post-bot-471518/agents-sdk/agents-sdk-api:v1.20.0`
+**Image:** `us-central1-docker.pkg.dev/instagram-post-bot-471518/agents-sdk/agents-sdk-api:v1.21.0`
+**Onceki revision (rollback):** `agents-sdk-api-00009-667` (v1.20.0)
+
+**v1.21.0 Yenilikler (Sales Analyst):**
+- `src/tools/sales/reporting_tools.py` — 7 read-only tool (count/list/funnel/channel/stale/timeline/digest)
+- `src/agents/sales/sales_analyst_agent.py` — yeni agent (read-only NocoDB CRM raporu)
+- Orchestrator -> `sales_analyst_tool` routing (kac/listele/funnel/dagilim/takili/timeline/gunluk rapor)
+- Akilli tarih yorumu ([TODAY: ISO] marker'i + LLM "bu hafta" -> ISO date_from/date_to)
+- TR cevap, default limit 10, max 500
+- `meta_agent_tool` (yazma) vs `sales_analyst_tool` (okuma) net ayrimi
 
 **v1.20.0 Yenilikler:**
 - Sales Agent (Meta) + NocoDB CRM tools entegre
