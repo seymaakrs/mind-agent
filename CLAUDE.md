@@ -58,6 +58,9 @@ NOCODB_API_TOKEN          # NocoDB xc-token
 NOCODB_LEADS_TABLE_ID     # leads tablosu id
 NOCODB_MESSAGES_TABLE_ID  # lead_messages tablosu id
 NOCODB_NOTIFICATIONS_TABLE_ID  # seyma_notifications tablosu id
+ZERNIO_API_KEY            # Zernio (WhatsApp Business + Inbox + Social) API key
+ZERNIO_BASE_URL           # default: https://api.zernio.com/v1
+ZERNIO_WA_ACCOUNT_ID      # default: 69ecc2273a63baf2053dfc21 (Slowdays WA hatti)
 DRY_RUN=false             # true: API cagirmadan prompt logla
 ```
 
@@ -83,6 +86,12 @@ DRY_RUN=false             # true: API cagirmadan prompt logla
 - Trigger: n8n Facebook Lead Ads -> POST /task with extras.lead_data
 - Akis: lead parse -> skor hesapla -> **upsert_lead (external_id ile idempotent)** -> log_lead_message -> sicaksa notify_seyma
 - Live idempotency kanıtlandı (2026-05-01): aynı external_id ile 2 task → NocoDB'de 1 kayıt
+
+**Sales/Zernio (WhatsApp + Inbox):** `list_contacts`, `find_conversation`, `send_message`, `tag_contact`
+- Client: `src/infra/zernio/` (mixin pattern: WhatsApp + Inbox; Late paterni)
+- Tools: `src/tools/sales/zernio_tools.py` (henuz hicbir agent'a bagli degil — Adim 4/5'te Outreach + Webhook agent'larina baglanacak)
+- `send_message` SADECE free-form (24h CS window). Cold outreach template'i `/whatsapp/bulk` Adim 4'te eklenecek.
+- Error mapping: `src/infra/errors.py` `_ZERNIO_MAP` (HTTP status -> ErrorCode)
 
 ## Kritik Akislar
 
@@ -130,7 +139,7 @@ DRY_RUN=false             # true: API cagirmadan prompt logla
 | # | Adim | Onkosul | Sure | Durum |
 |---|---|---|---|---|
 | 1 | Portal <-> Beyin koprusu (mind-id chat -> mind-agent /task) | — | done | **PR #10 acik, CI bekleniyor** |
-| 2 | Zernio client paketi (`src/infra/zernio/`) + 4 tool (list_contacts/find_conversation/send_message/tag_contact) | 1 | 3-4 saat | **Sirada — onaylandi, baslanacak** |
+| 2 | Zernio client paketi (`src/infra/zernio/`) + 4 tool (list_contacts/find_conversation/send_message/tag_contact) | 1 | 3-4 saat | **DONE 2026-05-09** — `src/infra/zernio/` (base + whatsapp + inbox mixins), `src/tools/sales/zernio_tools.py`, 19 test gecti, `_ZERNIO_MAP` errors.py'a eklendi. Agent'a henüz bağlı değil (Adım 4/5). |
 | 3 | n8n "Lead Toplama Agent" payload bug fix (Calculate Lead Score code node Zernio payload mapping) | — | 1 saat | n8n API token gerekir |
 | 4 | Outreach Agent (Cloud Run'da 7/24, otel_gonderim.py muadili, NocoDB'den hedef listesi) | 2 | 1 gun | bekliyor |
 | 5 | Zernio webhook listener (`/zernio/webhook` endpoint, 60sn polling biter) | 2 | 4 saat | bekliyor |
