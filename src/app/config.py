@@ -63,6 +63,10 @@ class Settings(BaseModel):
     zernio_wa_account_id: str = Field(
         default="69ecc2273a63baf2053dfc21", alias="ZERNIO_WA_ACCOUNT_ID"
     )
+    # Webhook HMAC secret (X-Zernio-Signature). Optional in dev — when unset
+    # the webhook accepts unsigned payloads with a warning log; in production
+    # set this and Zernio computes sha256(secret, body) on its end.
+    zernio_webhook_secret: str | None = Field(default=None, alias="ZERNIO_WEBHOOK_SECRET")
 
     # Dry-run mode - Google API'lerine gercek cagri yapmadan prompt'lari loglar
     dry_run: bool = Field(default=False, alias="DRY_RUN")
@@ -96,6 +100,7 @@ class Settings(BaseModel):
                 "zernio_wa_account_id": os.getenv(
                     "ZERNIO_WA_ACCOUNT_ID", "69ecc2273a63baf2053dfc21"
                 ),
+                "zernio_webhook_secret": os.getenv("ZERNIO_WEBHOOK_SECRET"),
             }
         )
 

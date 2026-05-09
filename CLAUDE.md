@@ -61,6 +61,7 @@ NOCODB_NOTIFICATIONS_TABLE_ID  # seyma_notifications tablosu id
 ZERNIO_API_KEY            # Zernio (WhatsApp Business + Inbox + Social) API key
 ZERNIO_BASE_URL           # default: https://api.zernio.com/v1
 ZERNIO_WA_ACCOUNT_ID      # default: 69ecc2273a63baf2053dfc21 (Slowdays WA hatti)
+ZERNIO_WEBHOOK_SECRET     # /zernio/webhook HMAC dogrulama secret'i. Bos ise dogrulama atlanir (dev mode).
 DRY_RUN=false             # true: API cagirmadan prompt logla
 ```
 
@@ -92,6 +93,12 @@ DRY_RUN=false             # true: API cagirmadan prompt logla
 - Tools: `src/tools/sales/zernio_tools.py` (henuz hicbir agent'a bagli degil — Adim 4/5'te Outreach + Webhook agent'larina baglanacak)
 - `send_message` SADECE free-form (24h CS window). Cold outreach template'i `/whatsapp/bulk` Adim 4'te eklenecek.
 - Error mapping: `src/infra/errors.py` `_ZERNIO_MAP` (HTTP status -> ErrorCode)
+
+**Zernio Inbox Webhook (Adim 5):** `POST /zernio/webhook` (FastAPI route)
+- Modul: `src/app/zernio_webhook.py` — `verify_signature` (HMAC-SHA256, soft mode), `map_to_lead_fields`, `map_to_message_fields`, `derive_external_id` (BSUID > phone > sender.id), `handle`
+- Akis: Zernio `message.received` -> imza dogrula -> map -> `upsert_record(Leadler, external_id, ...)` -> `upsert_record(Etkilesimler, external_message_id, ...)`
+- Idempotency: ayni kullanici 2 mesaj atarsa 1 lead (external_id ayni); ayni mesaj 2 kez gelirse 1 Etkilesimler satiri (platformMessageId ayni)
+- Sicaklik: `direction=incoming` -> `Sicak`, `outgoing` -> `Yeni`. Diger event'ler 200 ack ile no-op.
 
 ## Kritik Akislar
 
@@ -142,7 +149,7 @@ DRY_RUN=false             # true: API cagirmadan prompt logla
 | 2 | Zernio client paketi (`src/infra/zernio/`) + 4 tool (list_contacts/find_conversation/send_message/tag_contact) | 1 | 3-4 saat | **DONE 2026-05-09** — `src/infra/zernio/` (base + whatsapp + inbox mixins), `src/tools/sales/zernio_tools.py`, 19 test gecti, `_ZERNIO_MAP` errors.py'a eklendi. Agent'a henüz bağlı değil (Adım 4/5). |
 | 3 | n8n "Lead Toplama Agent" payload bug fix (Calculate Lead Score code node Zernio payload mapping) | — | 1 saat | n8n API token gerekir |
 | 4 | Outreach Agent (Cloud Run'da 7/24, otel_gonderim.py muadili, NocoDB'den hedef listesi) | 2 | 1 gun | bekliyor |
-| 5 | Zernio webhook listener (`/zernio/webhook` endpoint, 60sn polling biter) | 2 | 4 saat | bekliyor |
+| 5 | Zernio webhook listener (`/zernio/webhook` endpoint, 60sn polling biter) | 2 | 4 saat | **DONE 2026-05-09** — `src/app/zernio_webhook.py` (HMAC verify soft mode + payload mapping + idempotent upsert + Etkilesimler log), `POST /zernio/webhook` route eklendi, 27 test gecti. n8n by-pass kod tarafi hazir; Zernio panel'inden webhook URL switch manuel is. |
 | 6 | Auto-reply Agent (NocoDB `message_templates` tablosu, UTF-8 dogru, intent siniflandirici opsiyonel) | 5 | 1 gun | bekliyor |
 | 7 | Guardrail (reply rate <%5 -> pause, quality YELLOW -> pause) + Seyma bildirim | 6 | 4 saat | bekliyor |
 | 8 | Reporting dashboard (mind-id sekmesi, gonderim/reply/quality/CPL) | 7 | 1 gun | bekliyor |
