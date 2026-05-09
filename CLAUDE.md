@@ -298,6 +298,11 @@ start-dev.bat  # Docker
 2. Video SDK Gecisi (ASKIDA) - google-genai SDK
 3. **Sales Agent Genisletme:** customer_agent/AGENT-MIMARISI-MASTER.md'deki diger 5 agent (LinkedIn, Clay, IG DM, Takip, Itiraz). Her biri `src/agents/sales/` altinda Meta agent ornegini takip edecek.
 4. **Meta Agent Genisletme:** Facebook Ads Manager API (CTR/CPC/CPL izleme, A/B test, gunluk rapor) - su anki tools sadece NocoDB CRUD.
+5. **NocoDB sertlestirme (P1, 2026-05-09 tespit edildi)** — 3 sorun ust uste yasandi:
+   - Bazi ISP/kurumsal aglar port 80'i blokluyor (Beyza pc'sinden erisemedi, telefon hotspot'undan ya da Cloud Shell'den OK)
+   - External IP ephemeral; restart sonrasi degisme riski
+   - Bot saldirilari (/cgi-bin/.../sh path'leri) NocoDB SQLite pool'unu doldurdu -> OOM crash, kontainer restart'a girdi
+   **Cozum:** Static IP + subdomain (orn. `crm.slowdaysai.com`) + Caddy reverse proxy (auto Let's Encrypt 443) + NocoDB'yi `127.0.0.1:8080`'e bagla (dis dunyaya hic acik olmasin) + Caddy'de junk path filter (/cgi-bin /.env /.git /wp-admin -> 444). 1-2 saatlik tek seferlik is. Beyza musait olunca yapilacak.
 
 ## Notlar
 
