@@ -6,6 +6,7 @@ ensuring the orchestrator LLM cannot forget or fabricate it.
 """
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from agents import Agent, Runner, FunctionTool, function_tool
@@ -213,6 +214,58 @@ def create_meta_agent_wrapper_tool(
     return meta_agent_wrapper
 
 
+def create_sales_analyst_wrapper_tool(
+    sales_analyst_agent: Agent,
+    hooks: Any = None,
+) -> FunctionTool:
+    """
+    Wrapper tool for the Sales Analyst Agent (read-only NocoDB CRM reports).
+
+    Sales Analyst, NocoDB Leadler + Etkilesimler tablolarindan rapor uretir.
+    Hicbir yazma yapmaz; sadece okuma. Portal'dan gelen "kac sicak lead",
+    "bu hafta hangi kanal", "X kisinin son etkilesimleri", "gunluk rapor"
+    gibi sorulari yapilandirilmis JSON cevap olarak donduruyor.
+    """
+
+    @function_tool(
+        name_override="sales_analyst_tool",
+        description_override=(
+            "Sales Analyst (READ-ONLY CRM raporu). Use for sales/lead REPORTING "
+            "questions: counts, lists, funnels, channel breakdown, stale leads, "
+            "lead timelines, daily digests. NEVER writes to CRM. "
+            "REQUIRED PARAMETERS: "
+            "- business_id: The exact business ID from context. "
+            "- prompt: Turkish question (e.g. 'kac sicak lead var', 'bu hafta hangi "
+            "kanal en cok dondurdu', 'Ali Demir son 5 etkilesim', 'gunluk rapor', "
+            "'3 gundur takili sicak lead'ler'). "
+            "Keywords: rapor, kac, sayisi, listele, hangi, dagilim, funnel, kaynak, "
+            "kanal, takili, stale, son N, timeline, gecmis, gunluk, ozet, digest, "
+            "sicak lead, ilik lead, atanan, Seyma'ya bekleyen."
+        ),
+        strict_mode=False,
+    )
+    async def sales_analyst_wrapper(
+        business_id: str,
+        prompt: str,
+    ) -> str:
+        """Run Sales Analyst with explicit business_id and TODAY date."""
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        effective_prompt = (
+            f"[TODAY: {today}]\n[Business ID: {business_id}]\n\n{prompt}"
+        )
+
+        result = await Runner.run(
+            starting_agent=sales_analyst_agent,
+            input=effective_prompt,
+            max_turns=8,
+            hooks=hooks,
+        )
+
+        return result.final_output
+
+    return sales_analyst_wrapper
+
+
 def create_analysis_agent_wrapper_tool(
     analysis_agent: Agent,
     hooks: Any = None,
@@ -270,4 +323,5 @@ __all__ = [
     "create_marketing_agent_wrapper_tool",
     "create_analysis_agent_wrapper_tool",
     "create_meta_agent_wrapper_tool",
+    "create_sales_analyst_wrapper_tool",
 ]
