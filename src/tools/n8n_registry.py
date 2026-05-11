@@ -104,12 +104,13 @@ N8N_REGISTRY: list[N8nWorkflow] = [
     ),
     N8nWorkflow(
         name="bekci_alert",
-        workflow_id="",  # Beyza yeni workflow yaratacak (Adim 8 deploy oncesi)
+        workflow_id="JQrjJcDRuYKTpMkC",
         webhook_path="bekci-alert",
         description=(
             "Bekci Robot (Guardian) alert tetikleyici. Mind-agent'in "
-            "Guardian runner'i RED/YELLOW kararinda buraya POST atar. "
-            "n8n Gmail node'u Seyma'ya mail gonderir."
+            "Guardian runner'i RED/YELLOW kararinda buraya POST atar "
+            "(body: level, reason, metrics, timestamp, pause_outreach). "
+            "n8n Gmail node'u Seyma'ya HTML mail gonderir."
         ),
     ),
 ]

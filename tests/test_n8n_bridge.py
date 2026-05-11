@@ -173,13 +173,14 @@ class TestN8nWorkflowHealth:
         assert result["error_code"] == "NOT_FOUND"
 
     @pytest.mark.asyncio
-    async def test_bekci_alert_not_yet_configured(self, monkeypatch):
-        # bekci_alert has empty workflow_id in registry (Beyza will create it
-        # before going live). Health reports "not configured" even if base URL set.
+    async def test_bekci_alert_now_configured(self, monkeypatch):
+        # 2026-05-11 sonrasi: workflow n8n MCP'den yaratildi
+        # (JQrjJcDRuYKTpMkC). Registry guncellendi.
         monkeypatch.setenv("N8N_BASE_URL", "https://mindidai.app.n8n.cloud")
         result = await bt._n8n_workflow_health_impl("bekci_alert")
         assert result["success"] is True
-        assert result["configured"] is False  # workflow_id is empty
+        assert result["configured"] is True
+        assert result["workflow_id"] == "JQrjJcDRuYKTpMkC"
 
 
 class TestToolRegistration:
