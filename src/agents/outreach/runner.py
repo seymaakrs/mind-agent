@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import signal
 import sys
 from datetime import datetime, timezone
@@ -37,6 +38,7 @@ _PAUSE_NO_TARGET_SEC = 120
 _PAUSE_OFF_HOURS_SEC = 300
 _PAUSE_DAILY_LIMIT_SEC = 1800  # 30 min — re-check whether the day rolled over
 _PAUSE_ERROR_SEC = 60
+_PAUSE_GUARDIAN_SEC = 300       # 5dk — Guardian pause sirasinda bayrak re-check
 
 # Mirror Seyma's otel_gonderim.py: 2 retries, 30sn between. Transient Zernio
 # hiccups (502/timeout/rate-limit) should not lose a lead — without retry the
@@ -49,6 +51,28 @@ _SEND_RETRY_DELAY_SEC = 30
 # ---------------------------------------------------------------------------
 # Send pipeline (one lead)
 # ---------------------------------------------------------------------------
+
+
+def _is_outreach_paused() -> bool:
+    """Bekci Robot tarafindan PAUSE bayragi atildi mi? (system_settings tablosu)
+
+    NOCODB_SETTINGS_TABLE_ID env'i yoksa: Guardian henuz kurulu degil, daima
+    False (Outreach normal çalisir). NocoDB hatasinda da False — yanlis
+    pozitiften (yanlis durdurma) yanlis negatif (gerçi pause vardi ama biz
+    durmadik) daha az kotu cunku metric'ler hatayi yine yakalar.
+    """
+    table_id = os.environ.get("NOCODB_SETTINGS_TABLE_ID")
+    if not table_id:
+        return False
+    try:
+        result = get_nocodb_client().list_records(table_id, limit=1)
+        rows = result.get("list") or []
+        if not rows:
+            return False
+        return bool(rows[0].get("outreach_paused"))
+    except Exception as exc:
+        log.warning("outreach: pause-flag check failed: %s — assuming active", exc)
+        return False
 
 
 async def _send_with_retry(
@@ -242,6 +266,15 @@ async def loop(config: OutreachConfig | None = None, *, max_iterations: int | No
     while max_iterations is None or iteration < max_iterations:
         iteration += 1
         try:
+            # Adim 8 Bekci kontrolü: NOCODB_SETTINGS_TABLE_ID set ise
+            # outreach_paused bayrağına bak. RED kararla durdurulduysak hicbir
+            # mesaj atma — sadece bekle. Yeniden baslatma INSAN onayli (Şeyma
+            # NocoDB'den outreach_paused=false yapacak).
+            if _is_outreach_paused():
+                log.info("outreach: PAUSED by Guardian, sleeping %ds", _PAUSE_GUARDIAN_SEC)
+                await asyncio.sleep(_PAUSE_GUARDIAN_SEC)
+                continue
+
             eligible, reason = policy.is_eligible()
             if not eligible:
                 pause = (
