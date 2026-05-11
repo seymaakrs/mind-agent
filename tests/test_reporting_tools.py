@@ -321,6 +321,139 @@ async def test_daily_digest_returns_metrics(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_get_reporting_tools_lists_all_seven():
+def test_get_reporting_tools_includes_core_seven():
+    # The 7 original read-only reporting tools must always be present.
+    # Adim 8 added 3 runtime status tools — tested separately in
+    # `test_get_reporting_tools_now_lists_ten`.
     tools = rt.get_reporting_tools()
-    assert len(tools) == 7
+    names = {getattr(t, "name", None) for t in tools}
+    assert {
+        "count_leads", "list_leads", "lead_funnel", "channel_breakdown",
+        "stale_leads", "lead_timeline", "daily_digest",
+    }.issubset(names)
+
+
+# ---------------------------------------------------------------------------
+# Adim 8 (C): runtime status tools
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_outreach_status_sent_today_and_last_hour(monkeypatch):
+    # Mock _fetch_all to return distinct counts per call (today, last_hour).
+    calls: list[str] = []
+
+    def fake_fetch_all(table_id, *, where=None, **kwargs):
+        calls.append(where or "")
+        # First call: today (12 rows); second call: last hour (3 rows).
+        return [{"Id": i} for i in range(12 if "00:00:00" in (where or "") else 3)]
+
+    monkeypatch.setattr(rt, "_fetch_all", fake_fetch_all)
+    monkeypatch.setenv("OUTREACH_DAILY_LIMIT", "240")
+
+    result = await rt._outreach_status_impl()
+    assert result["success"] is True
+    assert result["sent_today"] == 12
+    assert result["daily_limit"] == 240
+    assert result["remaining"] == 228
+    assert result["sent_last_hour"] == 3
+    assert result["percent_used"] == 5.0
+    assert "12/240" in result["summary_tr"]
+    # Filter shape sanity
+    assert any("(yon,eq,Giden)" in w for w in calls)
+    assert any("(agent,eq,Outreach Agent)" in w for w in calls)
+
+
+@pytest.mark.asyncio
+async def test_outreach_status_missing_table(monkeypatch):
+    monkeypatch.setattr(rt, "_messages_table", lambda: None)
+    result = await rt._outreach_status_impl()
+    assert result["success"] is False
+    assert result["error_code"] == "INVALID_INPUT"
+
+
+@pytest.mark.asyncio
+async def test_auto_reply_status_response_rate(monkeypatch):
+    """10 inbound, 6 outgoing -> rate 60%, 4 pending."""
+    def fake_fetch_all(table_id, *, where=None, **kwargs):
+        if "(yon,eq,Gelen)" in (where or ""):
+            return [
+                {"Id": i, "auto_reply_processed": (i < 6)}
+                for i in range(10)
+            ]
+        if "Auto-reply Agent" in (where or ""):
+            return [{"Id": i} for i in range(6)]
+        return []
+
+    monkeypatch.setattr(rt, "_fetch_all", fake_fetch_all)
+
+    result = await rt._auto_reply_status_impl()
+    assert result["success"] is True
+    assert result["inbound_count"] == 10
+    assert result["auto_replies_sent"] == 6
+    assert result["response_rate_pct"] == 60.0
+    assert result["pending_unprocessed"] == 4
+
+
+@pytest.mark.asyncio
+async def test_auto_reply_status_zero_inbound_no_division_error(monkeypatch):
+    monkeypatch.setattr(rt, "_fetch_all", lambda *a, **k: [])
+    result = await rt._auto_reply_status_impl()
+    assert result["success"] is True
+    assert result["inbound_count"] == 0
+    assert result["auto_replies_sent"] == 0
+    assert result["response_rate_pct"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_outreach_health_no_settings_table_assumes_active(monkeypatch):
+    monkeypatch.delenv("NOCODB_SETTINGS_TABLE_ID", raising=False)
+    result = await rt._outreach_health_impl()
+    assert result["success"] is True
+    assert result["configured"] is False
+    assert result["active"] is True
+    assert result["paused"] is False
+
+
+@pytest.mark.asyncio
+async def test_outreach_health_paused_row(monkeypatch):
+    monkeypatch.setenv("NOCODB_SETTINGS_TABLE_ID", "settings_tbl")
+    client = MagicMock()
+    client.list_records.return_value = {
+        "list": [{
+            "outreach_paused": True,
+            "pause_reason": "Reply rate %2.1 (esik %5 alti)",
+            "paused_at": "2026-05-11T14:32:00Z",
+        }]
+    }
+    monkeypatch.setattr(rt, "get_nocodb_client", lambda: client)
+
+    result = await rt._outreach_health_impl()
+    assert result["success"] is True
+    assert result["configured"] is True
+    assert result["paused"] is True
+    assert result["active"] is False
+    assert "Reply rate" in result["reason"]
+
+
+@pytest.mark.asyncio
+async def test_outreach_health_active_row(monkeypatch):
+    monkeypatch.setenv("NOCODB_SETTINGS_TABLE_ID", "settings_tbl")
+    client = MagicMock()
+    client.list_records.return_value = {"list": [{"outreach_paused": False}]}
+    monkeypatch.setattr(rt, "get_nocodb_client", lambda: client)
+
+    result = await rt._outreach_health_impl()
+    assert result["success"] is True
+    assert result["paused"] is False
+    assert result["active"] is True
+
+
+def test_get_reporting_tools_now_lists_ten():
+    # 7 original + 3 status tools (outreach_status, auto_reply_status, outreach_health)
+    tools = rt.get_reporting_tools()
+    names = {getattr(t, "name", getattr(t, "_name", None)) for t in tools}
+    assert "outreach_status" in names
+    assert "auto_reply_status" in names
+    assert "outreach_health" in names
+    assert len(tools) == 10

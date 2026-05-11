@@ -14,6 +14,7 @@ Schema reference: customer_agent/docs/NOCODB-SCHEMA-V2.md (v2.1)
 """
 from __future__ import annotations
 
+import os
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -469,6 +470,161 @@ async def _daily_digest_impl(date: str | None = None) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Adim 8 (C): Runtime status tools — Outreach + Auto-reply worker'lar
+# canliyken MindBot'un "su an ne durumdayiz?" sorulari icin.
+# ---------------------------------------------------------------------------
+
+
+def _outreach_daily_limit() -> int:
+    """Read from OUTREACH_DAILY_LIMIT env (default 240, matches OutreachConfig)."""
+    try:
+        return int(os.environ.get("OUTREACH_DAILY_LIMIT", "240"))
+    except (TypeError, ValueError):
+        return 240
+
+
+def _settings_table() -> str | None:
+    """Optional `system_settings` table for Guardian-controlled flags."""
+    return os.environ.get("NOCODB_SETTINGS_TABLE_ID") or None
+
+
+async def _outreach_status_impl() -> dict[str, Any]:
+    """Outreach Robotu'nun anlik durumu: bugun atilan + son saat + kalan kapasite."""
+    msgs_tbl = _messages_table()
+    if not msgs_tbl:
+        return _missing_table_error("messages")
+    try:
+        now = _now_utc()
+        midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        one_hour_ago = now - timedelta(hours=1)
+        daily_limit = _outreach_daily_limit()
+
+        today_rows = _fetch_all(
+            msgs_tbl,
+            where=(
+                f"(yon,eq,Giden)~and(agent,eq,Outreach Agent)"
+                f"~and(tarih,ge,{midnight.isoformat()})"
+            ),
+        )
+        last_hour_rows = _fetch_all(
+            msgs_tbl,
+            where=(
+                f"(yon,eq,Giden)~and(agent,eq,Outreach Agent)"
+                f"~and(tarih,ge,{one_hour_ago.isoformat()})"
+            ),
+        )
+        sent_today = len(today_rows)
+        sent_last_hour = len(last_hour_rows)
+        remaining = max(0, daily_limit - sent_today)
+        percent_used = round(100 * sent_today / daily_limit, 1) if daily_limit else 0.0
+
+        return {
+            "success": True,
+            "sent_today": sent_today,
+            "daily_limit": daily_limit,
+            "remaining": remaining,
+            "percent_used": percent_used,
+            "sent_last_hour": sent_last_hour,
+            "summary_tr": (
+                f"Bugun {sent_today}/{daily_limit} mesaj atildi "
+                f"(%{percent_used}). Son 1 saatte {sent_last_hour} mesaj. "
+                f"Kalan kapasite: {remaining}."
+            ),
+        }
+    except Exception as exc:
+        return classify_error(exc, "nocodb")
+
+
+async def _auto_reply_status_impl() -> dict[str, Any]:
+    """Auto-reply Agent son 24 saatte: kac inbound geldi, kacina yanit gonderildi."""
+    msgs_tbl = _messages_table()
+    if not msgs_tbl:
+        return _missing_table_error("messages")
+    try:
+        now = _now_utc()
+        day_ago = now - timedelta(hours=24)
+        since = day_ago.isoformat()
+
+        inbound = _fetch_all(
+            msgs_tbl, where=f"(yon,eq,Gelen)~and(tarih,ge,{since})"
+        )
+        outgoing_auto = _fetch_all(
+            msgs_tbl,
+            where=(
+                f"(yon,eq,Giden)~and(agent,eq,Auto-reply Agent)"
+                f"~and(tarih,ge,{since})"
+            ),
+        )
+        pending = [r for r in inbound if not r.get("auto_reply_processed")]
+
+        n_in = len(inbound)
+        n_out = len(outgoing_auto)
+        rate = round(100 * n_out / n_in, 1) if n_in else 0.0
+
+        return {
+            "success": True,
+            "window_hours": 24,
+            "inbound_count": n_in,
+            "auto_replies_sent": n_out,
+            "response_rate_pct": rate,
+            "pending_unprocessed": len(pending),
+            "summary_tr": (
+                f"Son 24 saatte {n_in} otel cevap verdi, {n_out} otomatik "
+                f"yanit gonderildi (%{rate}). Bekleyen: {len(pending)} "
+                f"(genelde olumsuz/spam — sessiz birakildi)."
+            ),
+        }
+    except Exception as exc:
+        return classify_error(exc, "nocodb")
+
+
+async def _outreach_health_impl() -> dict[str, Any]:
+    """Outreach Robotu su an PAUSE durumunda mi? (Bekci Robot Adim 8 bunu set eder.)
+
+    `NOCODB_SETTINGS_TABLE_ID` env'i yoksa: Guardian henuz kurulmamis
+    demek -> 'active' varsayilir. Set ise system_settings tablosundan
+    outreach_paused field'i okunur (tek satir bekleniyor).
+    """
+    tbl = _settings_table()
+    if not tbl:
+        return {
+            "success": True,
+            "configured": False,
+            "active": True,
+            "paused": False,
+            "reason": None,
+            "summary_tr": (
+                "Outreach Robotu aktif. (Bekci Robot/system_settings henuz "
+                "kurulmamis — manuel pause kontrolu yok.)"
+            ),
+        }
+    try:
+        client = get_nocodb_client()
+        result = client.list_records(tbl, limit=1)
+        rows = result.get("list") if isinstance(result, dict) else None
+        row = (rows or [{}])[0]
+        paused = bool(row.get("outreach_paused"))
+        reason = row.get("pause_reason") or None
+        pause_ts = row.get("paused_at") or None
+        return {
+            "success": True,
+            "configured": True,
+            "active": not paused,
+            "paused": paused,
+            "reason": reason,
+            "paused_at": pause_ts,
+            "summary_tr": (
+                f"Outreach Robotu DURDURULDU. Sebep: {reason or 'belirtilmemis'}."
+                + (f" (Pause zamani: {pause_ts})" if pause_ts else "")
+                if paused else
+                "Outreach Robotu aktif, kampanya devam ediyor."
+            ),
+        }
+    except Exception as exc:
+        return classify_error(exc, "nocodb")
+
+
+# ---------------------------------------------------------------------------
 # Tool registrations (function_tool wrappers — exposed to the SDK)
 # ---------------------------------------------------------------------------
 
@@ -562,6 +718,43 @@ daily_digest = function_tool(
 # ---------------------------------------------------------------------------
 
 
+outreach_status = function_tool(
+    name_override="outreach_status",
+    description_override=(
+        "Outreach Robotu'nun ANLIK durumu: bugun atilan mesaj sayisi, "
+        "gunluk limit (240 default), son 1 saatlik tempo, kalan kapasite. "
+        "Argumansiz. 'Bugun kac mesaj atildi?', 'Outreach hizinda mi?', "
+        "'Limit dolmus mu?' gibi sorular icin."
+    ),
+    strict_mode=False,
+)(_outreach_status_impl)
+
+
+auto_reply_status = function_tool(
+    name_override="auto_reply_status",
+    description_override=(
+        "Auto-reply (Cevap Robotu) son 24 saat durumu: kac otel cevap "
+        "verdi, kacina otomatik yanit gonderildi, response rate %, "
+        "bekleyen (sessiz birakilmis — genelde olumsuz/spam) sayisi. "
+        "Argumansiz. 'Bugun kac cevap geldi?', 'Auto-reply calisiyor mu?', "
+        "'Reply rate ne?' gibi sorular icin."
+    ),
+    strict_mode=False,
+)(_auto_reply_status_impl)
+
+
+outreach_health = function_tool(
+    name_override="outreach_health",
+    description_override=(
+        "Outreach Robotu su an aktif mi PAUSE durumunda mi? "
+        "Bekci Robot (Guardian) kotu reply rate / spam / ban riski "
+        "yakaladiginda outreach'i durdurur. Bu tool durumun + sebebini "
+        "dondurur. Argumansiz. 'Kampanya neden durdu?', 'Outreach calisiyor mu?'"
+    ),
+    strict_mode=False,
+)(_outreach_health_impl)
+
+
 def get_reporting_tools() -> list:
     """All read-only sales reporting tools for the Sales Analyst agent."""
     return [
@@ -572,6 +765,9 @@ def get_reporting_tools() -> list:
         stale_leads,
         lead_timeline,
         daily_digest,
+        outreach_status,
+        auto_reply_status,
+        outreach_health,
     ]
 
 
@@ -583,6 +779,9 @@ __all__ = [
     "stale_leads",
     "lead_timeline",
     "daily_digest",
+    "outreach_status",
+    "auto_reply_status",
+    "outreach_health",
     "get_reporting_tools",
     # Implementation functions exposed for direct testing
     "_count_leads_impl",
@@ -592,4 +791,7 @@ __all__ = [
     "_stale_leads_impl",
     "_lead_timeline_impl",
     "_daily_digest_impl",
+    "_outreach_status_impl",
+    "_auto_reply_status_impl",
+    "_outreach_health_impl",
 ]
