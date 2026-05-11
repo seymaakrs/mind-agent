@@ -1,25 +1,23 @@
 """NocoDB schema migration for Adim 8 (Guardian / Bekci Robot).
 
-Adds (idempotent):
-1. ``system_settings`` table — Cloud Shell'den koşmadan ÖNCE Beyza UI'da
-   "system_settings" adinda BOŞ bir tablo yaratacak ve TABLE ID'sini
-   ``NOCODB_SETTINGS_TABLE_ID`` env'ine verecek (NocoDB v2 meta API tablo
-   yaratma için baseId gerek, kullanıcının vermediği bir env — UI 1 dakika).
-2. Yukaridaki tabloya su Checkbox/Text/DateTime kolonlari:
-   - outreach_paused      Checkbox (default false) — Outreach Robotu bunu
-                          her tick'te okur; True ise mesaj atmaz.
-   - pause_reason         LongText — Bekci'nin yazdigi sebep
-   - paused_at            DateTime — pause zamani
-   - last_health_check    DateTime — Bekci'nin son tick'i
-   - last_decision_level  Text — GREEN/YELLOW/RED/INSUFFICIENT
-   - last_decision_reason LongText
-   - last_metrics_json    LongText — son hesaplanan metric'lerin JSON'i
-3. Tablonun TEK satirini olusturur (Id=1 by convention) eger bossa.
+Iki mod:
 
-Run:
+A) ``NOCODB_SETTINGS_TABLE_ID`` SET ise: o tabloya 7 kolon ekler + initial
+   row insert eder (idempotent, mevcut sutunlari atlar).
+
+B) ``NOCODB_SETTINGS_TABLE_ID`` BOSSA ama ``NOCODB_LEADS_TABLE_ID`` SET ise:
+   Leadler tablosunun meta'sindan ``base_id``yi cikarir, ``system_settings``
+   tablosunu olusturur (NocoDB v2 meta API), kolonlari ekler ve initial row
+   insert eder. Yeni table_id'yi STDOUT'a yazar — kullanıcı Cloud Run env'ine
+   eklemeli (``NOCODB_SETTINGS_TABLE_ID=...``).
+
+Run (Cloud Shell):
     export NOCODB_BASE_URL=...
     export NOCODB_API_TOKEN=...
-    export NOCODB_SETTINGS_TABLE_ID=...    # UI'dan kopyaladığın tablo ID
+    # Mod A icin:
+    export NOCODB_SETTINGS_TABLE_ID=...
+    # YA DA Mod B icin (table'i benim yaratmam):
+    export NOCODB_LEADS_TABLE_ID=...
     python scripts/migrate_guardian_schema.py
 """
 from __future__ import annotations
@@ -32,6 +30,7 @@ import httpx
 
 
 _TIMEOUT = 30.0
+_TABLE_NAME = "system_settings"
 
 
 def _client(base_url: str, token: str) -> httpx.Client:
@@ -40,6 +39,61 @@ def _client(base_url: str, token: str) -> httpx.Client:
         headers={"xc-token": token, "Content-Type": "application/json"},
         timeout=_TIMEOUT,
     )
+
+
+def _get_base_id_from_table(client: httpx.Client, table_id: str) -> str:
+    """Mevcut bir tablonun meta'sindan base_id'yi çıkar."""
+    r = client.get(f"/api/v2/meta/tables/{table_id}")
+    r.raise_for_status()
+    meta = r.json()
+    base_id = (
+        meta.get("base_id")
+        or meta.get("baseId")
+        or meta.get("source_id")
+        or meta.get("sourceId")
+    )
+    if not base_id:
+        raise RuntimeError(
+            f"could not extract base_id from table {table_id}; meta keys: "
+            f"{list(meta.keys())[:20]}"
+        )
+    return base_id
+
+
+def _find_existing_table(client: httpx.Client, base_id: str, name: str) -> str | None:
+    """base_id altinda verilen ad'a sahip tabloyu ara."""
+    r = client.get(f"/api/v2/meta/bases/{base_id}/tables")
+    if r.status_code >= 400:
+        return None
+    payload = r.json() or {}
+    tables = payload.get("list") or payload.get("tables") or []
+    for t in tables:
+        if (t.get("table_name") or "").lower() == name.lower():
+            return t.get("id")
+        if (t.get("title") or "").lower() == name.lower():
+            return t.get("id")
+    return None
+
+
+def create_settings_table(client: httpx.Client, base_id: str) -> tuple[str, str]:
+    """Yarat (yoksa) veya bul. Returns (table_id, 'OK' | 'ALREADY EXISTS')."""
+    existing = _find_existing_table(client, base_id, _TABLE_NAME)
+    if existing:
+        return existing, "ALREADY EXISTS"
+
+    body = {
+        "table_name": _TABLE_NAME,
+        "title": _TABLE_NAME,
+        # NocoDB v2 auto-adds an Id PK; passing an empty columns array works.
+        "columns": [],
+    }
+    r = client.post(f"/api/v2/meta/bases/{base_id}/tables", json=body)
+    if r.status_code >= 400:
+        raise RuntimeError(
+            f"create table failed: {r.status_code} {r.text[:300]}"
+        )
+    data = r.json() or {}
+    return data.get("id"), "OK"
 
 
 def _get_table_meta(client: httpx.Client, table_id: str) -> dict[str, Any]:
@@ -99,24 +153,40 @@ def main() -> int:
     base_url = os.environ.get("NOCODB_BASE_URL")
     token = os.environ.get("NOCODB_API_TOKEN")
     settings_tbl = os.environ.get("NOCODB_SETTINGS_TABLE_ID")
+    leads_tbl = os.environ.get("NOCODB_LEADS_TABLE_ID")
 
-    missing = [
-        k for k, v in {
-            "NOCODB_BASE_URL": base_url,
-            "NOCODB_API_TOKEN": token,
-            "NOCODB_SETTINGS_TABLE_ID": settings_tbl,
-        }.items() if not v
-    ]
-    if missing:
-        print(f"FAIL: missing env vars: {', '.join(missing)}", file=sys.stderr)
+    if not (base_url and token):
         print(
-            "Hint: NocoDB UI'da 'system_settings' adında BOŞ bir tablo yarat, "
-            "table id'sini NOCODB_SETTINGS_TABLE_ID env'ine ver.",
+            "FAIL: NOCODB_BASE_URL and NOCODB_API_TOKEN are required.",
+            file=sys.stderr,
+        )
+        return 2
+    if not settings_tbl and not leads_tbl:
+        print(
+            "FAIL: Either NOCODB_SETTINGS_TABLE_ID (existing table) or "
+            "NOCODB_LEADS_TABLE_ID (so I can derive base_id and CREATE the "
+            "table) must be set.",
             file=sys.stderr,
         )
         return 2
 
     print(f"Connecting to {base_url} ...")
+
+    # Mode B: settings_tbl yoksa, leads_tbl'den base_id cikar ve tabloyu yarat
+    if not settings_tbl:
+        with _client(base_url, token) as c:
+            try:
+                base_id = _get_base_id_from_table(c, leads_tbl)
+                print(f"  Derived base_id from Leadler: {base_id}")
+                settings_tbl, status = create_settings_table(c, base_id)
+                print(f"  [{status:>15}]  Create '{_TABLE_NAME}' table  (id={settings_tbl})")
+                print()
+                print(f"  >>> NocoDB Cloud Run env'ine EKLE:")
+                print(f"  >>> NOCODB_SETTINGS_TABLE_ID={settings_tbl}")
+                print()
+            except Exception as exc:
+                print(f"FAIL: could not create table: {exc}", file=sys.stderr)
+                return 1
     with _client(base_url, token) as c:
         steps = [
             ("outreach_paused (Checkbox, default false)",
