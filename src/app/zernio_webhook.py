@@ -182,6 +182,10 @@ def map_to_message_fields(payload: dict[str, Any], lead_name: str) -> dict[str, 
         "external_message_id": message.get("platformMessageId") or message.get("id"),
         "agent": "Zernio Webhook",
         "otomatik_mi": True,
+        # Auto-reply worker (Adim 6) picks rows where this is False. Webhook
+        # writes incoming messages with False so the responder loop can claim
+        # them; responder flips to True after sending the reply.
+        "auto_reply_processed": False,
     }
 
 
