@@ -203,6 +203,20 @@ Sirali plan (10 dakika):
 5. 1 saat gozlem: bir otele 2 mesaj geliyor mu? — gelmiyorsa OK
 6. 24 saat sonra Seyma scripti dosyalarini sil (PC'den)
 
+### MIGRATIONS DONE (Cloud Shell, 2026-05-11) — Guardian schema
+
+`python scripts/migrate_guardian_schema.py` (auto-create modu):
+- ✅ system_settings tablosu yaratildi (base_id=ps9dj2fqrh823av)
+- ✅ **NOCODB_SETTINGS_TABLE_ID=mzpphfqirl8njoe** (Cloud Run env'ine eklenecek)
+- ✅ 7 kolon: outreach_paused (Checkbox), pause_reason (LongText),
+  paused_at (DateTime), last_health_check (DateTime),
+  last_decision_level (SingleLineText), last_decision_reason (LongText),
+  last_metrics_json (LongText)
+- ✅ Initial row (Id=1) insert edildi (outreach_paused=false)
+
+Bekci Robot artik bu tabloya tick yazabilir. Outreach Robotu her tick basinda
+outreach_paused okur; True ise mesaj atmaz.
+
 ### YARIN DEVAM (2026-05-10) — kaldigimiz yer
 
 **Bugun bitenler (2026-05-09):**
