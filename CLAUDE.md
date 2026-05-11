@@ -173,6 +173,35 @@ NocoDB schema migration calistirildi (`python scripts/migrate_auto_reply_schema.
 
 Bu Adim 6 Auto-reply Agent'in NocoDB tarafindaki onkosulu — artik Beyza tarafinda UI ile elle ekleme kalmadi.
 
+### n8n SALES AGENT HARITASI (2026-05-11 MCP ile dogrulandi)
+
+`mindidai.app.n8n.cloud`'da 38 workflow var. Sales ile alakali olanlar:
+
+| Agent | Workflow ID | Tetik | Domain | Python ile cakisma? |
+|---|---|---|---|---|
+| **Itiraz Agent** | `9nTdKNPLCjo8DKfE` | Webhook `/itiraz-gelen` | Mindid B2B (form/email itiraz) → Gemini → NocoDB Itirazlar → Seyma'ya oneri maili (insan onayli, otomatik mesaj YOLLAMAZ) | ❌ Yok. Auto-reply'a `itiraz` intent eklenip handoff yapilabilir (POST `/itiraz-gelen`). |
+| **Takip Agent** | `nWNMQYHJzsMvMUGP` | Schedule 6 saatte bir | Slowdays Leadler tablosunu tarar, `asama=Yeni OR Soguk` → Seyma'ya mail | ⚠️ **EVET, RISK.** Outreach canliya gecince gunde 240 Soguk olusur → Takip Agent 4×240=960 mail atar. Filter'a `son_temas null OR <now-7gun` ekle. **Atomic switch ile birlikte yap.** |
+| **Upsell Agent** | `kVXXr4e6O5F3lGiD` | Schedule gunde 10:00 | NocoDB Firsatlar (`mnf5nyu2mx5xtej`, asama=Kazanildi) → 28-32 gun once kapanmis → upsell maili | ❌ Yok |
+| **Referans Agent** | `28hnN6OrH5TF9NX2` | Schedule gunde 11:00 | Aynı Firsatlar → 58-62 gun → referans maili | ❌ Yok |
+| **Meta Lead Ads Agent** | `xblguxS49CJ4r4OF` | Facebook Lead Ads webhook | Lead → NocoDB + Seyma'ya mail | ❌ Yok (Adim 3 ile fix'lendi) |
+| **Lead Toplama Agent** | `l31p16NRZeyk4eEm` | Webhook | Lead skor + NocoDB + mail | ❌ Yok |
+
+### ATOMIC SWITCH PLANI (Outreach + Auto-reply canliya gecis)
+
+Seyma'nin local script'leri (`otel_gonderim.py`, `lead_monitor.py`) hala Windows PC'sinde calisiyor. Python sistemler GitHub'da hazir ama deploy edilmedi. Cakisma SADECE deploy + Seyma scripti acik kalirsa olur.
+
+Sirali plan (10 dakika):
+1. Cloud Run image v1.22.0 build & push (yeni `/zernio/webhook` route + iki yeni job)
+2. Outreach + Auto-reply Cloud Run job'larini `DRY_RUN=true` ile baslat (gerçek mesaj atmaz, shadow loglar)
+3. 30 dk Seyma scripti ile paralel log kiyaslamasi (NocoDB Etkilesimler tablosuna farkli "agent" field'i)
+4. ATOMIC pencere (5 dk):
+   - Seyma PC: `otel_gonderim.py` ve `lead_monitor.py` process'lerini kill
+   - Zernio panel: webhook URL → `https://...run.app/zernio/webhook` + secret set
+   - Cloud Run job env: `DRY_RUN=false` update
+   - n8n Takip Agent: filter'a `(son_temas,is_empty)~or(son_temas,before,now-7d)` ekle (Adim A)
+5. 1 saat gozlem: bir otele 2 mesaj geliyor mu? — gelmiyorsa OK
+6. 24 saat sonra Seyma scripti dosyalarini sil (PC'den)
+
 ### YARIN DEVAM (2026-05-10) — kaldigimiz yer
 
 **Bugun bitenler (2026-05-09):**
