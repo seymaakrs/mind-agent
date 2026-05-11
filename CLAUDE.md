@@ -164,6 +164,15 @@ DRY_RUN=false             # true: API cagirmadan prompt logla
 
 ---
 
+### MIGRATIONS DONE (Cloud Shell, 2026-05-10)
+
+NocoDB schema migration calistirildi (`python scripts/migrate_auto_reply_schema.py`):
+- ✅ Etkilesimler.auto_reply_processed (Checkbox, default false)
+- ✅ Leadler.asama option 'Takipte' eklendi
+- ✅ Leadler.son_temas (DateTime)
+
+Bu Adim 6 Auto-reply Agent'in NocoDB tarafindaki onkosulu — artik Beyza tarafinda UI ile elle ekleme kalmadi.
+
 ### YARIN DEVAM (2026-05-10) — kaldigimiz yer
 
 **Bugun bitenler (2026-05-09):**
@@ -342,6 +351,8 @@ start-dev.bat  # Docker
    - External IP ephemeral; restart sonrasi degisme riski
    - Bot saldirilari (/cgi-bin/.../sh path'leri) NocoDB SQLite pool'unu doldurdu -> OOM crash, kontainer restart'a girdi
    **Cozum:** Static IP + subdomain (orn. `crm.slowdaysai.com`) + Caddy reverse proxy (auto Let's Encrypt 443) + NocoDB'yi `127.0.0.1:8080`'e bagla (dis dunyaya hic acik olmasin) + Caddy'de junk path filter (/cgi-bin /.env /.git /wp-admin -> 444). 1-2 saatlik tek seferlik is. Beyza musait olunca yapilacak.
+6. **Cloud Run secrets sertlestirme (P1, 2026-05-10 tespit edildi)** — `agents-sdk-api` servisinde OPENAI_API_KEY / GOOGLE_AI_API_KEY / LATE_API_KEY / FAL_KEY / SERPER_API_KEY / KLING_*  / **NOCODB_API_TOKEN** hepsi **plain text env var** olarak duruyor (yalnizca FIREBASE_CREDENTIALS_FILE Secret Manager'da). Risk: `gcloud run services describe` cikti loglara, terminal scrollback'ine, ekran kayitlarina dusuyor. **Cozum:** Her birini `gcloud secrets create <name> --data-file=-` ile Secret Manager'a tasi, `gcloud run services update --update-secrets KEY=secret:latest` ile bagla. Beyza musait olunca yapilacak.
+7. **Zernio env'leri eksik (2026-05-10 tespit edildi)** — `agents-sdk-api` Cloud Run servisinde ZERNIO_API_KEY ve ZERNIO_WEBHOOK_SECRET YOK. Adim 2-5 deploy oncesi Secret Manager + `--update-secrets` ile eklenmeli, yoksa `/zernio/webhook` ve auto_reply/outreach worker fail eder.
 
 ## Notlar
 
