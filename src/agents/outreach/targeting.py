@@ -18,6 +18,7 @@ lead is not picked again. Inbound reply (Adim 5 webhook) overwrites it to
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 
@@ -47,4 +48,32 @@ def pick_next_target(client: Any, leads_table_id: str, source_workflow_id: str) 
     return rows[0] if rows else None
 
 
-__all__ = ["pick_next_target", "_build_where"]
+def count_sent_today(
+    client: Any,
+    messages_table_id: str,
+    *,
+    agent_name: str = "Outreach Agent",
+    now: datetime | None = None,
+) -> int:
+    """Outreach Robotu'nun bugun gonderdigi mesaj sayisi.
+
+    Seyma'nin local script'i bu sayiyi CSV log'undan okuyor; bizim Cloud
+    Run worker'i restart edebilir, in-memory sayac sifirlanir. Restart
+    sonrasi day_count'i NocoDB Etkilesimler'den geri yukle — boylece
+    ayni gun icinde 2x daily_limit ban'i imkansiz.
+
+    Filter: yon=Giden AND agent=<agent_name> AND tarih >= bugun 00:00 UTC.
+    UTC sabit; Cloud Run job timezone'undan bagimsiz olur.
+    """
+    now = now or datetime.now(timezone.utc)
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    where = (
+        f"(yon,eq,Giden)"
+        f"~and(agent,eq,{agent_name})"
+        f"~and(tarih,ge,{midnight.isoformat()})"
+    )
+    response = client.list_records(messages_table_id, where=where, limit=1000)
+    return len(response.get("list") or [])
+
+
+__all__ = ["pick_next_target", "count_sent_today", "_build_where"]

@@ -20,7 +20,11 @@ import pytest
 os.environ.setdefault("OPENAI_API_KEY", "test")
 
 from src.agents.outreach.policy import OutreachConfig, OutreachPolicy  # noqa: E402
-from src.agents.outreach.targeting import _build_where, pick_next_target  # noqa: E402
+from src.agents.outreach.targeting import (  # noqa: E402
+    _build_where,
+    count_sent_today,
+    pick_next_target,
+)
 from src.agents.outreach import runner  # noqa: E402
 
 
@@ -363,3 +367,165 @@ class TestSendWhatsappTemplateTool:
             "send_whatsapp_template",
             "tag_contact",
         }
+
+
+# ---------------------------------------------------------------------------
+# Adim 7 fix-1: Daily limit persistence (count_sent_today)
+# ---------------------------------------------------------------------------
+
+
+class TestCountSentToday:
+    def test_where_filter_uses_utc_midnight(self):
+        client = MagicMock()
+        client.list_records.return_value = {"list": []}
+        now = datetime(2026, 5, 11, 14, 23, tzinfo=timezone.utc)
+        count_sent_today(client, "msgs_tbl", now=now)
+        where = client.list_records.call_args.kwargs["where"]
+        assert "(yon,eq,Giden)" in where
+        assert "(agent,eq,Outreach Agent)" in where
+        assert "(tarih,ge,2026-05-11T00:00:00+00:00)" in where
+
+    def test_returns_row_count(self):
+        client = MagicMock()
+        client.list_records.return_value = {
+            "list": [{"Id": 1}, {"Id": 2}, {"Id": 3}]
+        }
+        assert count_sent_today(client, "msgs_tbl") == 3
+
+    def test_empty_means_zero(self):
+        client = MagicMock()
+        client.list_records.return_value = {"list": []}
+        assert count_sent_today(client, "msgs_tbl") == 0
+
+
+# ---------------------------------------------------------------------------
+# Adim 7 fix-2: send_with_retry
+# ---------------------------------------------------------------------------
+
+
+class TestSendWithRetry:
+    @pytest.mark.asyncio
+    async def test_succeeds_on_first_attempt(self, monkeypatch):
+        zernio = MagicMock()
+        zernio.send_template = AsyncMock(return_value={"messageId": "ok"})
+        # No sleep needed when first attempt wins
+        monkeypatch.setattr(runner.asyncio, "sleep", AsyncMock())
+
+        result = await runner._send_with_retry(
+            zernio, phone="+9", template_name="t", variables=["x"],
+            language="tr", retries=2, retry_delay_sec=30,
+        )
+        assert result == {"messageId": "ok"}
+        assert zernio.send_template.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_recovers_on_second_attempt(self, monkeypatch):
+        zernio = MagicMock()
+        zernio.send_template = AsyncMock(
+            side_effect=[RuntimeError("boom"), {"messageId": "ok"}]
+        )
+        sleeps = []
+
+        async def fake_sleep(s):
+            sleeps.append(s)
+
+        monkeypatch.setattr(runner.asyncio, "sleep", fake_sleep)
+
+        result = await runner._send_with_retry(
+            zernio, phone="+9", template_name="t", variables=["x"],
+            language="tr", retries=2, retry_delay_sec=30,
+        )
+        assert result == {"messageId": "ok"}
+        assert zernio.send_template.await_count == 2
+        assert sleeps == [30]
+
+    @pytest.mark.asyncio
+    async def test_raises_after_all_retries_fail(self, monkeypatch):
+        zernio = MagicMock()
+        zernio.send_template = AsyncMock(
+            side_effect=[RuntimeError("a"), RuntimeError("b"), RuntimeError("c")]
+        )
+        monkeypatch.setattr(runner.asyncio, "sleep", AsyncMock())
+
+        with pytest.raises(RuntimeError, match="c"):
+            await runner._send_with_retry(
+                zernio, phone="+9", template_name="t", variables=["x"],
+                language="tr", retries=2, retry_delay_sec=30,
+            )
+        # 1 initial + 2 retries = 3 attempts
+        assert zernio.send_template.await_count == 3
+
+
+# ---------------------------------------------------------------------------
+# Adim 7 fix-3: Zernio contact tagging
+# ---------------------------------------------------------------------------
+
+
+class TestTagZernioContact:
+    @pytest.mark.asyncio
+    async def test_merges_into_existing_tags(self):
+        zernio = MagicMock()
+        zernio.list_contacts = AsyncMock(return_value={
+            "contacts": [
+                {"id": "c1", "phone": "+90 555 111 22 33", "tags": ["bolge_bodrum"]}
+            ]
+        })
+        zernio.tag_contact = AsyncMock(return_value={})
+
+        await runner._tag_zernio_contact(
+            zernio, "+905551112233", to_add=["kontak_atildi", "outreach_v1"]
+        )
+        zernio.tag_contact.assert_awaited_once()
+        contact_id, tags = zernio.tag_contact.await_args.args
+        assert contact_id == "c1"
+        assert set(tags) == {"bolge_bodrum", "kontak_atildi", "outreach_v1"}
+
+    @pytest.mark.asyncio
+    async def test_skips_when_no_match(self):
+        zernio = MagicMock()
+        zernio.list_contacts = AsyncMock(return_value={"contacts": []})
+        zernio.tag_contact = AsyncMock()
+
+        await runner._tag_zernio_contact(zernio, "+905551112233", to_add=["x"])
+        zernio.tag_contact.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_swallows_exception(self):
+        zernio = MagicMock()
+        zernio.list_contacts = AsyncMock(side_effect=RuntimeError("zernio down"))
+        # Should not raise
+        await runner._tag_zernio_contact(zernio, "+905551112233", to_add=["x"])
+
+    @pytest.mark.asyncio
+    async def test_skips_when_phone_empty(self):
+        zernio = MagicMock()
+        zernio.list_contacts = AsyncMock()
+        await runner._tag_zernio_contact(zernio, "", to_add=["x"])
+        zernio.list_contacts.assert_not_called()
+
+
+class TestSendOneInvokesTagging:
+    @pytest.mark.asyncio
+    async def test_real_send_calls_tag_zernio_contact(self, monkeypatch):
+        zernio_mock = MagicMock()
+        zernio_mock.send_template = AsyncMock(return_value={"messageId": "wamid.X"})
+        zernio_mock.list_contacts = AsyncMock(return_value={
+            "contacts": [{"id": "c1", "phone": "+905551112233", "tags": []}]
+        })
+        zernio_mock.tag_contact = AsyncMock(return_value={})
+        nocodb_mock = MagicMock()
+        monkeypatch.setattr(runner, "get_zernio_client", lambda: zernio_mock)
+        monkeypatch.setattr(runner, "get_nocodb_client", lambda: nocodb_mock)
+
+        result = await runner.send_one(
+            lead={"Id": 7, "ad_soyad": "Otel A", "telefon": "+905551112233"},
+            config=OutreachConfig(),
+            leads_table="leads_tbl",
+            messages_table="msgs_tbl",
+            dry_run=False,
+        )
+        assert result["success"] is True
+        zernio_mock.tag_contact.assert_awaited_once()
+        _, tags = zernio_mock.tag_contact.await_args.args
+        assert "kontak_atildi" in tags
+        assert "outreach_v1" in tags

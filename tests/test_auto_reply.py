@@ -350,3 +350,64 @@ class TestWebhookIntegrationField:
         fields = map_to_message_fields(payload, "Otel X")
         assert fields["auto_reply_processed"] is False
         assert fields["yon"] == "Gelen"
+
+
+class TestAutoReplyContactTagging:
+    @pytest.mark.asyncio
+    async def test_tags_contact_when_conversation_has_contact(self, mock_clients, monkeypatch):
+        nocodb, zernio = mock_clients
+        # Conversation now returns a `contact` payload so the runner can tag it.
+        zernio.find_conversation_by_phone = AsyncMock(
+            return_value={"id": "conv-1", "contact": {"id": "c-9", "tags": ["bolge_bodrum"]}}
+        )
+        zernio.tag_contact = AsyncMock(return_value={})
+
+        async def fake_decide(message, **kwargs):
+            return _make_decision("olumlu", "Tesekkurler, gorusebilir miyiz?", 0.9)
+
+        monkeypatch.setattr(runner, "decide_reply", fake_decide)
+
+        await runner.handle_one(
+            inbound_row={"Id": 7, "mesaj_icerigi": "ilgileniyorum", "lead_adi": "Otel A"},
+            config=AutoReplyConfig(),
+            leads_table="leads_tbl",
+            messages_table="msgs_tbl",
+            dry_run=False,
+        )
+        zernio.tag_contact.assert_awaited_once()
+        contact_id, tags = zernio.tag_contact.await_args.args
+        assert contact_id == "c-9"
+        # Existing 'bolge_bodrum' must be preserved (Zernio PATCH is full replace)
+        assert set(tags) == {"bolge_bodrum", "hot_lead", "oto_yanit_gonderildi"}
+
+    @pytest.mark.asyncio
+    async def test_skips_tag_when_no_contact_in_conversation(self, mock_clients, monkeypatch):
+        nocodb, zernio = mock_clients
+        # No `contact` key — older Zernio responses
+        zernio.find_conversation_by_phone = AsyncMock(return_value={"id": "conv-1"})
+        zernio.tag_contact = AsyncMock(return_value={})
+
+        async def fake_decide(message, **kwargs):
+            return _make_decision("olumlu", "Tesekkurler", 0.9)
+
+        monkeypatch.setattr(runner, "decide_reply", fake_decide)
+
+        await runner.handle_one(
+            inbound_row={"Id": 7, "mesaj_icerigi": "evet", "lead_adi": "Otel A"},
+            config=AutoReplyConfig(),
+            leads_table="leads_tbl",
+            messages_table="msgs_tbl",
+            dry_run=False,
+        )
+        zernio.tag_contact.assert_not_called()
+
+
+class TestFallbackTemplatesFromSeyma:
+    def test_olumlu_contains_seyma_anchors(self):
+        joined = " ".join(FALLBACK_TEMPLATES["olumlu"])
+        # Slowdays-specific anchors that LLM is told to preserve verbatim.
+        assert "Bodrum" in joined
+        assert "Marmaris" in joined
+        assert "Fethiye" in joined
+        assert "Booking" in joined
+        assert "30 dakika" in joined

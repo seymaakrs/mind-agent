@@ -313,7 +313,7 @@ class TestTagContactTool:
 
 
 class TestToolRegistration:
-    def test_get_zernio_tools_exposes_four(self):
+    def test_get_zernio_tools_exposes_five(self):
         from src.tools.sales.zernio_tools import get_zernio_tools
 
         tools = get_zernio_tools()
@@ -322,5 +322,6 @@ class TestToolRegistration:
             "list_contacts",
             "find_conversation",
             "send_message",
+            "send_whatsapp_template",
             "tag_contact",
         }

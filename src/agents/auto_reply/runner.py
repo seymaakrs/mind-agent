@@ -88,6 +88,23 @@ async def handle_one(
             else:
                 send_raw = await zernio.send_message(conv_id, decision.reply_text)
                 reply_sent = True
+                # Mirror Seyma's lead_monitor.py tagging behaviour: mark the
+                # contact as hot + auto-reply sent so Beyza's Zernio panel
+                # segments stay in sync.
+                contact = (conv or {}).get("contact") or {}
+                contact_id = contact.get("id")
+                if contact_id:
+                    try:
+                        existing = list(contact.get("tags") or [])
+                        merged = sorted(
+                            set(existing + ["hot_lead", "oto_yanit_gonderildi"])
+                        )
+                        await zernio.tag_contact(contact_id, merged)
+                    except Exception as exc:
+                        log.warning(
+                            "auto_reply: tag_contact failed contact_id=%s: %s",
+                            contact_id, exc,
+                        )
 
     if reply_sent:
         platform_message_id = (

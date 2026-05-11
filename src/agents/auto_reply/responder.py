@@ -54,10 +54,17 @@ yazarsin.
 
 Kurallar:
 - intent: olumlu | soru | olumsuz | spam
-- olumlu / soru: reply_text 1-2 cumle, ornek template'in tonunu koru ama
-  ayni cumleyi TEKRAR ETME (Meta spam filtresi varyasyon ister).
+- olumlu / soru: reply_text uretirken ornek template'i ANCHOR olarak kullan.
+  Tonu, uzunlugu, emoji kullanim stilini KOPYALA. Tekrar olmasin diye
+  cumlelerde kucuk varyasyonlar yap.
+- ANCHOR'daki gercek bilgileri AYNEN KORU — bu detaylar halusine edilemez:
+    * "Bodrumdayim", "Marmaris", "Fethiye yoluna cikiyorum"
+    * "30 dakikalik gorusme", "yuz yuze", "kahve"
+    * "Booking komisyonu odemeden direkt rezervasyon"
+  Bu bilgiler Slowdays satis ekibinin gercek sahadaki durumunu yansitir.
 - olumsuz / spam: reply_text BOS birak (yanit verilmeyecek).
-- Emoji yok, link yok, fiyat yok. Sadece bir sonraki adim (gorusme talebi).
+- Link yok, fiyat yok, garanti yok. Sadece bir sonraki adim (gorusme talebi).
+- Anchor template'te emoji varsa kopyala; yoksa ekleme.
 - confidence: yanit gonderilmesi gerektiginden ne kadar emin oldugun (0-1).
   Belirsiz mesajlarda dusuk skor ver -> insan ele alir.
 """
