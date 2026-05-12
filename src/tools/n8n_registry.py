@@ -113,6 +113,18 @@ N8N_REGISTRY: list[N8nWorkflow] = [
             "n8n Gmail node'u Seyma'ya HTML mail gonderir."
         ),
     ),
+    N8nWorkflow(
+        name="lead_onboarding",
+        workflow_id="nz8tNAR737yjrQRS",
+        webhook_path="",  # Schedule-driven, webhook yok
+        description=(
+            "Lead Onboarding sequence: asama=Sicak leadlere 3 asamali "
+            "welcome dizisi (anında / 24sa / 72sa). Saatte 1 calisir, "
+            "state machine NocoDB onboarding_step kolonunda. Slowdays "
+            "leadleri exclude. HARD_CAP 50/run. Schedule-driven — bu "
+            "tool MindBot'tan TETIKLENEMEZ, sadece bilgi amacli registry'de."
+        ),
+    ),
 ]
 
 
