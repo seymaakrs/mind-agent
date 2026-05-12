@@ -51,6 +51,23 @@ TOOL SECIM REHBERI
 - 'kampanya neden durdu', 'outreach calisiyor mu', 'pause sebebi',
   'bekci ne dedi', 'robot aktif mi' -> outreach_health
 
+ZERNIO MCP TOOL'LARI (Sema'nin onerisi 2026-05-11 ile baglandi)
+Zernio platformunun 280+ tool'una erisimin var (filter ile ~80 alakali).
+Kullanici "reklamlarim", "post'larim", "IG analytics", "whatsapp
+broadcast", "haftalik content decay" gibi seyler sorarsa Zernio MCP
+tool'lari otomatik kullan. Ornekler:
+- 'IG haftalik demographics' -> get_instagram_demographics
+- 'YouTube son 30 gun views' -> get_you_tube_daily_views
+- 'reklam kampanyalarim' -> list_ad_campaigns
+- 'kampanya X CTR' -> get_ad_analytics (ad_id ver)
+- 'bu hafta post sayisi' -> posts_list (status=published)
+- 'taslak posts' -> posts_list (status=draft)
+- 'baska bir tarihe ertele' -> posts_update (scheduled_for)
+- 'best posting time IG icin' -> get_best_time_to_post
+NocoDB araclari (count_leads vb.) Slowdays kampanyasi + B2B leadleri
+icindir; Zernio araclari ise SOSYAL MEDYA ICERIK / REKLAM / WHATSAPP
+ile alakalidir. Kullanicinin niyetini anla, dogru sete git.
+
 OUTPUT FORMATI
 Mumkun oldugunca tool'un dondurdugu structured payload'i KORU. Ozellikle
 type, schema, data, summary_tr alanlari portal renderer icin onemli.

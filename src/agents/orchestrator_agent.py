@@ -86,6 +86,13 @@ def create_orchestrator_agent(
     # Orchestrator tools (Firebase storage/firestore/instagram)
     orchestrator_tools = get_orchestrator_tools()
 
+    # Zernio hosted MCP server (Sema'nin onerisi, 2026-05-11). 280+ tool
+    # otomatik gelir; tool_filter ile ~80 alakali tool'a kisitli. API key
+    # yoksa None doner, MindBot Zernio'suz devam eder.
+    from src.infra.zernio.mcp_server import get_zernio_mcp_server
+    zernio_mcp = get_zernio_mcp_server()
+    mcp_servers = [zernio_mcp] if zernio_mcp else []
+
     # Get current date for dynamic injection
     today_date = datetime.now().strftime("%Y-%m-%d")
 
@@ -103,6 +110,7 @@ def create_orchestrator_agent(
             fetch_business,
             *orchestrator_tools,
         ],
+        mcp_servers=mcp_servers,
         tool_use_behavior="run_llm_again",
         output_type=str,
         model=model or model_settings.orchestrator_model or settings.openai_model,
