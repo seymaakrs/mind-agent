@@ -1,5 +1,128 @@
 # Claude Session Notes
 
+## ⚡ YENI SESSION? ÖNCE BURAYI OKU — SLOWDAYS DEPLOY DURUMU (2026-05-11)
+
+**Branch (3 repo):** `claude/add-hot-leads-count-LJNi7`
+
+### Tek cumlede ne yapiyoruz
+Mindid kendi B2B CRM omurgasini koruyarak, Slowdays kampanyasi (331 otel Whatsapp outreach) icin 4 robot (Outreach + Postaci/webhook + Cevap + Bekci) ve MindBot icin 3 status tool + n8n koprusu kurduk. Tum kod hazir, **deploy edilmedi**. Seyma'nin Windows PC'sindeki `otel_gonderim.py` ve `lead_monitor.py` HALA gercek mesaj atan sistem.
+
+### Bitenler (sirasiyla, hepsi GitHub'da)
+| Adim | Ne | Commit | Test |
+|---|---|---|---|
+| 1 | Portal-Beyin koprusu (mind-id chat → mind-agent /task) | onceki session | ✅ Canli |
+| 2 | Zernio client (`src/infra/zernio/`) + 4 tool | `25f75eb` | 19 |
+| 3 | n8n Lead Toplama payload bug fix | smoke OK | — |
+| 4 | Outreach Robotu (`src/agents/outreach/`) | `1bb86af` | 35 |
+| 5 | Postaci (`/zernio/webhook` endpoint) | `ce37bf5` | 27 |
+| 6 | Cevap Robotu / Auto-reply (`src/agents/auto_reply/`) | `a76cc21` | 24 |
+| 6.5 | NocoDB migration (auto_reply_processed, Takipte, son_temas) | Cloud Shell'de kosuldu, OK | 10 |
+| 7 | Seyma scripti parity fix paketi (4 fix: daily limit persistence, retry, contact tagging, hibrit templates) | `6cd9adb` | +11 |
+| 8 | Bekci Robot / Guardian (`src/agents/guardian/`) | `0fe8397` | 21 |
+| 8.5 | Bekci Alert n8n workflow yaratildi + 13 inaktif workflow arsivlendi | `1573c41` | — |
+| 8.6 | `system_settings` NocoDB tablosu auto-create migration | `9ed27d6`, Cloud Shell'de kosuldu, OK | 8 |
+| C | MindBot 3 status tool (outreach_status, auto_reply_status, outreach_health) | `dc74375` | +9 |
+| 9 | n8n bridge tool (`src/tools/n8n_bridge_tools.py`) — MindBot 10 workflow'u tanir | `4e8772e` | 16 |
+
+**Toplam test: 182/182 yesil**, regression yok.
+
+### KRITIK BILGILER (yeni session bunlari ezbere bilmeli)
+
+**GCP:**
+- Project: `instagram-post-bot-471518`
+- Cloud Run service: `agents-sdk-api` (us-central1)
+- Mevcut image: `v1.21.0` (eski, yeni kod YOK)
+- Region: `us-central1`
+- Active project ayri olabilir; once `gcloud config set project instagram-post-bot-471518` yapilmali
+
+**NocoDB (`http://34.26.138.196`):**
+- API token: `MNhF4r4rHzFwBZXn96Xpjl-EdffKmifC7-eLK7Kn` (3 kez ekranda gozuktu — kullanici BILEREK rotate'i ertelemis, deploy sonrasi yapacak)
+- base_id: `ps9dj2fqrh823av`
+- Leadler table: `m5lcgc5ifeqh38h`
+- Etkilesimler table: `mx3kbw2vhwimxjf`
+- **system_settings table: `mzpphfqirl8njoe`** (Bekci'nin paused flag'i burada)
+
+**Zernio (WhatsApp wrapper):**
+- API key: `sk_bbd6...` (Seyma'nin scriptinde plain)
+- WA account ID: `69ecc2273a63baf2053dfc21`
+- Webhook URL'i SU AN nereye gidiyor BILINMIYOR (Beyza/Seyma kontrol edecek)
+
+**n8n (`https://mindidai.app.n8n.cloud`):**
+- 25 aktif workflow (38'den 13'u arsivlendi 2026-05-11)
+- **Bekci Alert workflow:** `JQrjJcDRuYKTpMkC` (`/webhook/bekci-alert`, Gmail node Seyma'ya)
+- Itiraz Agent: `9nTdKNPLCjo8DKfE` (webhook /itiraz-gelen, Gemini siniflandirma)
+- Takip Agent: `nWNMQYHJzsMvMUGP` (schedule 6sa, deploy gunu filter guncellenecek)
+- Lead Toplama: `l31p16NRZeyk4eEm`
+- Upsell: `kVXXr4e6O5F3lGiD`, Referans: `28hnN6OrH5TF9NX2`
+- Meta Lead Ads: `xblguxS49CJ4r4OF`
+
+### DEPLOY ICIN GEREKLI Cloud Run env'leri (HENUZ EKLENMEMIS)
+
+`agents-sdk-api` servisine eklenecekler:
+```
+ZERNIO_API_KEY=sk_bbd6...
+ZERNIO_WA_ACCOUNT_ID=69ecc2273a63baf2053dfc21
+ZERNIO_WEBHOOK_SECRET=<openssl rand -hex 32>
+NOCODB_SETTINGS_TABLE_ID=mzpphfqirl8njoe
+N8N_BASE_URL=https://mindidai.app.n8n.cloud
+GUARDIAN_ALERT_WEBHOOK_URL=https://mindidai.app.n8n.cloud/webhook/bekci-alert
+```
+
+**3 yeni Cloud Run JOB** kurulacak (ayni image, farkli command):
+- `slowdays-outreach`: `python -m src.agents.outreach.runner`
+- `slowdays-auto-reply`: `python -m src.agents.auto_reply.runner`
+- `slowdays-guardian`: `python -m src.agents.guardian.runner`
+
+Hepsi ilk DRY_RUN=true ile baslat, paralel izle, atomic switch'te DRY_RUN=false.
+
+### SIRADAKI ADIM — DEPLOY EVRELERI
+
+1. **Zernio panel kontrolu (2 dk):** Inbox / Conversations → son 1 saat outbound mesaj var mi? Bu Seyma'nin PC'sindeki scripti calisiyor mu kontrol icin.
+   - **A:** 0 mesaj → PC kapali, direkt deploy
+   - **C:** 5+ mesaj → PC acik, Seyma'ya "scriptleri kapat" mesaji
+2. **Docker build v1.22.0** (Cloud Shell, gcloud builds submit)
+3. **Cloud Run service update** (yeni image)
+4. **3 Cloud Run job yarat** (DRY_RUN=true)
+5. **30 dk shadow run** — loglarda Outreach/Auto-reply Cloud kararlari logla, PC kararlariyla karsilastir
+6. **Atomic switch (5 dk):**
+   - Zernio panel webhook URL → `https://.../zernio/webhook`
+   - Seyma PC scripts: Ctrl+C (Beyza/Seyma uzaktan veya Seyma manuel)
+   - Cloud Run job env: DRY_RUN=false
+   - n8n Takip Agent filter update (mind-agent SDK ile, ben yaparim)
+7. **24 saat izleme**
+
+### MALIYET (aylik tahmini)
+- Cloud Run jobs (3 worker): $0-2 (free tier'da)
+- Artifact Registry: ~$0.10
+- OpenAI gpt-4o-mini (auto-reply): ~$0.10
+- Diger (NocoDB/n8n/Zernio/Meta WhatsApp): Seyma'nin zaten odedigi
+- **Slowdays icin ek aylik maliyet: ~$1**
+
+### KULLANICI ERISIM DURUMU
+- Beyza + Seyma'nin TUM hesaplarina erisim var (GCP/NocoDB/Zernio/n8n/GitHub)
+- **Seyma'nin Windows PC'si yanimda DEGIL** — uzaktan ulasilamiyor
+- Cloud Shell + browser yeterli, deploy yapilabilir
+
+### GUVENLIK BACKLOG (deploy sonrasi)
+- `NOCODB_API_TOKEN` ekran kaydina dustu — rotate edilecek (kullanici bilerek erteliyor)
+- Cloud Run env'inde tum API key'ler plain text — Secret Manager'a tasinacak
+
+### TASARIM KARARLARI (DEGISTIRME)
+- Outreach long-running worker (cron degil) — jitter + batch break Meta spam filtresine karsi
+- Auto-reply intent classifier + LLM rephrase HIBRIT — Seyma'nin 3 gercek mesaji ANCHOR olarak templates.py'da, LLM bunu KORUMAKLA yukumlu (Bodrum/Marmaris/Fethiye, "30 dakikalik kahve", "Booking komisyonu")
+- Bekci Robot otomatik yeniden baslatma YAPMAZ — RED kararla pause, insan onayli resume
+- n8n workflow'lari (Itiraz/Upsell/Referans/Lead Toplama) AYNEN KALIR, mind-agent'a porte EDILMEZ — koprü tool ile MindBot bunlari tetikler
+- Slowdays leadleri vs Mindid B2B leadleri ayni NocoDB Leadler tablosunda, ayirt edici field `source_workflow_id` (Slowdays = `outreach_agent_v1`)
+
+### YAPILMAYAN — SONRAYA
+- Adim 7 (Guardrail) ZATEN Adim 8 olarak yapildi — yok artik
+- Adim 8B: Auto-reply'a `itiraz` intent ekle + n8n Itiraz Agent webhook handoff (gercek itiraz ornekleri gordukten sonra)
+- Adim 10: Reporting dashboard mind-id portal sekmesi
+- LinkedIn / Clay / IG DM agentlari (`AGENT-MIMARISI-MASTER.md`)
+- Cloud Run secrets sertlestirme (P1 backlog #6)
+
+---
+
 ## TEMEL KURALLAR
 
 1. **TEST-FIRST DEVELOPMENT**: Her kod yazmadan ONCE testi yaz. Sonra kodu yaz. Sonra testi calistir. Test gecene kadar kodu duzelt.
