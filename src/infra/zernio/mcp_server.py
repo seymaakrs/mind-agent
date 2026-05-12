@@ -108,7 +108,6 @@ def _zernio_tool_filter(tool_name: str) -> bool:
 
 _singleton: MCPServerStreamableHttp | None = None
 _active_servers: list = []          # FastAPI lifespan ile connected olanlar
-_active_manager = None              # MCPServerManager singleton (cleanup icin)
 
 
 def get_zernio_mcp_server() -> MCPServerStreamableHttp | None:
@@ -145,55 +144,56 @@ def get_zernio_mcp_server() -> MCPServerStreamableHttp | None:
 
 def reset_zernio_mcp_server() -> None:
     """Test helper — singleton'i sifirla."""
-    global _singleton, _active_servers, _active_manager
+    global _singleton, _active_servers
     _singleton = None
     _active_servers = []
-    _active_manager = None
 
 
 async def start_mcp_servers() -> None:
     """FastAPI lifespan **startup** hook: MCP server'lari connect et.
 
-    SDK 0.6.2'de Agent(mcp_servers=[...]) OTOMATIK connect etmiyor —
-    MCPServerManager pattern'i ile manuel baslatma sart. Bu fonksiyon
-    api.py lifespan'inden cagrilir, basarisiz olan server'lar otomatik
-    discard edilir (drop_failed_servers=True), Agent yine de calisir.
+    SDK 0.6.2'de Agent(mcp_servers=[...]) OTOMATIK connect etmiyor.
+    SDK'da MCPServerManager bazi sub-version'larda yok — biz minimal
+    manager'imizi inline yaziyoruz (server.connect() / server.cleanup()
+    direkt cagrilarak). Basarisiz olanlar discard edilir, agent yine
+    calisir (graceful degradation).
     """
-    global _active_servers, _active_manager
-    from agents.mcp.manager import MCPServerManager  # local import — opsiyonel SDK feature
-
+    global _active_servers
     zernio = get_zernio_mcp_server()
     if not zernio:
         log.info("No Zernio MCP server to start (ZERNIO_API_KEY missing)")
         _active_servers = []
         return
 
-    _active_manager = MCPServerManager(
-        [zernio],
-        strict=False,                # bagli olmayan server agent run'u patlamasin
-        drop_failed_servers=True,    # connected olmayan exclude edilsin
-    )
-    await _active_manager.__aenter__()
-    _active_servers = list(_active_manager.active_servers)
+    candidates = [zernio]
+    connected: list = []
+    for server in candidates:
+        name = getattr(server, "name", type(server).__name__)
+        try:
+            await server.connect()
+            connected.append(server)
+            log.info("MCP server connected: %s", name)
+        except Exception as exc:
+            log.warning(
+                "MCP server connect failed: %s (%s) — skipping, agent will run without it",
+                name, exc,
+            )
+    _active_servers = connected
     log.info(
-        "MCP startup complete: %d active server(s) (%s)",
-        len(_active_servers),
-        ", ".join(getattr(s, "name", "?") for s in _active_servers) or "none",
+        "MCP startup complete: %d/%d active server(s)",
+        len(connected), len(candidates),
     )
 
 
 async def stop_mcp_servers() -> None:
     """FastAPI lifespan **shutdown** hook: MCP cleanup."""
-    global _active_manager, _active_servers
-    if _active_manager is None:
-        return
-    try:
-        await _active_manager.__aexit__(None, None, None)
-    except Exception as exc:
-        log.warning("MCP cleanup error (ignored): %s", exc)
-    finally:
-        _active_manager = None
-        _active_servers = []
+    global _active_servers
+    for server in _active_servers:
+        try:
+            await server.cleanup()
+        except Exception as exc:
+            log.warning("MCP cleanup error (ignored): %s", exc)
+    _active_servers = []
 
 
 def get_active_mcp_servers() -> list:
