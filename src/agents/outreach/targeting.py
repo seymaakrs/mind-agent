@@ -65,13 +65,12 @@ def count_sent_today(
     Filter: yon=Giden AND agent=<agent_name> AND tarih >= bugun 00:00 UTC.
     UTC sabit; Cloud Run job timezone'undan bagimsiz olur.
     """
-    from src.infra.nocodb_client import iso_for_nocodb_filter
+    from src.infra.nocodb_client import today_filter_clause
     now = now or datetime.now(timezone.utc)
-    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
     where = (
         f"(yon,eq,Giden)"
         f"~and(agent,eq,{agent_name})"
-        f"~and(tarih,ge,{iso_for_nocodb_filter(midnight)})"
+        f"~and{today_filter_clause('tarih', now)}"
     )
     response = client.list_records(messages_table_id, where=where, limit=1000)
     return len(response.get("list") or [])

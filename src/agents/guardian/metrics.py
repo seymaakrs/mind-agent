@@ -68,29 +68,35 @@ def compute_metrics(
     now: datetime | None = None,
 ) -> GuardianMetrics:
     """Pull 24h counts from Etkilesimler. Pure NocoDB read — no decisions."""
-    from src.infra.nocodb_client import iso_for_nocodb_filter
+    from src.infra.nocodb_client import days_ago_filter_clause, today_filter_clause
     now = now or datetime.now(timezone.utc)
-    since = iso_for_nocodb_filter(now - timedelta(hours=window_hours))
+    # NocoDB v2 datetime sadece exactDate/daysAgo kabul ediyor (saat yok).
+    # 24h -> daysAgo,1; bugun = exactDate today. Diger window'lar icin
+    # round-up daysAgo (asla 0 olmaz).
+    if window_hours <= 24:
+        since_clause = today_filter_clause("tarih", now)
+    else:
+        since_clause = days_ago_filter_clause("tarih", max(1, window_hours // 24))
 
     outreach_sent = _count_where(
         client,
         messages_table_id,
         where=(
             f"(yon,eq,Giden)~and(agent,eq,Outreach Agent)"
-            f"~and(tarih,ge,{since})"
+            f"~and{since_clause}"
         ),
     )
     inbound_received = _count_where(
         client,
         messages_table_id,
-        where=f"(yon,eq,Gelen)~and(tarih,ge,{since})",
+        where=f"(yon,eq,Gelen)~and{since_clause}",
     )
     auto_replies_sent = _count_where(
         client,
         messages_table_id,
         where=(
             f"(yon,eq,Giden)~and(agent,eq,Auto-reply Agent)"
-            f"~and(tarih,ge,{since})"
+            f"~and{since_clause}"
         ),
     )
     # FAILED log Adim 9'da Outreach runner'a eklenecek (status field).

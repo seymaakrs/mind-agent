@@ -23,7 +23,11 @@ from agents import function_tool
 
 from src.app.config import get_settings
 from src.infra.errors import classify_error
-from src.infra.nocodb_client import get_nocodb_client, iso_for_nocodb_filter
+from src.infra.nocodb_client import (
+    days_ago_filter_clause,
+    get_nocodb_client,
+    today_filter_clause,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -499,20 +503,20 @@ async def _outreach_status_impl() -> dict[str, Any]:
         one_hour_ago = now - timedelta(hours=1)
         daily_limit = _outreach_daily_limit()
 
+        # NocoDB v2 datetime filter sadece exactDate/daysAgo operatorlerini
+        # kabul ediyor (saat hassasiyeti yok). Bugun gondericileri NocoDB'den
+        # kaba al, "son 1 saat"'i Python tarafinda ince filter et.
         today_rows = _fetch_all(
             msgs_tbl,
             where=(
                 f"(yon,eq,Giden)~and(agent,eq,Outreach Agent)"
-                f"~and(tarih,ge,{iso_for_nocodb_filter(midnight)})"
+                f"~and{today_filter_clause('tarih', now)}"
             ),
         )
-        last_hour_rows = _fetch_all(
-            msgs_tbl,
-            where=(
-                f"(yon,eq,Giden)~and(agent,eq,Outreach Agent)"
-                f"~and(tarih,ge,{iso_for_nocodb_filter(one_hour_ago)})"
-            ),
-        )
+        last_hour_rows = [
+            r for r in today_rows
+            if (_dt := _parse_dt(r.get("tarih"))) and _dt >= one_hour_ago
+        ]
         sent_today = len(today_rows)
         sent_last_hour = len(last_hour_rows)
         remaining = max(0, daily_limit - sent_today)
@@ -542,17 +546,15 @@ async def _auto_reply_status_impl() -> dict[str, Any]:
         return _missing_table_error("messages")
     try:
         now = _now_utc()
-        day_ago = now - timedelta(hours=24)
-        since = iso_for_nocodb_filter(day_ago)
-
+        day_clause = days_ago_filter_clause("tarih", 1)
         inbound = _fetch_all(
-            msgs_tbl, where=f"(yon,eq,Gelen)~and(tarih,ge,{since})"
+            msgs_tbl, where=f"(yon,eq,Gelen)~and{day_clause}"
         )
         outgoing_auto = _fetch_all(
             msgs_tbl,
             where=(
                 f"(yon,eq,Giden)~and(agent,eq,Auto-reply Agent)"
-                f"~and(tarih,ge,{since})"
+                f"~and{day_clause}"
             ),
         )
         pending = [r for r in inbound if not r.get("auto_reply_processed")]

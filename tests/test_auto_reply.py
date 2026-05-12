@@ -113,28 +113,31 @@ class TestResponderHelpers:
 class TestTargeting:
     def test_where_filter_shape(self):
         now = datetime(2026, 5, 10, 12, 0, tzinfo=timezone.utc)
-        w = _build_where(60, now=now)
+        w = _build_where(now=now)
         assert "(yon,eq,Gelen)" in w
         assert "(auto_reply_processed,eq,false)" in w
-        assert "(tarih,gt," in w
-        # Cutoff is now - 60min
-        assert "2026-05-10 11:00:00" in w
+        # NocoDB v2: exactDate operator (datetime SQL format reddediliyor)
+        assert "(tarih,gte,exactDate,2026-05-10)" in w
 
-    def test_find_pending_inbounds_returns_oldest_first(self):
+    def test_find_pending_inbounds_returns_fresh_oldest_first(self):
+        now = datetime(2026, 5, 10, 12, 0, tzinfo=timezone.utc)
         client = MagicMock()
         client.list_records.return_value = {
             "list": [
-                {"Id": 1, "mesaj_icerigi": "a"},
-                {"Id": 2, "mesaj_icerigi": "b"},
+                # Eski satir — cutoff disinda (max_age_minutes=60 -> 11:00 oncesi)
+                {"Id": 1, "tarih": "2026-05-10T10:30:00+00:00"},
+                # Taze satirlar
+                {"Id": 2, "tarih": "2026-05-10T11:15:00+00:00"},
+                {"Id": 3, "tarih": "2026-05-10T11:45:00+00:00"},
             ]
         }
         rows = find_pending_inbounds(
-            client, "msgs_tbl", batch_size=10, max_age_minutes=60
+            client, "msgs_tbl", batch_size=10, max_age_minutes=60, now=now
         )
-        assert [r["Id"] for r in rows] == [1, 2]
+        # Python filter eski satiri eler
+        assert [r["Id"] for r in rows] == [2, 3]
         kwargs = client.list_records.call_args.kwargs
         assert kwargs["sort"] == "tarih"
-        assert kwargs["limit"] == 10
 
     def test_find_pending_inbounds_empty(self):
         client = MagicMock()

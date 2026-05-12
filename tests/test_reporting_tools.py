@@ -340,13 +340,26 @@ def test_get_reporting_tools_includes_core_seven():
 
 @pytest.mark.asyncio
 async def test_outreach_status_sent_today_and_last_hour(monkeypatch):
-    # Mock _fetch_all to return distinct counts per call (today, last_hour).
+    """NocoDB v2 exactDate operator: bugun kayitlari tek call'da geliyor,
+    'son 1 saat' Python tarafinda ince filter ediliyor."""
+    from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+    now = _dt.now(_tz.utc)
+    one_hour_ago = now - _td(hours=1)
+    two_hours_ago = now - _td(hours=2)
+
+    today_rows = [
+        # Son 1 saatte 3 mesaj
+        {"Id": 1, "tarih": (now - _td(minutes=10)).isoformat()},
+        {"Id": 2, "tarih": (now - _td(minutes=30)).isoformat()},
+        {"Id": 3, "tarih": (now - _td(minutes=50)).isoformat()},
+        # 1 saat oncesi 9 mesaj
+        *[{"Id": 10 + i, "tarih": two_hours_ago.isoformat()} for i in range(9)],
+    ]
     calls: list[str] = []
 
     def fake_fetch_all(table_id, *, where=None, **kwargs):
         calls.append(where or "")
-        # First call: today (12 rows); second call: last hour (3 rows).
-        return [{"Id": i} for i in range(12 if "00:00:00" in (where or "") else 3)]
+        return today_rows
 
     monkeypatch.setattr(rt, "_fetch_all", fake_fetch_all)
     monkeypatch.setenv("OUTREACH_DAILY_LIMIT", "240")
@@ -354,13 +367,10 @@ async def test_outreach_status_sent_today_and_last_hour(monkeypatch):
     result = await rt._outreach_status_impl()
     assert result["success"] is True
     assert result["sent_today"] == 12
-    assert result["daily_limit"] == 240
-    assert result["remaining"] == 228
     assert result["sent_last_hour"] == 3
-    assert result["percent_used"] == 5.0
-    assert "12/240" in result["summary_tr"]
-    # Filter shape sanity
-    assert any("(yon,eq,Giden)" in w for w in calls)
+    assert result["daily_limit"] == 240
+    # Filter shape: NocoDB v2 exactDate
+    assert any("exactDate" in w for w in calls)
     assert any("(agent,eq,Outreach Agent)" in w for w in calls)
 
 

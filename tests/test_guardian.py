@@ -88,8 +88,8 @@ class TestComputeMetrics:
         assert m.outreach_failed == 0
 
         wheres = [c.kwargs["where"] for c in client.list_records.call_args_list]
-        # since cutoff = 2026-05-10T18:00:00+00:00
-        assert all("2026-05-10 18:00:00" in w for w in wheres)
+        # window_hours=24 -> today_filter (exactDate today)
+        assert all("(tarih,gte,exactDate,2026-05-11)" in w for w in wheres)
         assert any("(agent,eq,Outreach Agent)" in w for w in wheres)
         assert any("(yon,eq,Gelen)" in w for w in wheres)
         assert any("(agent,eq,Auto-reply Agent)" in w for w in wheres)

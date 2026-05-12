@@ -30,25 +30,45 @@ _TIMEOUT_SECONDS = 30.0
 
 
 def iso_for_nocodb_filter(dt: "datetime") -> str:
-    """NocoDB v2 'where' filter icin guvenli datetime formati.
+    """DEPRECATED: NocoDB v2 datetime filter SQL ISO format kabul etmiyor.
+    Yerine ``today_filter_clause`` veya ``days_ago_filter_clause`` kullan.
 
-    Production'da iki format denedik, ikisi de 422 ile reddedildi:
-        '2026-05-12T00:00:00+00:00' is not supported.
-        '2026-05-12T00:00:00Z' is not supported.
-
-    NocoDB v2 SQL-style timezone-less format kabul ediyor:
-        2026-05-12 00:00:00
-
-    Boslukla ayrilmis, tz yok. Bu helper tz-aware datetime'i UTC'ye cevirir,
-    space-separated format doner. Tum (tarih,ge,...) / (tarih,gt,...)
-    filter'lari bu fonksiyonu kullanmali.
-    """
+    Bu fonksiyon hala mevcut kodlar icin geriye-uyumluluk amaciyla durur,
+    sadece UTC formatli string doner (debug/log icin yararli)."""
     from datetime import timezone as _tz
     if dt.tzinfo is None:
         utc = dt
     else:
         utc = dt.astimezone(_tz.utc).replace(tzinfo=None)
     return utc.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def today_filter_clause(field: str, now: "datetime | None" = None) -> str:
+    """NocoDB v2 'where' clause: bugun (UTC) 00:00 ve sonrasi.
+
+    NocoDB v2 DateTime kolonlari ISO datetime string'i kabul etmiyor (422);
+    bunun yerine ``exactDate`` operator'unu istiyor:
+        (field,gte,exactDate,YYYY-MM-DD)
+
+    Production test (2026-05-12): `2026-05-12T00:00:00+00:00`, `Z` ve
+    space-separated formatlar HEPSI 422 verdi. Sadece exactDate calisiyor.
+    """
+    from datetime import datetime as _dt, timezone as _tz
+    now = now or _dt.now(_tz.utc)
+    date_str = now.strftime("%Y-%m-%d")
+    return f"({field},gte,exactDate,{date_str})"
+
+
+def days_ago_filter_clause(field: str, days: int) -> str:
+    """NocoDB v2 'where' clause: son N gun (today inclusive).
+
+        (field,gt,daysAgo,N)
+
+    Saat hassasiyetli pencereler icin (son 60dk vs.) bu filter'i kaba
+    pencere olarak kullan, sonra Python tarafinda `tarih` field'ini parse
+    edip ince filter et — NocoDB v2'de saat-bazli operator yok.
+    """
+    return f"({field},gt,daysAgo,{days})"
 
 
 class NocoDBClient:
