@@ -110,39 +110,37 @@ class TestAgentWiring:
     def teardown_method(self):
         reset_zernio_mcp_server()
 
-    def _stub_mcp(self, monkeypatch):
-        """Agent factory'lerin gercek MCP server kurmasini engelle —
-        sadece 'baglandi mi' davranisini test ediyoruz."""
-        sentinel = object()
+    def _stub_active(self, monkeypatch, servers):
+        """Agent factory'ler get_active_mcp_servers() cagirir — lifespan
+        ile connect edilmis listeyi doner. Test'te bunu doğrudan stub'liyoruz."""
         monkeypatch.setattr(
-            "src.infra.zernio.mcp_server.get_zernio_mcp_server",
-            lambda: sentinel,
+            "src.infra.zernio.mcp_server.get_active_mcp_servers",
+            lambda: list(servers),
         )
-        return sentinel
 
-    def test_orchestrator_attaches_mcp_when_available(self, monkeypatch):
-        sentinel = self._stub_mcp(monkeypatch)
+    def test_orchestrator_attaches_mcp_when_active(self, monkeypatch):
+        sentinel = object()
+        self._stub_active(monkeypatch, [sentinel])
         from src.agents.orchestrator_agent import create_orchestrator_agent
         agent = create_orchestrator_agent()
         assert sentinel in agent.mcp_servers
 
-    def test_orchestrator_omits_mcp_when_unavailable(self, monkeypatch):
-        monkeypatch.setattr(
-            "src.infra.zernio.mcp_server.get_zernio_mcp_server",
-            lambda: None,
-        )
+    def test_orchestrator_omits_mcp_when_none_active(self, monkeypatch):
+        self._stub_active(monkeypatch, [])
         from src.agents.orchestrator_agent import create_orchestrator_agent
         agent = create_orchestrator_agent()
         assert agent.mcp_servers == []
 
     def test_sales_analyst_attaches_mcp(self, monkeypatch):
-        sentinel = self._stub_mcp(monkeypatch)
+        sentinel = object()
+        self._stub_active(monkeypatch, [sentinel])
         from src.agents.sales.sales_analyst_agent import create_sales_analyst_agent
         agent = create_sales_analyst_agent()
         assert sentinel in agent.mcp_servers
 
     def test_marketing_attaches_mcp(self, monkeypatch):
-        sentinel = self._stub_mcp(monkeypatch)
+        sentinel = object()
+        self._stub_active(monkeypatch, [sentinel])
         from src.agents.marketing_agent import create_marketing_agent
         agent = create_marketing_agent()
         assert sentinel in agent.mcp_servers

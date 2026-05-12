@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import traceback
+from contextlib import asynccontextmanager
 from typing import Any
 
 from agents import set_default_openai_key
@@ -20,7 +21,23 @@ from src.infra.thread_manager import generate_thread_id
 settings = get_settings()
 set_default_openai_key(settings.openai_api_key)
 
-app = FastAPI(title="Agents Orchestrator API", version="0.1.0")
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """Startup/shutdown hooks. MCP server'lari burada connect ediliyor
+    (SDK 0.6.2 Agent(mcp_servers=...) otomatik connect etmiyor)."""
+    from src.infra.zernio.mcp_server import start_mcp_servers, stop_mcp_servers
+    await start_mcp_servers()
+    try:
+        yield
+    finally:
+        await stop_mcp_servers()
+
+
+app = FastAPI(
+    title="Agents Orchestrator API",
+    version="0.1.0",
+    lifespan=_lifespan,
+)
 
 # CORS middleware
 app.add_middleware(

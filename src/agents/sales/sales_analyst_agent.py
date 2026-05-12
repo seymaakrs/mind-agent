@@ -25,11 +25,10 @@ def create_sales_analyst_agent(
     tools = list(get_reporting_tools())
 
     # Zernio MCP — analytics + reports (IG demographics, posting frequency,
-    # best time, content decay, post-timeline, ads analytics). Sema's
-    # "reklamlarim/icerigim/whatsapp konusmalarim" senaryolari icin.
-    from src.infra.zernio.mcp_server import get_zernio_mcp_server
-    zernio_mcp = get_zernio_mcp_server()
-    mcp_servers = [zernio_mcp] if zernio_mcp else []
+    # best time, content decay, post-timeline, ads analytics). Lifespan
+    # ile connect edilmis aktif server'lari al.
+    from src.infra.zernio.mcp_server import get_active_mcp_servers
+    mcp_servers = get_active_mcp_servers()
 
     return Agent(
         name="sales_analyst",

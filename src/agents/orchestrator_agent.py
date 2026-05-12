@@ -87,11 +87,11 @@ def create_orchestrator_agent(
     orchestrator_tools = get_orchestrator_tools()
 
     # Zernio hosted MCP server (Sema'nin onerisi, 2026-05-11). 280+ tool
-    # otomatik gelir; tool_filter ile ~80 alakali tool'a kisitli. API key
-    # yoksa None doner, MindBot Zernio'suz devam eder.
-    from src.infra.zernio.mcp_server import get_zernio_mcp_server
-    zernio_mcp = get_zernio_mcp_server()
-    mcp_servers = [zernio_mcp] if zernio_mcp else []
+    # otomatik gelir; tool_filter ile ~80 alakali tool'a kisitli. Lifespan
+    # ile connect edilmis aktif server'lari al — Cloud Run startup'ta
+    # baglandi, hata varsa otomatik disre alindi.
+    from src.infra.zernio.mcp_server import get_active_mcp_servers
+    mcp_servers = get_active_mcp_servers()
 
     # Get current date for dynamic injection
     today_date = datetime.now().strftime("%Y-%m-%d")

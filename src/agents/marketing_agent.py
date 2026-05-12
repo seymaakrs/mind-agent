@@ -54,9 +54,9 @@ def create_marketing_agent(
 
     # Zernio MCP — posts_create / cross_post / boost_post / ad campaigns
     # (Late API'nin tamamlayıcısı; 14 platforma direkt yayın yapabilir).
-    from src.infra.zernio.mcp_server import get_zernio_mcp_server
-    zernio_mcp = get_zernio_mcp_server()
-    mcp_servers = [zernio_mcp] if zernio_mcp else []
+    # Lifespan ile connect edilmis aktif server'lari al.
+    from src.infra.zernio.mcp_server import get_active_mcp_servers
+    mcp_servers = get_active_mcp_servers()
 
     return Agent(
         name="marketing",
