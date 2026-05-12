@@ -32,6 +32,7 @@ Mindid kendi B2B CRM omurgasini koruyarak, Slowdays kampanyasi (331 otel Whatsap
 - Project: `instagram-post-bot-471518`
 - Cloud Run service: `agents-sdk-api` (us-central1)
 - Mevcut image: `v1.21.0` (eski, yeni kod YOK)
+- **ROLLBACK noktasi:** `agents-sdk-api-00025-rnw` (v1.21.0, 2026-05-09)
 - Region: `us-central1`
 - Active project ayri olabilir; once `gcloud config set project instagram-post-bot-471518` yapilmali
 
