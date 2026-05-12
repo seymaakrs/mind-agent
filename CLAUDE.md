@@ -341,6 +341,30 @@ Sirali plan (10 dakika):
 Bekci Robot artik bu tabloya tick yazabilir. Outreach Robotu her tick basinda
 outreach_paused okur; True ise mesaj atmaz.
 
+### FAZ 1 DEPLOY DONE (2026-05-12) — Zernio MCP canli
+
+Cloud Run v1.22.6 (revision agents-sdk-api-00034-vgb) canli %100 trafik.
+Rollback noktasi: 00025-rnw (v1.21.0 orijinal).
+
+Test sonuclari (portal + curl):
+- ✅ "Sicak lead sayisi?" → 68 (count_leads NocoDB)
+- ✅ "Zernio'da hangi sosyal medya hesaplari?" → 9 hesap, Zernio MCP (accounts_list)
+- ✅ "Slowdays reklamlarimi listele" → Zernio MCP (list_ad_campaigns)
+- ✅ "n8n'de hangi workflow'lar var?" → 10 workflow (köprü)
+- ✅ "Bekci Alert yapilandirildi mi?" → configured: true
+- ✅ "Bugun outreach kac mesaj?" → 0/240 (NocoDB exactDate filter)
+
+8 deploy yaptik, hicbiri canliyi bozmadi (Cloud Run revision/health check
+fail-safe). Bug'lar production'da gozlemlendi, fix'lendi:
+1. MCP otomatik connect etmiyor → FastAPI lifespan
+2. agents.mcp.manager modulu yok → inline minimal manager
+3. tool_filter signature (context, tool) → fix
+4. NocoDB v2 datetime ISO format reddediyor → exactDate/daysAgo operator
+
+Bilinen sinir: gpt-4o TPM 30K, Zernio MCP 80 tool context'i ~28K token.
+Hizli ardisik sorularda 429 rate limit. Faz 2-3-4 boyunca takilmaz; demo
+oncesi tool filter darat + gpt-4o-mini orchestrator kombosu uygulanir.
+
 ### YARIN DEVAM (2026-05-10) — kaldigimiz yer
 
 **Bugun bitenler (2026-05-09):**
