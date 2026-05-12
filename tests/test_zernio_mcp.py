@@ -51,7 +51,9 @@ class TestToolFilter:
         "docs_search",
     ])
     def test_allowed_tools_pass(self, tool_name):
-        assert _zernio_tool_filter(tool_name) is True
+        # SDK signature: (context, tool) -> bool. Test'te basit mock yeterli.
+        fake_tool = type("T", (), {"name": tool_name})()
+        assert _zernio_tool_filter(None, fake_tool) is True
 
     @pytest.mark.parametrize("tool_name", [
         # Yonetim/altyapi — kod tarafinda halledilir, MindBot'a gerek yok
@@ -64,7 +66,8 @@ class TestToolFilter:
         "random_xyz", "internal_admin_purge",
     ])
     def test_disallowed_tools_blocked(self, tool_name):
-        assert _zernio_tool_filter(tool_name) is False
+        fake_tool = type("T", (), {"name": tool_name})()
+        assert _zernio_tool_filter(None, fake_tool) is False
 
 
 class TestGetZernioMcpServer:

@@ -99,10 +99,14 @@ _ZERNIO_TOOL_ALLOW_PREFIXES: tuple[str, ...] = (
 )
 
 
-def _zernio_tool_filter(tool_name: str) -> bool:
-    """Tool allow-list check. Filter fonksiyonu MCPServerStreamableHttp'a
-    static callable olarak verilir (SDK her tool icin sorar)."""
-    return any(tool_name.startswith(p) or tool_name == p.rstrip("_")
+def _zernio_tool_filter(context, tool) -> bool:
+    """Tool allow-list check. SDK 0.6.2 imzasi:
+        (ToolFilterContext, Tool) -> bool | Awaitable[bool]
+    Production log'undan tespit edildi (2026-05-12). ``tool.name`` orneğin
+    'list_ad_campaigns', 'posts_create' gibi snake_case fonksiyon adi.
+    """
+    name = getattr(tool, "name", None) or ""
+    return any(name.startswith(p) or name == p.rstrip("_")
                for p in _ZERNIO_TOOL_ALLOW_PREFIXES)
 
 
