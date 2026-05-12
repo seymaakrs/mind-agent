@@ -25,7 +25,7 @@ from .policy import AutoReplyConfig
 from .templates import FALLBACK_TEMPLATES
 
 
-Intent = Literal["olumlu", "olumsuz", "soru", "spam"]
+Intent = Literal["olumlu", "olumsuz", "soru", "spam", "itiraz"]
 
 
 class AutoReplyDecision(BaseModel):
@@ -33,11 +33,12 @@ class AutoReplyDecision(BaseModel):
 
     intent: Intent = Field(
         description="Inbound mesajin niyeti. olumlu=ilgi var, soru=bilgi "
-        "soruyor, olumsuz=red/iptal, spam=alakasiz."
+        "soruyor, olumsuz=red/iptal, spam=alakasiz, itiraz=fiyat/rekabet/"
+        "kanit/erteleme/olcek/teknoloji itirazi (insan eli gerek)."
     )
     reply_text: str = Field(
         default="",
-        description="Gonderilecek TR yanit. Olumsuz/spam ise BOS birak.",
+        description="Gonderilecek TR yanit. Olumsuz/spam/itiraz ise BOS birak.",
     )
     confidence: float = Field(
         default=0.5,
@@ -53,10 +54,14 @@ inbound mesajlari okur, niyetini siniflandirir ve KISA, SAMIMI, TR bir yanit
 yazarsin.
 
 Kurallar:
-- intent: olumlu | soru | olumsuz | spam
+- intent: olumlu | soru | olumsuz | spam | itiraz
 - olumlu / soru: reply_text uretirken ornek template'i ANCHOR olarak kullan.
   Tonu, uzunlugu, emoji kullanim stilini KOPYALA. Tekrar olmasin diye
   cumlelerde kucuk varyasyonlar yap.
+- itiraz: musteri fiyat/rekabet/erteleme/olcek/teknoloji/kanit itirazi
+  yapiyorsa intent=itiraz. reply_text BOS birak — Auto-reply otomatik
+  cevap atmaz; n8n Itiraz Agent webhook'una handoff yapilir (Gemini
+  sinflandirir, Seyma'ya oneri maili gonderir).
 - ANCHOR'daki gercek bilgileri AYNEN KORU — bu detaylar halusine edilemez:
     * "Bodrumdayim", "Marmaris", "Fethiye yoluna cikiyorum"
     * "30 dakikalik gorusme", "yuz yuze", "kahve"

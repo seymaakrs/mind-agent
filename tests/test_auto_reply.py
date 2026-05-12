@@ -63,6 +63,10 @@ class TestTemplates:
         assert has_active_templates("olumsuz") is False
         assert has_active_templates("spam") is False
 
+    def test_itiraz_is_handoff_no_template(self):
+        # itiraz intent Auto-reply yanit atmaz, n8n handoff yapilir
+        assert has_active_templates("itiraz") is False
+
     def test_no_emoji_or_link(self):
         for variants in FALLBACK_TEMPLATES.values():
             for v in variants:
@@ -414,3 +418,90 @@ class TestFallbackTemplatesFromSeyma:
         assert "Fethiye" in joined
         assert "Booking" in joined
         assert "30 dakika" in joined
+
+
+# ---------------------------------------------------------------------------
+# Itiraz handoff (Tier 1.2)
+# ---------------------------------------------------------------------------
+
+
+class TestItirazHandoff:
+    @pytest.mark.asyncio
+    async def test_itiraz_intent_triggers_n8n_handoff_no_reply(self, mock_clients, monkeypatch):
+        """intent=itiraz olunca:
+        - Otomatik yanit ATILMAZ
+        - n8n Itiraz Agent webhook'una POST atilir
+        - Lead asama -> Itiraz
+        - Etkilesimler'e 'Itiraz Handoff' satir yazilir
+        """
+        nocodb, zernio = mock_clients
+
+        async def fake_decide(message, **kwargs):
+            return _make_decision("itiraz", "", 0.9)
+
+        monkeypatch.setattr(runner, "decide_reply", fake_decide)
+
+        handoff_mock = AsyncMock(return_value=True)
+        monkeypatch.setattr(runner, "_handoff_to_n8n_itiraz", handoff_mock)
+
+        result = await runner.handle_one(
+            inbound_row={
+                "Id": 7,
+                "mesaj_icerigi": "Fiyatınız çok yüksek, biraz indirim yapabilir misiniz?",
+                "lead_adi": "Otel A",
+                "lead_email": "otel@example.com",
+            },
+            config=AutoReplyConfig(),
+            leads_table="leads_tbl",
+            messages_table="msgs_tbl",
+            dry_run=False,
+        )
+
+        # Otomatik yanit YOK
+        assert result["reply_sent"] is False
+        assert result["handoff_sent"] is True
+        zernio.send_message.assert_not_called()
+
+        # n8n webhook tetiklendi
+        handoff_mock.assert_awaited_once()
+        kwargs = handoff_mock.await_args.kwargs
+        assert kwargs["inbound_text"].startswith("Fiyatınız")
+        assert kwargs["lead_name"] == "Otel A"
+
+        # Lead asama -> Itiraz
+        update_calls = nocodb.update_record.call_args_list
+        lead_update = next(
+            c for c in update_calls
+            if c.args[0] == "leads_tbl" and c.args[2].get("asama") == "Itiraz"
+        )
+        assert lead_update is not None
+
+        # Etkilesimler 'Itiraz Handoff' log
+        upsert_calls = nocodb.upsert_record.call_args_list
+        handoff_log = next(
+            c for c in upsert_calls
+            if c.args[2].get("tur") == "Itiraz Handoff"
+        )
+        assert handoff_log is not None
+
+    @pytest.mark.asyncio
+    async def test_itiraz_low_confidence_no_handoff(self, mock_clients, monkeypatch):
+        """conf < 0.5 ise insan eli — handoff yok, log yok, sessiz."""
+        nocodb, zernio = mock_clients
+
+        async def fake_decide(message, **kwargs):
+            return _make_decision("itiraz", "", 0.3)
+
+        monkeypatch.setattr(runner, "decide_reply", fake_decide)
+        handoff_mock = AsyncMock(return_value=True)
+        monkeypatch.setattr(runner, "_handoff_to_n8n_itiraz", handoff_mock)
+
+        await runner.handle_one(
+            inbound_row={"Id": 8, "mesaj_icerigi": "?", "lead_adi": "Otel B"},
+            config=AutoReplyConfig(),
+            leads_table="leads_tbl",
+            messages_table="msgs_tbl",
+            dry_run=False,
+        )
+        handoff_mock.assert_not_called()
+        zernio.send_message.assert_not_called()

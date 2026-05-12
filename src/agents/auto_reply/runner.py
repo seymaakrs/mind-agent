@@ -147,6 +147,54 @@ async def handle_one(
             except Exception as exc:
                 log.warning("auto_reply: lead update failed: %s", exc)
 
+    # ----- Itiraz handoff (intent=itiraz) -----
+    # Auto-reply otomatik yanit ATMAZ. Bunun yerine n8n Itiraz Agent
+    # webhook'una POST: Gemini siniflandirir, Seyma'ya oneri maili gonderir.
+    handoff_sent = False
+    if decision.intent == "itiraz" and decision.confidence >= 0.5 and not dry_run:
+        try:
+            handoff_sent = await _handoff_to_n8n_itiraz(
+                inbound_text=text,
+                lead_name=lead_name,
+                lead_email=(inbound_row.get("lead_email") or ""),
+            )
+        except Exception as exc:
+            log.warning("auto_reply: itiraz handoff failed row_id=%s: %s", row_id, exc)
+
+        # Lead asama: Itiraz (yeni SingleSelect option — migration ile eklenir)
+        lead_row = _resolve_lead_row(nocodb, leads_table, inbound_row)
+        if lead_row:
+            try:
+                nocodb.update_record(
+                    leads_table,
+                    int(lead_row["Id"]),
+                    {"asama": "Itiraz", "son_temas": timestamp},
+                )
+            except Exception as exc:
+                log.warning("auto_reply: lead asama->Itiraz failed: %s", exc)
+
+        # Etkilesimler'e handoff log (yon=Sistem, tur=Itiraz Handoff)
+        if messages_table:
+            try:
+                nocodb.upsert_record(
+                    messages_table,
+                    "external_message_id",
+                    {
+                        "lead_adi": lead_name,
+                        "tarih": timestamp,
+                        "kanal": inbound_row.get("kanal") or "WhatsApp",
+                        "yon": "Giden",
+                        "tur": "Itiraz Handoff",
+                        "mesaj_icerigi": f"Auto-reply intent=itiraz tespit etti, n8n Itiraz Agent'a handoff edildi. Orijinal: {text[:200]}",
+                        "external_message_id": f"itiraz_handoff_{row_id}_{int(datetime.now(timezone.utc).timestamp())}",
+                        "agent": "Auto-reply Agent",
+                        "otomatik_mi": True,
+                        "auto_reply_processed": True,
+                    },
+                )
+            except Exception as exc:
+                log.warning("auto_reply: itiraz log failed: %s", exc)
+
     if not dry_run:
         try:
             nocodb.update_record(
@@ -156,12 +204,41 @@ async def handle_one(
             log.warning("auto_reply: cannot mark processed row_id=%s: %s", row_id, exc)
 
     return {
+        "handoff_sent": handoff_sent,
         "row_id": row_id,
         "intent": decision.intent,
         "confidence": decision.confidence,
         "reply_sent": reply_sent,
         "dry_run": dry_run,
     }
+
+
+async def _handoff_to_n8n_itiraz(
+    *, inbound_text: str, lead_name: str, lead_email: str
+) -> bool:
+    """Auto-reply intent=itiraz tespit ettiginde n8n Itiraz Agent
+    webhook'una POST. n8n Gemini ile siniflandirir + Seyma'ya oneri maili
+    gonderir (insan onayli, otomatik musteriye yollamaz).
+
+    Returns True if webhook 2xx donduyse.
+    """
+    from src.tools.n8n_bridge_tools import _call_n8n_workflow_impl
+    result = await _call_n8n_workflow_impl(
+        name="itiraz_agent",
+        body={
+            "musteri_email": lead_email or f"{lead_name.replace(' ', '_')}@unknown",
+            "mesaj": inbound_text,
+        },
+    )
+    ok = bool(result.get("success"))
+    if ok:
+        log.info("auto_reply: itiraz handoff to n8n OK (lead=%s)", lead_name)
+    else:
+        log.warning(
+            "auto_reply: itiraz handoff to n8n FAILED: %s",
+            result.get("user_message_tr") or result.get("error"),
+        )
+    return ok
 
 
 def _resolve_lead_row(

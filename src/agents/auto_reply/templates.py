@@ -44,6 +44,11 @@ FALLBACK_TEMPLATES: dict[str, list[str]] = {
         "uğrayabilirim, 30 dakikalık bir kahve görüşmesi yeterli. Ne gün "
         "size uyar?",
     ],
+    "itiraz": [
+        # Bos — Auto-reply otomatik yanit yollamaz. Bunun yerine n8n
+        # Itiraz Agent webhook'una handoff edilir (Gemini siniflandirma +
+        # Seyma'ya oneri maili). Insan onayli akis.
+    ],
     "olumsuz": [
         # Empty — olumsuz mesajlara yanit verme; otel rahatsiz edilmez.
     ],
