@@ -89,7 +89,7 @@ class TestComputeMetrics:
 
         wheres = [c.kwargs["where"] for c in client.list_records.call_args_list]
         # since cutoff = 2026-05-10T18:00:00+00:00
-        assert all("2026-05-10T18:00:00" in w for w in wheres)
+        assert all("2026-05-10 18:00:00" in w for w in wheres)
         assert any("(agent,eq,Outreach Agent)" in w for w in wheres)
         assert any("(yon,eq,Gelen)" in w for w in wheres)
         assert any("(agent,eq,Auto-reply Agent)" in w for w in wheres)

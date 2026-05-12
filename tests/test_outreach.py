@@ -383,7 +383,7 @@ class TestCountSentToday:
         where = client.list_records.call_args.kwargs["where"]
         assert "(yon,eq,Giden)" in where
         assert "(agent,eq,Outreach Agent)" in where
-        assert "(tarih,ge,2026-05-11T00:00:00Z)" in where
+        assert "(tarih,ge,2026-05-11 00:00:00)" in where
 
     def test_returns_row_count(self):
         client = MagicMock()

@@ -118,7 +118,7 @@ class TestTargeting:
         assert "(auto_reply_processed,eq,false)" in w
         assert "(tarih,gt," in w
         # Cutoff is now - 60min
-        assert "2026-05-10T11:00:00" in w
+        assert "2026-05-10 11:00:00" in w
 
     def test_find_pending_inbounds_returns_oldest_first(self):
         client = MagicMock()
