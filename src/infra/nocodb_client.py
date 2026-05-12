@@ -29,6 +29,26 @@ from src.infra.errors import ServiceError, classify_error
 _TIMEOUT_SECONDS = 30.0
 
 
+def iso_for_nocodb_filter(dt: "datetime") -> str:
+    """NocoDB v2 'where' filter icin guvenli ISO datetime formati.
+
+    NocoDB v2 ``2026-05-12T00:00:00+00:00`` formatini reddediyor (422):
+        {"msg": "'2026-05-12T00:00:00+00:00' is not supported."}
+    ``Z`` suffix kullanan kompakt UTC formati (RFC 3339) kabul ediyor:
+        2026-05-12T00:00:00Z
+    Bu helper tz-aware datetime'i UTC'ye cevirir ve Z ile bitiren string
+    doner. Tum (tarih,ge,...) / (tarih,gt,...) filter'lari bu fonksiyonu
+    kullanmali.
+    """
+    from datetime import timezone as _tz
+    if dt.tzinfo is None:
+        # Naive datetime -> UTC kabul et
+        utc = dt
+    else:
+        utc = dt.astimezone(_tz.utc).replace(tzinfo=None)
+    return utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 class NocoDBClient:
     """Thin httpx wrapper around NocoDB v2 REST API.
 

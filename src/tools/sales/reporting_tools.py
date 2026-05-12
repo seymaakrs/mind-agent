@@ -23,7 +23,7 @@ from agents import function_tool
 
 from src.app.config import get_settings
 from src.infra.errors import classify_error
-from src.infra.nocodb_client import get_nocodb_client
+from src.infra.nocodb_client import get_nocodb_client, iso_for_nocodb_filter
 
 
 # ---------------------------------------------------------------------------
@@ -503,14 +503,14 @@ async def _outreach_status_impl() -> dict[str, Any]:
             msgs_tbl,
             where=(
                 f"(yon,eq,Giden)~and(agent,eq,Outreach Agent)"
-                f"~and(tarih,ge,{midnight.isoformat()})"
+                f"~and(tarih,ge,{iso_for_nocodb_filter(midnight)})"
             ),
         )
         last_hour_rows = _fetch_all(
             msgs_tbl,
             where=(
                 f"(yon,eq,Giden)~and(agent,eq,Outreach Agent)"
-                f"~and(tarih,ge,{one_hour_ago.isoformat()})"
+                f"~and(tarih,ge,{iso_for_nocodb_filter(one_hour_ago)})"
             ),
         )
         sent_today = len(today_rows)
@@ -543,7 +543,7 @@ async def _auto_reply_status_impl() -> dict[str, Any]:
     try:
         now = _now_utc()
         day_ago = now - timedelta(hours=24)
-        since = day_ago.isoformat()
+        since = iso_for_nocodb_filter(day_ago)
 
         inbound = _fetch_all(
             msgs_tbl, where=f"(yon,eq,Gelen)~and(tarih,ge,{since})"

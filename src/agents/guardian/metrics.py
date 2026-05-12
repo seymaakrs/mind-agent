@@ -68,8 +68,9 @@ def compute_metrics(
     now: datetime | None = None,
 ) -> GuardianMetrics:
     """Pull 24h counts from Etkilesimler. Pure NocoDB read — no decisions."""
+    from src.infra.nocodb_client import iso_for_nocodb_filter
     now = now or datetime.now(timezone.utc)
-    since = (now - timedelta(hours=window_hours)).isoformat()
+    since = iso_for_nocodb_filter(now - timedelta(hours=window_hours))
 
     outreach_sent = _count_where(
         client,

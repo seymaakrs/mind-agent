@@ -14,12 +14,12 @@ from typing import Any
 
 
 def _build_where(max_age_minutes: int, now: datetime | None = None) -> str:
+    from src.infra.nocodb_client import iso_for_nocodb_filter
     cutoff = (now or datetime.now(timezone.utc)) - timedelta(minutes=max_age_minutes)
-    cutoff_iso = cutoff.isoformat()
     return (
         f"(yon,eq,Gelen)"
         f"~and(auto_reply_processed,eq,false)"
-        f"~and(tarih,gt,{cutoff_iso})"
+        f"~and(tarih,gt,{iso_for_nocodb_filter(cutoff)})"
     )
 
 
