@@ -46,6 +46,9 @@ from src.tools.brand import (  # noqa: E402
 
 HEX_RE = re.compile(r"^#[0-9A-Fa-f]{3}([0-9A-Fa-f]{3}([0-9A-Fa-f]{2})?)?$")
 CTA_CHOICES = ["soft", "hard", "quirky", "informative"]
+ADDRESS_CHOICES = ["siz", "sen"]
+EMOJI_CHOICES = ["bol", "az", "yok", "secili"]
+PRICE_CHOICES = ["ekonomik", "orta", "premium", "luks"]
 
 
 def _ask(prompt: str, default: str | None = None) -> str | None:
@@ -124,6 +127,7 @@ def _fill_basics(existing: BrandBasics) -> BrandBasics:
         industry=_ask("Sektor (orn. 'butik otel', 'B2B SaaS')", existing.industry),
         founded_year=_ask_int("Kurulus yili", existing.founded_year),
         languages=_ask_list("Diller (ISO 639-1, orn. tr, en)", existing.languages),
+        keywords=_ask_list("Markayi tanimlayan 5 anahtar kelime", existing.keywords),
     )
 
 
@@ -144,12 +148,18 @@ def _fill_visual(existing: BrandVisual) -> BrandVisual:
 def _fill_voice(existing: BrandVoice) -> BrandVoice:
     _section("VOICE — yazili kimlik (Marketing Agent caption icin)")
     return BrandVoice(
+        agent_role=_ask("Agent rolu (orn. 'Kidemli Copywriter')", existing.agent_role),
         tone=_ask("Ton (tek cumle, orn. 'samimi ama profesyonel')", existing.tone),
         personality=_ask_list("Kisilik etiketleri (orn. uzman, yardimsever, esprili)", existing.personality),
+        address_form=_ask_literal("Hitap sekli", ADDRESS_CHOICES, existing.address_form),
+        emoji_usage=_ask_literal("Emoji kullanim tarzi", EMOJI_CHOICES, existing.emoji_usage),
+        hook_style=_ask("Hook stili (orn. 'kisa soru', 'iddiali aciklama')", existing.hook_style),
         avoid_words=_ask_list("Yasak kelimeler (orn. devrim niteliginde, muthis)", existing.avoid_words),
+        avoid_topics=_ask_list("Yasakli konular (orn. siyaset, rakip X)", existing.avoid_topics),
         preferred_words=_ask_list("Tercih edilen kelimeler", existing.preferred_words),
+        cta_templates=_ask_list("Gercek CTA kaliplari (orn. 'Profildeki linke tikla')", existing.cta_templates),
         example_captions=_ask_list("Ornek caption'lar (virgulle ayir)", existing.example_captions),
-        cta_style=_ask_literal("CTA stili", CTA_CHOICES, existing.cta_style),
+        cta_style=_ask_literal("CTA stili (genel)", CTA_CHOICES, existing.cta_style),
     )
 
 
@@ -159,10 +169,16 @@ def _fill_audience(existing: BrandAudience) -> BrandAudience:
     primary = BrandAudiencePrimary(
         role=_ask("Birincil hedef rol (orn. 'Pazarlama yoneticisi')", prim.role),
         age_range=_ask("Yas araligi (orn. '28-45')", prim.age_range),
+        gender=_ask("Cinsiyet (kadin/erkek/karma)", prim.gender),
+        ses=_ask("SES (A/B/C1/orta-ust)", prim.ses),
         pain_points=_ask_list("Aci noktalari", prim.pain_points),
+        motivations=_ask_list("Motivasyonlar (orn. statu, zaman tasarrufu)", prim.motivations),
     )
     # primary'i sadece icinde bir sey varsa kaydet
-    if not any([primary.role, primary.age_range, primary.pain_points]):
+    if not any([
+        primary.role, primary.age_range, primary.gender, primary.ses,
+        primary.pain_points, primary.motivations,
+    ]):
         primary_final = None
     else:
         primary_final = primary
@@ -179,6 +195,7 @@ def _fill_content_strategy(existing: BrandContentStrategy) -> BrandContentStrate
         pillars=_ask_list("Icerik sutunlari (orn. egitici, sosyal kanit)", existing.pillars),
         posting_cadence=_ask("Yayinlama tempo (orn. 'haftada 3-5 post')", existing.posting_cadence),
         hashtag_strategy=_ask("Hashtag stratejisi", existing.hashtag_strategy),
+        required_hashtags=_ask_list("Zorunlu hashtagler (orn. #SlowdaysAI)", existing.required_hashtags),
     )
 
 
@@ -187,6 +204,7 @@ def _fill_business_context(existing: BrandBusinessContext) -> BrandBusinessConte
     return BrandBusinessContext(
         products=_ask_list("Urun/hizmet listesi", existing.products),
         usp=_ask("USP (rakipten farkli olan sey)", existing.usp),
+        price_segment=_ask_literal("Fiyat segmenti", PRICE_CHOICES, existing.price_segment),
         competitors=_ask_list("Rakip markalar", existing.competitors),
         seo_keywords=_ask_list("SEO anahtar kelimeler", existing.seo_keywords),
     )

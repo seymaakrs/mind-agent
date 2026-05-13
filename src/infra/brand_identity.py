@@ -59,6 +59,11 @@ class BrandBasics(BaseModel):
         default_factory=list,
         description="Marka dilleri ISO 639-1 (orn. ['tr', 'en'])",
     )
+    keywords: list[str] = Field(
+        default_factory=list,
+        description="Markayi tanimlayan kisa anahtar kelimeler (5 ideal)",
+        max_length=10,
+    )
 
     @field_validator("languages")
     @classmethod
@@ -121,6 +126,8 @@ class BrandVisual(BaseModel):
 
 
 CtaStyle = Literal["soft", "hard", "quirky", "informative"]
+AddressForm = Literal["siz", "sen"]
+EmojiUsage = Literal["bol", "az", "yok", "secili"]
 
 
 class BrandVoice(BaseModel):
@@ -159,15 +166,81 @@ class BrandVoice(BaseModel):
             "quirky = creative ironic | informative = ders verir tarzi"
         ),
     )
+    agent_role: str | None = Field(
+        default=None,
+        description=(
+            "Yapay zeka ajaninin ustleneceği rol (orn. 'Kidemli Copywriter', "
+            "'Eglenceli Topluluk Yoneticisi', 'Teknik Egitmen'). Marketing "
+            "Agent caption uretirken bu personayi taklit eder."
+        ),
+    )
+    address_form: AddressForm | None = Field(
+        default=None,
+        description=(
+            "Hitap sekli — 'siz' (resmi/saygi) veya 'sen' (samimi). Marketing "
+            "Agent tum metinlerde bu hitabi tutarli kullanir."
+        ),
+    )
+    emoji_usage: EmojiUsage | None = Field(
+        default=None,
+        description=(
+            "Emoji kullanim tarzi — 'bol' (her paragrafta), 'az' (sadece "
+            "vurgu), 'yok' (hic kullanma), 'secili' (sadece marka emojileri)."
+        ),
+    )
+    hook_style: str | None = Field(
+        default=None,
+        description=(
+            "Giris (hook) tarzi — orn. 'kisa soru', 'iddiali aciklama', "
+            "'kisisel hikaye', 'istatistik'. Caption'un ilk cumlesini sekillendirir."
+        ),
+    )
+    cta_templates: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Markanin kullandigi gercek CTA kaliplari (orn. 'Profildeki linke "
+            "tikla', 'DM ile bize ulas'). Marketing Agent caption sonunda "
+            "bu kaliplardan birini secip kullanir."
+        ),
+        max_length=10,
+    )
+    avoid_topics: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Yasakli konular — orn. 'siyaset', 'rakip X markasi', "
+            "'kisisel saglik tavsiyesi'. Caption icerigi bu konulara hic "
+            "girmemeli."
+        ),
+        max_length=15,
+    )
 
 
 class BrandAudiencePrimary(BaseModel):
     model_config = ConfigDict(extra="forbid")
     role: str | None = Field(default=None, description="Hedef rol (orn. 'Pazarlama yoneticisi')")
     age_range: str | None = Field(default=None, description="Yas araligi (orn. '28-45')")
+    gender: str | None = Field(
+        default=None,
+        description="Cinsiyet (orn. 'kadin', 'erkek', 'karma'). Serbest metin.",
+    )
+    ses: str | None = Field(
+        default=None,
+        description=(
+            "Sosyo-ekonomik durum (orn. 'A', 'B', 'C1', 'orta-ust'). "
+            "Serbest metin — sektorel terminolojiye gore."
+        ),
+    )
     pain_points: list[str] = Field(
         default_factory=list,
         description="Acilari (orn. ['zaman yok', 'ajans pahali'])",
+        max_length=10,
+    )
+    motivations: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Hedef kitleyi satin almaya / takip etmeye iten motivasyonlar "
+            "(orn. ['statu kazanma', 'zaman tasarrufu', 'topluluga aitlik'])."
+        ),
         max_length=10,
     )
 
@@ -208,6 +281,17 @@ class BrandContentStrategy(BaseModel):
             "'sadece 3 mikro-niche')"
         ),
     )
+    required_hashtags: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Her paylasimda mutlaka yer almasi gereken hashtagler (orn. "
+            "['#SlowdaysAI', '#BodrumPazarlama']). '#' prefix korunur."
+        ),
+        max_length=10,
+    )
+
+
+PriceSegment = Literal["ekonomik", "orta", "premium", "luks"]
 
 
 class BrandBusinessContext(BaseModel):
@@ -215,6 +299,13 @@ class BrandBusinessContext(BaseModel):
     products: list[str] = Field(
         default_factory=list,
         description="Urun/hizmet listesi",
+    )
+    price_segment: PriceSegment | None = Field(
+        default=None,
+        description=(
+            "Fiyat segmenti — agent caption tonunu (ozellikle 'erisilebilir' "
+            "vs 'lux') ona gore ayarlar."
+        ),
     )
     usp: str | None = Field(
         default=None,
@@ -287,10 +378,13 @@ class BrandIdentity(BaseModel):
         has_voice = bool(self.voice.tone)
         return has_visual or has_voice
 
-    def prompt_summary(self, max_chars: int = 600) -> str:
+    def prompt_summary(self, max_chars: int = 800) -> str:
         """Image/Video/Marketing agent prompt'larina enjekte edilecek
         kompakt brand summary. ``None``/bos alanlari atlar."""
         parts: list[str] = []
+
+        if self.voice.agent_role:
+            parts.append(f"Agent role: {self.voice.agent_role}")
 
         if self.basics.name:
             line = f"Brand: {self.basics.name}"
@@ -300,6 +394,9 @@ class BrandIdentity(BaseModel):
 
         if self.basics.tagline:
             parts.append(f"Tagline: {self.basics.tagline}")
+
+        if self.basics.keywords:
+            parts.append(f"Keywords: {', '.join(self.basics.keywords)}")
 
         if self.visual.visual_style:
             parts.append(f"Visual style: {self.visual.visual_style}")
@@ -324,9 +421,23 @@ class BrandIdentity(BaseModel):
         if self.voice.personality:
             parts.append(f"Personality: {', '.join(self.voice.personality)}")
 
+        if self.voice.address_form:
+            parts.append(f"Address form: {self.voice.address_form}")
+
+        if self.voice.emoji_usage:
+            parts.append(f"Emoji usage: {self.voice.emoji_usage}")
+
+        if self.voice.hook_style:
+            parts.append(f"Hook style: {self.voice.hook_style}")
+
         if self.voice.avoid_words:
             parts.append(
                 f"AVOID words: {', '.join(self.voice.avoid_words)}"
+            )
+
+        if self.voice.avoid_topics:
+            parts.append(
+                f"AVOID topics: {', '.join(self.voice.avoid_topics)}"
             )
 
         if self.voice.preferred_words:
@@ -334,11 +445,35 @@ class BrandIdentity(BaseModel):
                 f"Prefer words: {', '.join(self.voice.preferred_words)}"
             )
 
+        if self.voice.cta_templates:
+            parts.append(
+                f"CTA templates: {' | '.join(self.voice.cta_templates)}"
+            )
+
         if self.audience.primary and self.audience.primary.role:
             aud = f"Audience: {self.audience.primary.role}"
+            extras = []
             if self.audience.primary.age_range:
-                aud += f" ({self.audience.primary.age_range})"
+                extras.append(self.audience.primary.age_range)
+            if self.audience.primary.gender:
+                extras.append(self.audience.primary.gender)
+            if self.audience.primary.ses:
+                extras.append(f"SES {self.audience.primary.ses}")
+            if extras:
+                aud += f" ({', '.join(extras)})"
             parts.append(aud)
+            if self.audience.primary.motivations:
+                parts.append(
+                    f"Motivations: {', '.join(self.audience.primary.motivations)}"
+                )
+
+        if self.business_context.price_segment:
+            parts.append(f"Price segment: {self.business_context.price_segment}")
+
+        if self.content_strategy.required_hashtags:
+            parts.append(
+                f"Required hashtags: {' '.join(self.content_strategy.required_hashtags)}"
+            )
 
         summary = " | ".join(parts)
         if len(summary) > max_chars:
@@ -357,4 +492,7 @@ __all__ = [
     "BrandContentStrategy",
     "BrandBusinessContext",
     "CtaStyle",
+    "AddressForm",
+    "EmojiUsage",
+    "PriceSegment",
 ]
