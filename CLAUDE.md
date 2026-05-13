@@ -1,5 +1,140 @@
 # Claude Session Notes
 
+## ⚡ YENI SESSION? ÖNCE BURAYI OKU — DURUM (2026-05-12)
+
+**Branch (3 repo):** `claude/add-hot-leads-count-LJNi7`
+
+### 🎯 GÜNCEL HEDEF (2026-05-12 sonrası değişti)
+
+**Eski odak:** Slowdays kampanyası deploy → Şeyma'nın PC scriptleri Cloud Run'a
+**Yeni odak:** **İçerik üretim kalitesi + marka kimliği %100 uyum**
+
+Slowdays atomic switch, güvenlik P1, Tier 2-4 n8n workflow'lar → **EN SONA bırakıldı**.
+
+### 🛡️ ROLLBACK NOKTALARI
+
+| Kaynak | İşaret | Anlam |
+|---|---|---|
+| **Canlı Cloud Run revision** | `agents-sdk-api-00034-vgb` (v1.22.6) | Slowdays MCP entegre, NocoDB filter fix |
+| **Sağlam git commit (Faz A öncesi)** | `a8b895b` | Lead Onboarding draft sonrası |
+| **Son commit (Faz A sonrası)** | `2c76c8e` | Brand identity schema (deploy edilmedi) |
+
+Acil rollback: `gcloud run services update-traffic agents-sdk-api --region=us-central1 --to-revisions=agents-sdk-api-00034-vgb=100`
+
+### 📊 BUGÜNE KADAR YAPILANLAR (2026-05-12 oturumu)
+
+| Adım | Commit | Açıklama |
+|---|---|---|
+| Faz 1: Zernio MCP entegrasyonu | `6f9c2d8` | 280 tool → 80 filtered, MCP server lifecycle |
+| Lifespan fix | `7de7714` → `f4a8c2e` | MCP server connect/cleanup FastAPI lifespan |
+| Tool filter signature fix | `3b0187b` | SDK 0.6.2 `(context, tool)` imzası |
+| NocoDB datetime fix | `e949745` | exactDate/daysAgo operator (4 deneme sonunda) |
+| Faz 1 deploy v1.22.x | revision `00026` → `00034-vgb` (canlı) | 9 deploy, hepsi rollback noktalı |
+| Tier 1.1 Takip Agent v2 | n8n workflow update | mail bombardımanı önleme (son_temas + Slowdays exclude + HARD_CAP) |
+| Tier 1.2 Auto-reply itiraz handoff | `533606d` | 5. intent + n8n İtiraz Agent POST handoff |
+| Tier 2.1 Lead Onboarding workflow | n8n yarat + `a8b895b` | draft, 3 aşamalı welcome dizisi (publish bekliyor) |
+| Mimari review (bağımsız Plan agent) | — | 8 kategori risk haritası, 5 kritik madde |
+| **Faz A Brand Identity altyapı** | `2c76c8e` | Pydantic schema + Firestore tools + 40 test |
+
+### 🎨 YENI YOL HARITASI (4 Faz)
+
+| Faz | İçerik | Durum | Süre |
+|---|---|---|---|
+| **A** Brand Identity schema + tools | Pydantic + load/save/fetch/update + 40 test | ✅ TAMAM (`2c76c8e`) | — |
+| **B1** Brand Synthesis Agent | website + IG scrape → AI brand_identity draft | ⏳ Sırada | ~3 saat |
+| **B2** Portal "İşletme Ekle" wizard | mind-id Vercel — 5 adım UI | ⏳ Kullanıcı kararı bekliyor (repo erişimi?) | ~3 saat |
+| **C** Agent entegrasyon | Image/Video/Marketing brand_identity okusun | ⏳ | ~3 saat |
+| **D** Brand-fit scorer + drift | LLM judge (gpt-4o-mini), auto-retry, drift report | ⏳ | ~2 saat |
+| **Z** Tek atomik deploy (v1.23.0) | A+B1+C+D birikim → canlıya | ⏳ Son adım | 1 deploy |
+
+### 🔑 KRITIK KISIMLAR
+
+- **Faz A tamamen additive**: Mevcut hiçbir agent şu an brand_identity okumuyor. Sadece altyapı kuruldu. Cloud Run'da etkisi yok.
+- **fetch_business aynen kalır** (geri uyum garantisi).
+- **businesses/{id}.profile field aynen kalır** (Firestore'da). brand_identity ayrı subcollection `businesses/{id}/brand_identity/v1`.
+- **Schema versioning**: `BRAND_IDENTITY_SCHEMA_VERSION = 1`. Kırıcı değişiklikte +1.
+
+### 🎯 BRAND IDENTITY ŞEMASI (tek satır özet)
+
+```
+basics: name, tagline, industry, founded_year, languages
+visual: primary_colors, secondary_colors, logo_url, font_family,
+        visual_style, photography_style, image_dos, image_donts
+voice:  tone, personality, avoid_words, preferred_words,
+        example_captions, cta_style (soft/hard/quirky/informative)
+audience: primary {role, age_range, pain_points}, geo, languages
+content_strategy: pillars, posting_cadence, hashtag_strategy
+business_context: products, usp, competitors, seo_keywords
+```
+
+Helper: `BrandIdentity.prompt_summary()` → compact metin agent prompt'larına enjekte edilir.
+
+### ⏳ ASKIDA OLAN İŞLER (HATIRLAT — yeni session bunları unutma!)
+
+1. **Lead Onboarding workflow publish** (`nz8tNAR737yjrQRS`)
+   - Migration `scripts/migrate_onboarding_schema.py` koşulmadı (2 yeni kolon)
+   - Mail içerikleri Beyza/Şeyma onayı bekliyor
+   - n8n UI'dan publish bekliyor
+
+2. **İtiraz asama option migration** (`scripts/migrate_itiraz_asama_option.py`)
+   - Cloud Shell'den koşulmalı (Auto-reply deploy öncesi şart)
+   - Şu an Auto-reply Worker deploy değil, acil değil
+
+3. **Takip Agent v3 vs Hot Lead Reminder kararı**
+   - Sıcak/Teklif/Takipte stage'leri de izlesin mi?
+   - Tier 4 sonu civarı karar
+
+4. **Slowdays atomic switch** (Outreach + Auto-reply + Bekçi deploy)
+   - EN SON — Beyza/Şeyma kararıyla
+   - Kod %100 hazır, deploy edilmedi
+
+5. **Güvenlik P1 (mimari review'da çıkan 5 madde)**
+   - EN SON (portala sadece Beyza/Şeyma erişiyor)
+   - NOCODB_API_TOKEN rotate, Secret Manager, ZERNIO_WEBHOOK_SECRET zorunlu vs.
+
+6. **Tier 2.2-2.3 + Tier 3-4 n8n workflows**
+   - NoShow Follow-up, Deal Kayıp Analiz, LinkedIn/Clay/IG DM, Meta CTR, Rapor genişletme
+   - Faz A-D sonrası
+
+### 📂 ÖNEMLI DOSYALAR (yeni session bunlara bakacak)
+
+| Dosya | Ne yapar |
+|---|---|
+| `src/infra/brand_identity.py` | Pydantic BrandIdentity schema + alt modeller |
+| `src/tools/brand/__init__.py` | Firestore load/save + fetch/update tool'lar |
+| `src/infra/zernio/mcp_server.py` | Zernio MCP lifecycle (lifespan'de connect) |
+| `src/tools/n8n_registry.py` | 11 n8n workflow registry (lead_onboarding dahil) |
+| `src/agents/outreach/runner.py` | Outreach (deploy değil) |
+| `src/agents/auto_reply/runner.py` | Auto-reply + itiraz handoff (deploy değil) |
+| `src/agents/guardian/runner.py` | Bekçi Robot (deploy değil) |
+| `src/app/api.py` | FastAPI lifespan + /task + /zernio/webhook |
+| `tests/test_brand_identity.py` + `tests/test_brand_tools.py` | 40 yeni test |
+
+### 🎬 YENI SESSION'DA İLK 5 DAKİKADA YAPACAĞIN
+
+1. Bu bölümü oku (5 dk)
+2. Sırada **Faz B1: Brand Synthesis Agent** var
+3. `git log --oneline -5` ile son commit'leri gör
+4. Sandbox'ta git pull yap, branch kontrol et
+5. Kullanıcıya "B1 başlayalım mı?" diye sor + mind-id repo erişimi var mı netleştir
+
+### 💰 MEVCUT MALİYET (Slowdays canlı değil)
+
+| Kalem | $/ay |
+|---|---|
+| Cloud Run | $0-2 (free tier) |
+| Artifact Registry | $0.10 |
+| OpenAI (orchestrator + sales analyst) | $10-25 |
+| **Toplam** | **~$15-30/ay** |
+
+Slowdays canlıya geçince +$1 (WhatsApp Meta zaten Şeyma'nın aboneliği).
+
+### ❓ KULLANICI BEKLENTİSİ
+
+- "Yeni session'a geç" dedi → fresh başla
+- "Devir notunu yaz" dedi → bu bölüm = full devir
+- "Anlatmak zorunda kalmayayım" → CLAUDE.md başında her şey
+
 ## ⚡ YENI SESSION? ÖNCE BURAYI OKU — SLOWDAYS DEPLOY DURUMU (2026-05-11)
 
 **Branch (3 repo):** `claude/add-hot-leads-count-LJNi7`
