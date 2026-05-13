@@ -7,6 +7,103 @@ from src.infra.google_ai_client import get_image_generation_client
 from src.models.prompts import ImagePrompt, build_image_prompt_model
 
 
+# Tool-level retry for transient image generation failures.
+# Brand-aware path occasionally hits 5xx / empty responses from Gemini;
+# agents see generic errors and give up. Retrying inside the tool keeps
+# the agent layer clean.
+import asyncio
+import logging
+
+_log = logging.getLogger(__name__)
+
+# Delays between attempts (seconds). attempt 0 = immediate;
+# attempt 1 = wait 5s; attempt 2 = wait 15s.
+_RETRY_DELAYS: list[int] = [0, 5, 15]
+
+# Error codes that should NOT trigger a retry — they won't fix themselves.
+_NON_RETRYABLE_CODES = frozenset({
+    "CONTENT_POLICY",
+    "INVALID_INPUT",
+    "AUTH_ERROR",
+    "PERMISSION_DENIED",
+    "INSUFFICIENT_BALANCE",
+    "NOT_FOUND",
+})
+
+
+async def _generate_with_retry(
+    image_client,
+    prompt: str,
+    aspect_ratio: str = "4:5",
+    max_retries: int = 2,
+    delays: list[int] | None = None,
+):
+    """Call image_client.generate_image with automatic retry on transient
+    failures.
+
+    Retries on: RATE_LIMIT (429), SERVER_ERROR (5xx), TIMEOUT, NETWORK_ERROR,
+    or empty response (treated as transient).
+
+    Does NOT retry on: CONTENT_POLICY, INVALID_INPUT, AUTH_ERROR,
+    PERMISSION_DENIED, INSUFFICIENT_BALANCE, NOT_FOUND.
+
+    Args:
+        image_client: Has async generate_image(prompt, aspect_ratio) method.
+        prompt: Full prompt string.
+        aspect_ratio: Image aspect ratio.
+        max_retries: Maximum retry attempts (initial call + retries).
+        delays: Per-attempt sleep durations. Defaults to _RETRY_DELAYS.
+
+    Returns:
+        list of image bytes (non-empty) on success.
+
+    Raises:
+        The last exception encountered if all retries exhaust, or the
+        first non-retryable exception immediately.
+    """
+    delays = delays if delays is not None else _RETRY_DELAYS
+    attempts = max_retries + 1
+    last_exc: Exception | None = None
+
+    for attempt in range(attempts):
+        # Sleep before retry (skip on first attempt)
+        if attempt > 0 and attempt - 1 < len(delays):
+            wait = delays[attempt - 1] if attempt - 1 < len(delays) else delays[-1]
+            if wait > 0:
+                _log.warning(
+                    "image_generate retry %d/%d after %ds — last: %s",
+                    attempt, max_retries, wait, last_exc,
+                )
+                await asyncio.sleep(wait)
+
+        try:
+            images = await image_client.generate_image(
+                prompt=prompt, aspect_ratio=aspect_ratio,
+            )
+            if images:
+                return images
+            # Empty response — treat as transient
+            last_exc = RuntimeError("Image API returned empty response")
+            _log.warning("image_generate: empty response on attempt %d", attempt + 1)
+            continue
+        except Exception as exc:
+            last_exc = exc
+            # Classify to decide whether to retry
+            classified = classify_error(exc, "google_ai")
+            code = str(classified.get("error_code") or "")
+            if code in _NON_RETRYABLE_CODES:
+                _log.error(
+                    "image_generate non-retryable (%s): %s",
+                    code, exc,
+                )
+                raise
+
+    # All retries exhausted
+    assert last_exc is not None
+    _log.error("image_generate exhausted %d retries: %s", max_retries, last_exc)
+    raise last_exc
+
+
 def _count_tokens(text: str) -> int:
     """Tahmini token sayisini hesaplar (tiktoken cl100k_base encoding)."""
     try:
@@ -127,14 +224,17 @@ def _make_generate_image_tool(prompt_model: type[ImagePrompt]) -> FunctionTool:
                 )
                 message = "Gorsel duzenlendi ve kaydedildi"
             else:
-                # Generate mode - create new image from scratch
-                images = await image_client.generate_image(
+                # Generate mode - create new image from scratch.
+                # Use retry helper to survive transient Gemini failures.
+                images = await _generate_with_retry(
+                    image_client=image_client,
                     prompt=prompt,
                     aspect_ratio=aspect_ratio,
                 )
                 message = "Gorsel olusturuldu"
 
             if not images:
+                # Retry helper raises on exhaustion, so this is defensive.
                 return {"success": False, "error": "Gorsel uretilemedi."}
 
             # Upload first image to Firebase Storage
