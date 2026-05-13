@@ -8,6 +8,7 @@ from src.app.config import get_settings, get_model_settings
 from src.tools.instagram_tools import get_instagram_tools
 from src.tools.marketing_tools import get_marketing_tools
 from src.tools.analysis_tools import get_report_tools
+from src.tools.brand import fetch_brand_identity
 from src.tools.orchestrator_tools import (
     post_on_instagram,
     post_carousel_on_instagram,
@@ -44,6 +45,7 @@ def create_marketing_agent(
         get_document,              # Firestore doc okuma (instagram_stats için)
         save_document,             # Firestore doc yazma (summary için)
         query_documents,           # Firestore query (önceki haftalar için)
+        fetch_brand_identity,      # Faz C: marka kimliği — caption tonu için
     ]
 
     # Add sub-agent tools if provided

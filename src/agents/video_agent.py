@@ -6,6 +6,7 @@ from agents import Agent
 
 from src.app.config import get_settings, get_model_settings, get_agent_instructions
 from src.tools.video_tools import get_video_tools
+from src.tools.brand import fetch_brand_identity
 from src.agents.instructions import VIDEO_AGENT_CORE_INSTRUCTIONS, DEFAULT_VIDEO_PERSONA
 
 
@@ -30,7 +31,7 @@ def create_video_agent(model: str | None = None) -> Agent[dict[str, Any]]:
         name="video",
         handoff_description="Video olusturma alt agenti - cinematic prompt engineering yapar.",
         instructions=instructions,
-        tools=get_video_tools(config),
+        tools=[*get_video_tools(config), fetch_brand_identity],
         tool_use_behavior="run_llm_again",
         output_type=str,
         model=model or model_settings.video_agent_model or settings.openai_model,
