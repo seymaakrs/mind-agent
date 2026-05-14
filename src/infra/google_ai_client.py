@@ -564,9 +564,32 @@ class VideoGenerationClient:
 
 
 @lru_cache(maxsize=1)
-def get_image_generation_client() -> ImageGenerationClient:
-    """ImageGenerationClient instance dondurur (cached)."""
+def _get_gemini_image_client_cached() -> ImageGenerationClient:
     return ImageGenerationClient()
+
+
+def get_image_generation_client():
+    """Image generation client factory.
+
+    Dispatches based on `settings/app_settings.imageGenerationModel`:
+      - Model name starts with "gpt-image" or "dall-e" → OpenAIImageClient
+      - Anything else (default "gemini-*")            → Gemini client
+
+    Returns a client with the same async interface
+    (`generate_image(prompt, aspect_ratio) -> list[bytes]`), so existing
+    tools and the tool-level retry helper work without changes.
+
+    Not lru_cached at this level because the model setting may change at
+    runtime via admin panel. Individual provider clients are cached
+    internally (or are lightweight to build).
+    """
+    ms = get_model_settings()
+    model = (ms.image_generation_model or "").lower()
+    if model.startswith("gpt-image") or model.startswith("dall-e"):
+        # Local import to avoid a top-level cycle if config drags us back.
+        from src.infra.openai_image_client import OpenAIImageClient
+        return OpenAIImageClient()
+    return _get_gemini_image_client_cached()
 
 
 @lru_cache(maxsize=1)
