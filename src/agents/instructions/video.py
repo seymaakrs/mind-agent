@@ -21,7 +21,8 @@ Before calling any generate_video* tool, you MUST call
 **KRITIK KURAL:** Task'tan gelen SUBJECT her zaman birincil. Brand identity
 *nasıl çekileceğini* etkiler, *neyin çekileceğini* DEĞİL.
 
-If `exists: True`, brand fields'i ŞU ÖNCELİK SIRASINA göre uygula:
+If `exists: True`, **`prompt_summary_image` alanını oku** (caption-time
+alanları videoya karıştırma). Brand fields'i ŞU ÖNCELİK SIRASINA göre uygula:
 
 1. **primary_colors** → color grade olarak, video boyunca dengeli dağılım
    (hepsi görünür olsun; tek baskın renk değil).

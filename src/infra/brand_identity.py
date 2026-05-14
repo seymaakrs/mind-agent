@@ -378,6 +378,141 @@ class BrandIdentity(BaseModel):
         has_voice = bool(self.voice.tone)
         return has_visual or has_voice
 
+    def prompt_summary_image(self, max_chars: int = 400) -> str:
+        """Image/Video agent'a giden GORSEL-ODAKLI ozet.
+
+        Sadece visual alanlar + brand context. Voice / audience / CTA /
+        hashtag dahil edilmez — agent'in kafasini gorsel uretiminde
+        karistirmasin (text overlay, poster layout gibi yan etkilere
+        yol acmasin).
+        """
+        parts: list[str] = []
+
+        if self.basics.name:
+            line = f"Brand: {self.basics.name}"
+            if self.basics.industry:
+                line += f" ({self.basics.industry})"
+            parts.append(line)
+
+        if self.visual.visual_style:
+            parts.append(f"Visual style: {self.visual.visual_style}")
+
+        if self.visual.photography_style:
+            parts.append(f"Photography: {self.visual.photography_style}")
+
+        if self.visual.primary_colors:
+            parts.append(
+                f"Primary colors: {', '.join(self.visual.primary_colors)}"
+            )
+
+        if self.visual.secondary_colors:
+            parts.append(
+                f"Secondary colors: {', '.join(self.visual.secondary_colors)}"
+            )
+
+        if self.visual.image_dos:
+            parts.append(f"DO: {', '.join(self.visual.image_dos)}")
+
+        if self.visual.image_donts:
+            parts.append(f"DON'T: {', '.join(self.visual.image_donts)}")
+
+        summary = " | ".join(parts)
+        if len(summary) > max_chars:
+            return summary[: max_chars - 3] + "..."
+        return summary
+
+    def prompt_summary_caption(self, max_chars: int = 700) -> str:
+        """Marketing agent'a giden METIN-ODAKLI ozet.
+
+        Voice + audience + content strategy + business context. Visual
+        DOs/DONTs ve renkler dahil edilmez — agent caption yazarken
+        gorseli tarif etmeye calismasin.
+        """
+        parts: list[str] = []
+
+        if self.voice.agent_role:
+            parts.append(f"Agent role: {self.voice.agent_role}")
+
+        if self.basics.name:
+            line = f"Brand: {self.basics.name}"
+            if self.basics.industry:
+                line += f" ({self.basics.industry})"
+            parts.append(line)
+
+        if self.basics.tagline:
+            parts.append(f"Tagline: {self.basics.tagline}")
+
+        if self.basics.keywords:
+            parts.append(f"Keywords: {', '.join(self.basics.keywords)}")
+
+        if self.voice.tone:
+            parts.append(f"Voice tone: {self.voice.tone}")
+
+        if self.voice.personality:
+            parts.append(f"Personality: {', '.join(self.voice.personality)}")
+
+        if self.voice.address_form:
+            parts.append(f"Address form: {self.voice.address_form}")
+
+        if self.voice.emoji_usage:
+            parts.append(f"Emoji usage: {self.voice.emoji_usage}")
+
+        if self.voice.hook_style:
+            parts.append(f"Hook style: {self.voice.hook_style}")
+
+        if self.voice.avoid_words:
+            parts.append(
+                f"AVOID words: {', '.join(self.voice.avoid_words)}"
+            )
+
+        if self.voice.avoid_topics:
+            parts.append(
+                f"AVOID topics: {', '.join(self.voice.avoid_topics)}"
+            )
+
+        if self.voice.preferred_words:
+            parts.append(
+                f"Prefer words: {', '.join(self.voice.preferred_words)}"
+            )
+
+        if self.voice.cta_templates:
+            parts.append(
+                f"CTA templates: {' | '.join(self.voice.cta_templates)}"
+            )
+
+        if self.voice.cta_style:
+            parts.append(f"CTA style: {self.voice.cta_style}")
+
+        if self.audience.primary and self.audience.primary.role:
+            aud = f"Audience: {self.audience.primary.role}"
+            extras = []
+            if self.audience.primary.age_range:
+                extras.append(self.audience.primary.age_range)
+            if self.audience.primary.gender:
+                extras.append(self.audience.primary.gender)
+            if self.audience.primary.ses:
+                extras.append(f"SES {self.audience.primary.ses}")
+            if extras:
+                aud += f" ({', '.join(extras)})"
+            parts.append(aud)
+            if self.audience.primary.motivations:
+                parts.append(
+                    f"Motivations: {', '.join(self.audience.primary.motivations)}"
+                )
+
+        if self.business_context.price_segment:
+            parts.append(f"Price segment: {self.business_context.price_segment}")
+
+        if self.content_strategy.required_hashtags:
+            parts.append(
+                f"Required hashtags: {' '.join(self.content_strategy.required_hashtags)}"
+            )
+
+        summary = " | ".join(parts)
+        if len(summary) > max_chars:
+            return summary[: max_chars - 3] + "..."
+        return summary
+
     def prompt_summary(self, max_chars: int = 800) -> str:
         """Image/Video/Marketing agent prompt'larina enjekte edilecek
         kompakt brand summary. ``None``/bos alanlari atlar."""

@@ -134,7 +134,15 @@ async def _fetch_brand_identity_impl(business_id: str) -> dict[str, Any]:
         "success": True,
         "exists": True,
         "is_substantially_filled": bi.is_substantially_filled(),
+        # Backward-compat: full summary (all fields mixed).
         "prompt_summary": bi.prompt_summary(),
+        # NEW: routed summaries — image agent should use *_image, marketing
+        # agent should use *_caption. Keeps each agent's context focused
+        # and prevents caption-time fields (avoid_words, hashtags, CTA)
+        # from leaking into image generation and causing text overlays /
+        # poster layouts.
+        "prompt_summary_image": bi.prompt_summary_image(),
+        "prompt_summary_caption": bi.prompt_summary_caption(),
         **data,
     }
 

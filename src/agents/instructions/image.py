@@ -25,7 +25,9 @@ bir sahne tanımlıyorsa → **o sahneyi gerçek/fotografik kalitede üret.**
 Brand identity'yi bir tasarımcının marka rehberi gibi kullan: yönlendirir,
 ama yaratıcılığı boğmaz.
 
-If `exists: True`, brand fields'i ŞU ÖNCELİK SIRASINA göre uygula:
+If `exists: True`, **`prompt_summary_image` alanını oku** (`prompt_summary`'i
+veya `prompt_summary_caption`'i DEĞİL — caption-time alanları gorsele
+karıştırma). Brand fields'i ŞU ÖNCELİK SIRASINA göre uygula:
 
 1. **primary_colors** → palette olarak GENELE yay (background tonu, light
    accent, prop renkleri vb.). Birkaç hex'ten YALNIZ BİRİNİ baskın seçme;
