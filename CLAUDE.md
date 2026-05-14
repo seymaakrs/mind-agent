@@ -98,18 +98,33 @@ DRY_RUN=false             # true: API cagirmadan prompt logla
 
 ## Docker Deployment
 
-**Guncel Versiyon:** `v1.20.0` (2026-05-01 — production)
-**Cloud Run Revision:** `agents-sdk-api-00009-667`
+**Guncel Versiyon:** `v1.21.2` (2026-05-01 — production)
+**Cloud Run Revision:** `agents-sdk-api-00012-gln`
 **Cloud Run URL:** `https://agents-sdk-api-704233028546.us-central1.run.app`
 **GCP Project:** `instagram-post-bot-471518`
 **Registry:** Artifact Registry (us-central1)
-**Image:** `us-central1-docker.pkg.dev/instagram-post-bot-471518/agents-sdk/agents-sdk-api:v1.20.0`
+**Image:** `us-central1-docker.pkg.dev/instagram-post-bot-471518/agents-sdk/agents-sdk-api:v1.21.2`
 
-**v1.20.0 Yenilikler:**
+**v1.21.2 Yenilikler:**
+- Beyza'nin canli NocoDB sema hizalamasi (Leadler / Etkilesimler — Turkce alan adlari)
+- notify_seyma yeniden: Leadler.atanan_kisi='Seyma' + notlar timestamp + sicak ise asama='Sicak'
+- log_lead_message Etkilesimler option mismatch fix
+- End-to-end + idempotency canli kanitlandi (Leadler.Id=36, v1212_smoke)
+
+**v1.20.0 (onceki):**
 - Sales Agent (Meta) + NocoDB CRM tools entegre
 - `upsert_lead` idempotent tool (external_id key)
-- `nocodb_client` array body fix (NocoDB v2 records API requirement)
-- Firebase Secret Manager üzerinden okunuyor (env var değil)
+- `nocodb_client` array body fix (NocoDB v2 records API)
+- Firebase Secret Manager uzerinden okunuyor
+
+**Brand Identity sistemi (PR #10 — DRAFT, henuz CANLIDA DEGIL):**
+- Faz A: BrandIdentity Pydantic schema + Firestore tools (40 test)
+- Faz A2: +10 yeni alan Seyma listesi (37 test)
+- Faz B1: Brand Synthesis Agent (8 test)
+- Faz C: marketing/image/video fetch_brand_identity enjeksiyonu (6 test)
+- Faz C+ fix'leri: image retry, prompt_summary split, text-overlay yasak
+- Faz D: OpenAI gpt-image-1 toggle (factory + Firestore switch)
+- Rollback rehberi: `docs/ROLLBACK.md`
 
 **Secrets (Cloud Run env'de değil, Secret Manager'da):**
 - `FIREBASE_CREDENTIALS_FILE` → secret `firebase-credentials:latest` (key id 52b2405d, mindid-75079 SA)
