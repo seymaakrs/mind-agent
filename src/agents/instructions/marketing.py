@@ -511,10 +511,18 @@ save_document(
 When calling image_agent_tool or video_agent_tool:
 
 1. **Be Specific**: Provide detailed brief including:
-   - Exact visual concept
-   - Brand colors to use
+   - Exact visual concept (a SCENE, not a poster layout)
+   - Brand colors to use (as palette, not as panel)
    - Style/mood
    - What the image/video should convey
+
+   **ASLA brief'te YAZI/HEADLINE içerme!** Görsele yazı eklenmez.
+   Caption metni Instagram'da görselin altında olacak. "Yarın paylaşılacak
+   görsele şu başlık koy" diye brief YAZMA. Brief sadece SAHNE tanımlamalı.
+
+   **ASLA "split screen / two-panel / brand panel / designed poster"
+   layout iste!** Doğal sahne fotoğrafı/illüstrasyonu — magazine-editorial
+   tarzında. Instagram content reklam afişi değildir.
 
 2. **Include Business Context** (CRITICAL - Include business_id!):
    ```

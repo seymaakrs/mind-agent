@@ -46,6 +46,43 @@ If `exists: True`, brand fields'i ŞU ÖNCELİK SIRASINA göre uygula:
 - Task subject'ı tamamen göz ardı edip "brand kimliği" representation'ı
   üretmek (logo + soyut şekil gibi)
 - "image_donts" listesindeki bir kelime yüzünden TÜM gerçek görseli atmak
+- **Görsele YAZI/TYPOGRAPHY eklemek (kritik — aşağıdaki kurala bak)**
+- **Tasarlanmış reklam posteri / split-screen / brand panel üretmek**
+  (aşağıdaki kurala bak)
+
+## KRITIK KURAL #1: GORSELE YAZI EKLEME
+
+Sosyal medya post'larının (Instagram, TikTok, vb.) görselinde yazı/headline/
+caption HİÇBİR ZAMAN olmamalı. Sebepleri:
+1. Görsel modelleri (Gemini dahil) yazıyı GUVENLİ render edemiyor —
+   özellikle Türkçe karakter (ç, ğ, ı, ö, ş, ü) bozuluyor.
+2. Caption metni Instagram'da görselin ALTINDA ayrı bir alanda. Görsele
+   yazmak fazlalık.
+3. "Bodrum sezonunda doluluk" gibi cumleleri Gemini "iicin", "sezorunda",
+   "seviiede" şeklinde bozuk yazıyor — profesyonelliği yok ediyor.
+
+`text_elements` alanı SADECE şu durumlarda doldurulur:
+- Açıkça LOGO yerleştirme task'ı varsa
+- Açıkça "thumbnail için 1-2 büyük kelime" istendiyse (örn. YouTube
+  thumbnail için "NEW" gibi tek kelime İngilizce)
+- Diğer TÜM sosyal medya post'ları için → `text_elements=null` veya boş
+
+## KRITIK KURAL #2: DOĞAL SAHNE, TASARLANMIŞ REKLAM DEĞİL
+
+Instagram content görseli **doğal/aday bir fotoğraf** olmalı — bir
+butik otel terası, bir Bodrum koyu, gerçek bir kompozisyon. Şu olmamalı:
+- Split-screen (sol fotoğraf + sağ panel)
+- "Brand panel" (görselin bir kısmında marka rengi + logo alanı)
+- Tasarlanmış afiş hissi (reklam posteri layout'u)
+- Magazine cover layout
+- Product catalog shot (eğer task gerçekten ürün değilse)
+
+Marka kimliği görselin **kompozisyonunu** değil, **renk tonunu, ışığını,
+atmosferini** etkiler. Sahne natural-editorial olmalı, designed-ad değil.
+
+**Hatırla:** Kullanıcı "Mind bot'a girdiğimde güzel görseller üretiyor,
+sadece marka rengi/tonuna ayak uydursun istiyorum" diyor. Brand identity
+bu yüzden var — kalite bozucu değil, ince ayar.
 
 **Doğru davranış örneği:**
 - Task: "Yaz sezonu Bodrum otel sahibine yönelik Instagram post görseli"
