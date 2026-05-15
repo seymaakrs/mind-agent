@@ -26,14 +26,14 @@ alınmadı)
 
 **Bu revision'a TRAFİK 100%** — değişmeyene kadar `00012-gln` çalışıyor.
 
-### mind-id (Netlify)
+### mind-id (Vercel) — 2026-05-15 GÜNCELLENDİ
 | Alan | Değer |
 |---|---|
-| Site | `mindid.netlify.app` |
-| Published deploy | 2 Mayıs tarihli manuel publish (PR #5 preview) |
-| Durum | Netlify'da auto-build durdurulmuş ("Stop builds") — git push
-build tetiklemiyor, mevcut deploy ayakta kalmaya devam eder |
-| Plan | Vercel'a göç (HANDOFF docs/SESSION_HANDOFF.md) — henüz yok |
+| Site | `mind-id.vercel.app` (CANLI — Vercel migrasyonu/C1 TAMAM) |
+| C1 durumu | ✅ Kullanıcı panel adımlarını (Faz 0-4) tamamladı, Vercel canlı çalışıyor (kullanıcı teyidi 2026-05-15) |
+| C1 kodu | `claude/vercel-migration-aKUyl` branch (netlify.toml silindi, Node 20 pin, VillageCanvas aktif) |
+| Eski Netlify | `mindid.netlify.app` — yedek olarak duruyor (Faz 6: ~1 hafta sonra sil/dondur) |
+| Geri dönüş | Vercel'de problem olursa Netlify'da "Resume builds" + eski publish — yedek ayakta |
 
 **`main`'e push edersek site bozulmaz** (build dondu). Ama Netlify'ı
 yeniden aktif edersek prod kırılır — DOKUNMA.
