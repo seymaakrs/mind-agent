@@ -2,6 +2,7 @@
 
 ## TEMEL KURALLAR
 
+0. **ROLLBACK ZORUNLU (kullanici kalici karari, 2026-05-15):** Canli/geri-donulmesi zor HER degisiklikten ONCE mevcut hali yedekle (kod → commit; canli kaynak → repoda yedek dosyasi) ve geri donus yolunu devir/ROLLBACK notuna YAZ. Geri-donulebilir yontem tercih et. "Her zaman bu haline geri donebilelim" sarttir.
 1. **TEST-FIRST DEVELOPMENT**: Her kod yazmadan ONCE testi yaz. Sonra kodu yaz. Sonra testi calistir. Test gecene kadar kodu duzelt.
 2. **SELF-REVIEW**: Kodu yazdiktan sonra kendi kodunu review et. Hatalari, edge case'leri ve iyilestirmeleri kontrol et.
 3. **HER SESSION'DA BU DOSYAYI GUNCELLE**: Yeni ozellikler, degisiklikler eklendiginde MUTLAKA guncelle.
