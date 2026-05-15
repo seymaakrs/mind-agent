@@ -10,6 +10,7 @@ from src.agents.marketing_agent import create_marketing_agent
 from src.agents.analysis_agent import create_analysis_agent
 from src.agents.orchestrator_agent import create_orchestrator_agent
 from src.agents.sales.meta_agent import create_meta_agent
+from src.agents.sales.linkedin_agent import create_linkedin_agent
 from src.agents.brand_synthesis_agent import create_brand_synthesis_agent
 
 # Agent factory tipi: parametresiz cagrida yeni agent dondurur.
@@ -52,6 +53,11 @@ def create_meta() -> Agent[dict[str, Any]]:
     return create_meta_agent()
 
 
+def create_linkedin() -> Agent[dict[str, Any]]:
+    """LinkedIn Mesaj Motoru agenti olusturur (sales — mesaj uretir, gondermez)."""
+    return create_linkedin_agent()
+
+
 def create_brand_synthesis() -> Agent[dict[str, Any]]:
     """Brand Synthesis agenti olusturur (Faz B1 — marka kimligi sentezi)."""
     return create_brand_synthesis_agent()
@@ -69,6 +75,7 @@ def get_agent_registry() -> dict[str, AgentFactory]:
         "marketing": create_marketing,
         "analysis": create_analysis,
         "meta": create_meta,
+        "linkedin": create_linkedin,
         "brand_synthesis": create_brand_synthesis,
     }
 
@@ -80,6 +87,7 @@ __all__ = [
     "create_marketing",
     "create_analysis",
     "create_meta",
+    "create_linkedin",
     "create_brand_synthesis",
     "get_agent_registry",
     "AgentFactory",
