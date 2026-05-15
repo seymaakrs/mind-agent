@@ -182,6 +182,37 @@ geçerli.
 
 ---
 
+## 4.5. CANLI n8n DEĞİŞİKLİĞİ — Zernio fix (2026-05-14)
+
+**YAPILDI — canlı production'a uygulandı (kod değil, n8n workflow).**
+
+| Alan | Değer |
+|---|---|
+| Workflow | `Lead Toplama Agent` (id `l31p16NRZeyk4eEm`) |
+| n8n | https://mindidai.app.n8n.cloud |
+| Değişen | Sadece `Calculate Lead Score` code node `jsCode` |
+| Eski kod | 3174 char (Zernio formatını parse etmiyordu — boş kayıt) |
+| Yeni kod | 2894 char (Zernio message/comment + generic + boş-kayıt koruması) |
+| Test | Id 196 "Test Otel Sahibi" dolu düştü → kanıtlandı, sonra silindi |
+| Workflow durumu | ACTIVE kaldı (değişmedi) |
+
+**Geri dönüş (eski koda dön):**
+Yedek: `/tmp/lead-toplama-BACKUP.json` (Cloud Shell — kalıcı değil, /tmp
+temizlenebilir!). Repo'da eski kod git history'de: commit `0de44b9`
+öncesi `n8n/workflows/lead-toplama-agent.json`.
+
+```bash
+# Eski koda dönmek için (customer_agent repo'da):
+git show 0de44b9~1:n8n/workflows/lead-toplama-agent.json > /tmp/lead-OLD.json
+# /tmp/lead-OLD.json içindeki eski jsCode'u alıp aynı PUT script'iyle
+# n8n'e geri yaz (Bölüm 2'deki Zernio uygulama script'inin tersi).
+```
+
+Kalıcı yedek için `/tmp/lead-toplama-BACKUP.json`'ı repo dışı güvenli
+bir yere kopyalamak iyi olur (henüz yapılmadı — /tmp geçici).
+
+---
+
 ## 5. KURAL
 
 1. **Her büyük değişiklik öncesi** bu dosyaya bak. Bir önceki güvenli
