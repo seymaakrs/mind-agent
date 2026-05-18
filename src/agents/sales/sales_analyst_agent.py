@@ -6,7 +6,6 @@ from typing import Any
 
 from agents import Agent
 
-from src.app.config import get_settings, get_model_settings
 from src.tools.sales.reporting_tools import get_reporting_tools
 from src.agents.instructions.sales import SALES_ANALYST_INSTRUCTIONS
 
@@ -19,9 +18,6 @@ def create_sales_analyst_agent(
     Tool seti: count_leads, list_leads, lead_funnel, channel_breakdown,
     stale_leads, lead_timeline, daily_digest. Hepsi read-only.
     """
-    settings = get_settings()
-    model_settings = get_model_settings()
-
     tools = list(get_reporting_tools())
 
     # Zernio MCP — analytics + reports (IG demographics, posting frequency,
@@ -43,7 +39,10 @@ def create_sales_analyst_agent(
         mcp_servers=mcp_servers,
         tool_use_behavior="run_llm_again",
         output_type=str,
-        model=model or model_settings.marketing_agent_model or settings.openai_model,
+        # gpt-4o-mini: Zernio MCP ~80 tool semasi prompt'u sisirip gpt-4o'nun
+        # 30k TPM limitini asiyordu (429 -> ~30s -> gorev cokuyordu). mini'nin
+        # TPM limiti cok yuksek; rapor anlatimi icin yeterli. Override edilebilir.
+        model=model or "gpt-4o-mini",
     )
 
 
