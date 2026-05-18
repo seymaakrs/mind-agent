@@ -66,6 +66,33 @@ class TestNocoDBClientCRUD:
             assert args[1].endswith("/tbl1/records/5")
 
 
+class TestNocoDBClientCount:
+    def test_count_records_returns_true_total(self, client: NocoDBClient):
+        with patch("httpx.Client") as MockClient:
+            mock_request = MockClient.return_value.__enter__.return_value.request
+            mock_request.return_value = _mock_response(200, {"count": 1234})
+            total = client.count_records("tbl1", where="(asama,eq,Sicak)")
+            assert total == 1234
+            args, kwargs = mock_request.call_args
+            assert args[0] == "GET"
+            assert args[1].endswith("/tbl1/records/count")
+            assert kwargs["params"]["where"] == "(asama,eq,Sicak)"
+
+    def test_count_records_no_where_sends_no_params(self, client: NocoDBClient):
+        with patch("httpx.Client") as MockClient:
+            mock_request = MockClient.return_value.__enter__.return_value.request
+            mock_request.return_value = _mock_response(200, {"count": 0})
+            assert client.count_records("tbl1") == 0
+            assert mock_request.call_args.kwargs["params"] is None
+
+    def test_count_records_handles_missing_count_key(self, client: NocoDBClient):
+        with patch("httpx.Client") as MockClient:
+            MockClient.return_value.__enter__.return_value.request.return_value = (
+                _mock_response(200, {"unexpected": "shape"})
+            )
+            assert client.count_records("tbl1") == 0
+
+
 class TestNocoDBClientUpsert:
     """Idempotent upsert: lookup by unique field, then INSERT or PATCH."""
 

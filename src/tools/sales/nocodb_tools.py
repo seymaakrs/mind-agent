@@ -274,9 +274,34 @@ async def get_lead(lead_id: int) -> dict[str, Any]:
 
 
 @function_tool(
+    name_override="count_leads",
+    description_override=(
+        "Return the TRUE TOTAL number of leads matching an optional filter. "
+        "USE THIS for any 'kac lead / kac sicak lead / how many' question — "
+        "query_leads only returns a page sample (max 100), NEVER use its count "
+        "as a total. where syntax: '(field,op,value)', op is eq|neq|gt|lt|like "
+        "(e.g. '(asama,eq,Sicak)'). Multiple: '(asama,eq,Sicak)~and(kaynak,eq,Meta)'. "
+        "No where = all leads."
+    ),
+    strict_mode=False,
+)
+async def count_leads(where: str | None = None) -> dict[str, Any]:
+    table_id = _resolve_leads_table()
+    if not table_id:
+        return _missing_table_error("leads")
+
+    try:
+        total = get_nocodb_client().count_records(table_id, where=where)
+        return {"success": True, "count": total, "where": where}
+    except Exception as exc:
+        return classify_error(exc, "nocodb")
+
+
+@function_tool(
     name_override="query_leads",
     description_override=(
-        "List leads with an optional NocoDB where filter. "
+        "List leads with an optional NocoDB where filter. Returns a PAGE SAMPLE "
+        "(max 100 rows), NOT a total — for totals use count_leads. "
         "where syntax: '(field,op,value)' where op is eq|neq|gt|lt|like (e.g. '(asama,eq,Sicak)'). "
         "Multiple filters: '(asama,eq,Sicak)~and(kaynak,eq,Meta)'. "
         "limit defaults to 25, max 100."
@@ -297,7 +322,12 @@ async def query_leads(
             table_id, where=where, limit=min(limit, 100), sort=sort
         )
         records = result.get("list", []) if isinstance(result, dict) else []
-        return {"success": True, "results": records, "count": len(records)}
+        return {
+            "success": True,
+            "results": records,
+            "returned_count": len(records),
+            "note": "returned_count = bu sayfadaki ornek; TOPLAM icin count_leads kullan",
+        }
     except Exception as exc:
         return classify_error(exc, "nocodb")
 
@@ -436,6 +466,7 @@ def get_nocodb_tools() -> list:
         update_lead,
         get_lead,
         query_leads,
+        count_leads,
         log_lead_message,
         notify_seyma,
     ]
@@ -447,6 +478,7 @@ __all__ = [
     "update_lead",
     "get_lead",
     "query_leads",
+    "count_leads",
     "log_lead_message",
     "notify_seyma",
     "get_nocodb_tools",

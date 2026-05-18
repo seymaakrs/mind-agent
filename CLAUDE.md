@@ -78,7 +78,7 @@ DRY_RUN=false             # true: API cagirmadan prompt logla
 
 **Analysis:** `save_swot_report`, `save_seo_report` (v2+GEO), `save_seo_keywords`, `save_seo_summary` (v2+GEO), `get_seo_keywords`, `get_reports`, `save_instagram_report`
 
-**Sales/Meta (NocoDB CRM):** `upsert_lead` (idempotent, ana tool), `update_lead`, `get_lead`, `query_leads`, `log_lead_message`, `notify_seyma`
+**Sales/Meta (NocoDB CRM):** `upsert_lead` (idempotent, ana tool), `update_lead`, `get_lead`, `query_leads` (sayfa ornegi), `count_leads` (GERCEK toplam — "kac lead" sorularinda), `log_lead_message`, `notify_seyma`
 - `create_lead` DEPRECATED (kod tabanında duruyor ama agent listesinde yok — webhook retry'lerinde duplicate üretiyordu)
 - Wrapper: `meta_agent_tool` (orchestrator routing)
 - Trigger: n8n Facebook Lead Ads -> POST /task with extras.lead_data
