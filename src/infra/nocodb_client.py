@@ -172,6 +172,25 @@ class NocoDBClient:
             params["sort"] = sort
         return self._request("GET", self._records_url(table_id), params=params)
 
+    def count_records(self, table_id: str, *, where: str | None = None) -> int:
+        """True total row count via NocoDB v2 `/records/count`.
+
+        Unlike paging through `list_records`, this returns the real total and
+        is not capped by any page size / hard cap.
+        """
+        params: dict[str, Any] = {}
+        if where:
+            params["where"] = where
+        url = f"{self._records_url(table_id)}/count"
+        result = self._request("GET", url, params=params or None)
+        if isinstance(result, dict):
+            value = result.get("count")
+            if isinstance(value, bool):
+                return 0
+            if isinstance(value, (int, float)):
+                return int(value)
+        return 0
+
     def find_by_field(
         self, table_id: str, field: str, value: Any
     ) -> dict[str, Any] | None:

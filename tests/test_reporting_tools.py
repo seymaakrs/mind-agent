@@ -36,6 +36,7 @@ def _make_client(rows: list[dict[str, Any]] | None = None) -> MagicMock:
         "list": rows or [],
         "pageInfo": {"isLastPage": True, "totalRows": len(rows or [])},
     }
+    client.count_records.return_value = len(rows or [])
     return client
 
 
@@ -91,7 +92,7 @@ async def test_count_leads_passes_filter_and_returns_total(monkeypatch):
 
     assert result["success"] is True
     assert result["count"] == 7
-    args, kwargs = client.list_records.call_args
+    args, kwargs = client.count_records.call_args
     assert args[0] == "leads_tbl"
     assert "(asama,eq,Sicak)" in kwargs["where"]
     assert "(kaynak,eq,Meta Ads)" in kwargs["where"]
@@ -106,7 +107,7 @@ async def test_count_leads_no_filters(monkeypatch):
 
     assert result["success"] is True
     assert result["count"] == 2
-    _, kwargs = client.list_records.call_args
+    _, kwargs = client.count_records.call_args
     assert kwargs.get("where") is None
 
 

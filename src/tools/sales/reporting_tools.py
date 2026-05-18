@@ -183,8 +183,10 @@ async def _count_leads_impl(
         return _missing_table_error("leads")
     try:
         where = _build_where(asama, kaynak, atanan_kisi, date_from, date_to)
-        rows = _fetch_all(table_id, where=where)
-        count = len(rows)
+        # True total via NocoDB /records/count — NOT len(_fetch_all): _fetch_all
+        # re-fetches page 1 (no offset) and caps at 2000, so any >=100 result
+        # always reported exactly 2000.
+        count = get_nocodb_client().count_records(table_id, where=where)
         filters = {
             "asama": asama,
             "kaynak": kaynak,
