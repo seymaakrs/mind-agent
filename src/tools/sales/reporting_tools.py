@@ -96,6 +96,24 @@ def asama_field() -> str:
     return "asama"
 
 
+def _norm_date(value: str | None) -> str | None:
+    """Coerce an incoming date to NocoDB-friendly YYYY-MM-DD, else None.
+
+    Accepts 'YYYY-MM-DD' or any ISO datetime ('YYYY-MM-DDThh:mm:ss...').
+    Unparseable values (e.g. free text like 'bu ay') return None so the
+    filter is skipped instead of poisoning the query (was -> NocoDB 400).
+    """
+    if not value or not isinstance(value, str):
+        return None
+    v = value.strip()
+    try:
+        return datetime.fromisoformat(v.replace("Z", "+00:00")).strftime("%Y-%m-%d")
+    except ValueError:
+        if len(v) >= 10 and v[4] == "-" and v[7] == "-" and v[:10].replace("-", "").isdigit():
+            return v[:10]
+        return None
+
+
 def _build_where(
     asama: str | None = None,
     kaynak: str | None = None,
@@ -106,7 +124,8 @@ def _build_where(
 ) -> str | None:
     """Build NocoDB v2 `where` query string from common filters.
 
-    Format: '(field,op,value)~and(field,op,value)'
+    Format: '(field,op,value)~and(field,op,value)'. Date filters use the
+    NocoDB v2 `exactDate` operator — plain ISO values are rejected (400/422).
     """
     parts: list[str] = []
     if asama:
@@ -115,10 +134,12 @@ def _build_where(
         parts.append(f"(kaynak,eq,{kaynak})")
     if atanan_kisi:
         parts.append(f"(atanan_kisi,eq,{atanan_kisi})")
-    if date_from:
-        parts.append(f"({date_field},ge,{date_from})")
-    if date_to:
-        parts.append(f"({date_field},le,{date_to})")
+    df = _norm_date(date_from)
+    if df:
+        parts.append(f"({date_field},ge,exactDate,{df})")
+    dt = _norm_date(date_to)
+    if dt:
+        parts.append(f"({date_field},le,exactDate,{dt})")
     if not parts:
         return None
     return "~and".join(parts)
@@ -130,14 +151,19 @@ def _fetch_all(
     where: str | None = None,
     sort: str | None = None,
     page_size: int = 100,
-    hard_cap: int = 2000,
+    hard_cap: int = 20000,
 ) -> list[dict[str, Any]]:
-    """Page through NocoDB until exhausted (or hard cap)."""
+    """Page through NocoDB via `offset` until exhausted (or safety cap).
+
+    The previous version never advanced an offset, so it re-fetched page 1
+    forever and inflated to the cap (any >=100 result reported as 2000).
+    """
     client = get_nocodb_client()
     out: list[dict[str, Any]] = []
+    offset = 0
     while len(out) < hard_cap:
         result = client.list_records(
-            table_id, where=where, limit=page_size, sort=sort
+            table_id, where=where, limit=page_size, sort=sort, offset=offset
         )
         rows = result.get("list", []) if isinstance(result, dict) else []
         if not rows:
@@ -146,9 +172,9 @@ def _fetch_all(
         page_info = (
             result.get("pageInfo", {}) if isinstance(result, dict) else {}
         )
-        is_last = page_info.get("isLastPage")
-        if is_last is True or len(rows) < page_size:
+        if page_info.get("isLastPage") is True or len(rows) < page_size:
             break
+        offset += page_size
     return out[:hard_cap]
 
 

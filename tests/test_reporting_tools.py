@@ -72,9 +72,23 @@ def test_build_where_combines_with_and():
 
 
 def test_build_where_dates_use_default_field():
+    # NocoDB v2 requires the exactDate operator for date columns; plain
+    # ISO values are rejected (400/422).
     where = rt._build_where(date_from="2026-05-01", date_to="2026-05-09")
-    assert "(CreatedAt,ge,2026-05-01)" in where
-    assert "(CreatedAt,le,2026-05-09)" in where
+    assert "(CreatedAt,ge,exactDate,2026-05-01)" in where
+    assert "(CreatedAt,le,exactDate,2026-05-09)" in where
+
+
+def test_build_where_skips_unparseable_date():
+    # Free text like 'bu ay' must be dropped, not injected (was -> 400).
+    assert rt._build_where(date_from="bu ay") is None
+    assert rt._build_where(asama="Sicak", date_to="geçen hafta") == "(asama,eq,Sicak)"
+
+
+def test_build_where_normalizes_iso_datetime():
+    assert rt._build_where(date_from="2026-05-01T10:30:00Z") == (
+        "(CreatedAt,ge,exactDate,2026-05-01)"
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -163,6 +163,7 @@ class NocoDBClient:
         where: str | None = None,
         limit: int = 25,
         sort: str | None = None,
+        offset: int | None = None,
     ) -> dict[str, Any]:
         """List rows with optional `where` filter (NocoDB syntax: '(field,eq,value)')."""
         params: dict[str, Any] = {"limit": limit}
@@ -170,6 +171,8 @@ class NocoDBClient:
             params["where"] = where
         if sort:
             params["sort"] = sort
+        if offset:
+            params["offset"] = offset
         return self._request("GET", self._records_url(table_id), params=params)
 
     def count_records(self, table_id: str, *, where: str | None = None) -> int:
