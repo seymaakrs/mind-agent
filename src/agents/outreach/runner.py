@@ -266,10 +266,11 @@ async def loop(config: OutreachConfig | None = None, *, max_iterations: int | No
     while max_iterations is None or iteration < max_iterations:
         iteration += 1
         try:
-            # Adim 8 Bekci kontrolü: NOCODB_SETTINGS_TABLE_ID set ise
-            # outreach_paused bayrağına bak. RED kararla durdurulduysak hicbir
-            # mesaj atma — sadece bekle. Yeniden baslatma INSAN onayli (Şeyma
-            # NocoDB'den outreach_paused=false yapacak).
+            # Bekci kontrolu: NOCODB_SETTINGS_TABLE_ID set ise outreach_paused
+            # bayragina bak. RED kararla durdurulduysak hicbir mesaj atma —
+            # sadece bekle ve bayragi re-check et. Yeniden baslatma OTOMATIK:
+            # Guardian metrikler GREEN'e donunce outreach_paused=false yapar
+            # (kapali dongu, insan onayi gerekmez).
             if _is_outreach_paused():
                 log.info("outreach: PAUSED by Guardian, sleeping %ds", _PAUSE_GUARDIAN_SEC)
                 await asyncio.sleep(_PAUSE_GUARDIAN_SEC)
