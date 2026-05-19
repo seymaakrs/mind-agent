@@ -9,17 +9,15 @@ Polling-based (60sn). Each tick:
    message, mark inbound row processed, flip lead.asama.
 3. DRY_RUN gates Zernio + NocoDB writes (still classifies for shadow log).
 
-Itiraz (Faz 1): ``AUTO_REPLY_ITIRAZ_NATIVE`` acikken itiraz tespitinde
-responder'in urettigi ONERI taslagi + objection_type kullanilir;
-Etkilesimler'e 'Itiraz Önerisi' satiri yazilir ve n8n'e taslakla birlikte
-iletilir (Seyma onayli, musteriye OTOMATIK gitmez). Flag kapaliyken eski
-'Itiraz Handoff' davranisi aynen korunur (regresyon yok).
+Itiraz: olumlu/soru ile AYNI akis. Insan onayi YOK, n8n handoff YOK —
+responder itirazi siniflandirip cevabi yazar, confidence >= 0.5 ise
+dogrudan musteriye gonderilir (24h CS penceresi icindeyiz, free-form OK).
+Lead asama 'Itiraz', log turu 'Itiraz Yanit'.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import signal
 import sys
 from datetime import datetime, timezone
@@ -37,15 +35,7 @@ log = logging.getLogger("auto_reply")
 
 _PAUSE_ERROR_SEC = 60
 
-
-def _itiraz_native_enabled() -> bool:
-    """Faz 1 feature flag. Kapaliyken eski n8n handoff davranisi gecerli."""
-    return os.environ.get("AUTO_REPLY_ITIRAZ_NATIVE", "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+_SENDABLE_INTENTS = {"olumlu", "soru", "itiraz"}
 
 
 async def handle_one(
@@ -83,10 +73,11 @@ async def handle_one(
     timestamp = datetime.now(timezone.utc).isoformat()
     reply_sent = False
     send_raw: dict[str, Any] | None = None
+    is_itiraz = decision.intent == "itiraz"
 
     should_send = (
         bool(decision.reply_text.strip())
-        and decision.intent in {"olumlu", "soru"}
+        and decision.intent in _SENDABLE_INTENTS
         and decision.confidence >= 0.5
     )
 
@@ -139,7 +130,8 @@ async def handle_one(
                     "tarih": timestamp,
                     "kanal": inbound_row.get("kanal") or "WhatsApp",
                     "yon": "Giden",
-                    "tur": "Auto Reply",
+                    # 'Itiraz Yanit' yeni SingleSelect option — migration ile eklenir
+                    "tur": "Itiraz Yanit" if is_itiraz else "Auto Reply",
                     "mesaj_icerigi": decision.reply_text,
                     "external_message_id": platform_message_id,
                     "agent": "Auto-reply Agent",
@@ -150,7 +142,8 @@ async def handle_one(
         except Exception as exc:
             log.warning("auto_reply: outgoing log failed row_id=%s: %s", row_id, exc)
 
-        # Promote lead lifecycle: Sicak -> Takipte
+        # Lead lifecycle. itiraz -> 'Itiraz', diger -> 'Takipte'.
+        # ('Itiraz' yeni SingleSelect option — migration ile eklenir)
         lead_row = _resolve_lead_row(nocodb, leads_table, inbound_row)
         if lead_row:
             try:
@@ -158,84 +151,12 @@ async def handle_one(
                     leads_table,
                     int(lead_row["Id"]),
                     {
-                        "asama": "Takipte",
+                        "asama": "Itiraz" if is_itiraz else "Takipte",
                         "son_temas": timestamp,
                     },
                 )
             except Exception as exc:
                 log.warning("auto_reply: lead update failed: %s", exc)
-
-    # ----- Itiraz handoff (intent=itiraz) -----
-    # Auto-reply musteriye OTOMATIK yanit ATMAZ. Faz 1: native flag acikken
-    # responder'in urettigi ONERI taslagi + objection_type ile n8n'e
-    # iletilir ve 'Itiraz Önerisi' loglanir; flag kapaliyken eski
-    # 'Itiraz Handoff' davranisi aynen korunur.
-    handoff_sent = False
-    if decision.intent == "itiraz" and decision.confidence >= 0.5 and not dry_run:
-        native = _itiraz_native_enabled()
-        draft_reply = decision.reply_text.strip() if native else ""
-        objection_type = decision.objection_type if native else None
-        try:
-            handoff_sent = await _handoff_to_n8n_itiraz(
-                inbound_text=text,
-                lead_name=lead_name,
-                lead_email=(inbound_row.get("lead_email") or ""),
-                draft_reply=draft_reply,
-                objection_type=objection_type,
-            )
-        except Exception as exc:
-            log.warning("auto_reply: itiraz handoff failed row_id=%s: %s", row_id, exc)
-
-        # Lead asama: Itiraz (yeni SingleSelect option — migration ile eklenir)
-        lead_row = _resolve_lead_row(nocodb, leads_table, inbound_row)
-        if lead_row:
-            try:
-                nocodb.update_record(
-                    leads_table,
-                    int(lead_row["Id"]),
-                    {"asama": "Itiraz", "son_temas": timestamp},
-                )
-            except Exception as exc:
-                log.warning("auto_reply: lead asama->Itiraz failed: %s", exc)
-
-        # Etkilesimler log. native: 'Itiraz Önerisi' (taslak dahil),
-        # aksi halde eski 'Itiraz Handoff'. (yeni SingleSelect option —
-        # migration ile eklenir)
-        if messages_table:
-            if native:
-                log_tur = "Itiraz Önerisi"
-                log_body = (
-                    f"Auto-reply itiraz tespit etti (tip={objection_type}). "
-                    f"Seyma onayina dusen ONERI taslagi:\n\n{draft_reply}\n\n"
-                    f"Orijinal mesaj: {text[:200]}"
-                )
-                log_prefix = "itiraz_oneri"
-            else:
-                log_tur = "Itiraz Handoff"
-                log_body = (
-                    "Auto-reply intent=itiraz tespit etti, n8n Itiraz Agent'a "
-                    f"handoff edildi. Orijinal: {text[:200]}"
-                )
-                log_prefix = "itiraz_handoff"
-            try:
-                nocodb.upsert_record(
-                    messages_table,
-                    "external_message_id",
-                    {
-                        "lead_adi": lead_name,
-                        "tarih": timestamp,
-                        "kanal": inbound_row.get("kanal") or "WhatsApp",
-                        "yon": "Giden",
-                        "tur": log_tur,
-                        "mesaj_icerigi": log_body,
-                        "external_message_id": f"{log_prefix}_{row_id}_{int(datetime.now(timezone.utc).timestamp())}",
-                        "agent": "Auto-reply Agent",
-                        "otomatik_mi": True,
-                        "auto_reply_processed": True,
-                    },
-                )
-            except Exception as exc:
-                log.warning("auto_reply: itiraz log failed: %s", exc)
 
     if not dry_run:
         try:
@@ -246,7 +167,6 @@ async def handle_one(
             log.warning("auto_reply: cannot mark processed row_id=%s: %s", row_id, exc)
 
     return {
-        "handoff_sent": handoff_sent,
         "row_id": row_id,
         "intent": decision.intent,
         "confidence": decision.confidence,
@@ -254,46 +174,6 @@ async def handle_one(
         "reply_sent": reply_sent,
         "dry_run": dry_run,
     }
-
-
-async def _handoff_to_n8n_itiraz(
-    *,
-    inbound_text: str,
-    lead_name: str,
-    lead_email: str,
-    draft_reply: str = "",
-    objection_type: str | None = None,
-) -> bool:
-    """Auto-reply intent=itiraz tespit ettiginde n8n Itiraz Agent
-    webhook'una POST. n8n Seyma'ya oneri maili gonderir (insan onayli,
-    otomatik musteriye yollamaz).
-
-    Faz 1: ``draft_reply`` ve ``objection_type`` verildiyse (native flag),
-    bizim urettigimiz oneri taslagi + itiraz tipi de body'ye eklenir; n8n
-    Gemini siniflandirmasina ihtiyac duymadan dogrudan maile koyabilir.
-    Eski cagri sekli (sadece text) backward-compatible kalir.
-
-    Returns True if webhook 2xx donduyse.
-    """
-    from src.tools.n8n_bridge_tools import _call_n8n_workflow_impl
-    body: dict[str, Any] = {
-        "musteri_email": lead_email or f"{lead_name.replace(' ', '_')}@unknown",
-        "mesaj": inbound_text,
-    }
-    if draft_reply:
-        body["oneri_yaniti"] = draft_reply
-    if objection_type:
-        body["itiraz_tipi"] = objection_type
-    result = await _call_n8n_workflow_impl(name="itiraz_agent", body=body)
-    ok = bool(result.get("success"))
-    if ok:
-        log.info("auto_reply: itiraz handoff to n8n OK (lead=%s)", lead_name)
-    else:
-        log.warning(
-            "auto_reply: itiraz handoff to n8n FAILED: %s",
-            result.get("user_message_tr") or result.get("error"),
-        )
-    return ok
 
 
 def _resolve_lead_row(
@@ -324,14 +204,13 @@ async def loop(
         return
 
     log.info(
-        "auto_reply starting: poll=%ds batch=%d delay=%d-%ds model=%s dry_run=%s itiraz_native=%s",
+        "auto_reply starting: poll=%ds batch=%d delay=%d-%ds model=%s dry_run=%s",
         config.poll_interval_sec,
         config.batch_size,
         config.reply_min_delay_sec,
         config.reply_max_delay_sec,
         config.model,
         dry_run,
-        _itiraz_native_enabled(),
     )
 
     iteration = 0

@@ -1,10 +1,11 @@
-"""Faz 1 — Auto-reply native itiraz oneri taslagi.
+"""Auto-reply native itiraz — insan onayi YOK, dogrudan musteriye gonderim.
 
 Kapsam:
 - responder: objection_type alani + playbook anchor prompt'a giriyor
 - templates: ITIRAZ_PLAYBOOK saglikli (link/fiyat yok)
-- runner: AUTO_REPLY_ITIRAZ_NATIVE flag kapali/acik davranisi
-  (musteriye OTOMATIK yanit hicbir kosulda gitmez)
+- runner: itiraz olumlu/soru ile ayni akis — confidence >= 0.5 ise
+  Zernio ile gonderilir, 'Itiraz Yanit' loglanir, lead asama 'Itiraz';
+  dusuk confidence/dry_run gonderim yok; n8n handoff YOK.
 """
 from __future__ import annotations
 
@@ -67,7 +68,7 @@ class TestResponderObjection:
     def test_decision_accepts_objection_type(self):
         d = AutoReplyDecision(
             intent="itiraz",
-            reply_text="taslak",
+            reply_text="cevap",
             confidence=0.8,
             objection_type="fiyat",
         )
@@ -106,27 +107,24 @@ def mock_clients(monkeypatch):
     return nocodb, zernio
 
 
-def _itiraz_decision():
+def _itiraz_decision(conf=0.9):
     return AutoReplyDecision(
         intent="itiraz",
         reply_text="Bütçe tarafını anlıyorum, 30 dakika görüşelim mi?",
-        confidence=0.9,
+        confidence=conf,
         objection_type="fiyat",
     )
 
 
-class TestNativeFlagOff:
+class TestItirazAutoSend:
     @pytest.mark.asyncio
-    async def test_flag_off_keeps_legacy_handoff(self, mock_clients, monkeypatch):
+    async def test_itiraz_sends_reply_and_sets_asama(self, mock_clients, monkeypatch):
         nocodb, zernio = mock_clients
-        monkeypatch.delenv("AUTO_REPLY_ITIRAZ_NATIVE", raising=False)
 
         async def fake_decide(message, **kwargs):
             return _itiraz_decision()
 
         monkeypatch.setattr(runner, "decide_reply", fake_decide)
-        handoff = AsyncMock(return_value=True)
-        monkeypatch.setattr(runner, "_handoff_to_n8n_itiraz", handoff)
 
         result = await runner.handle_one(
             inbound_row={
@@ -140,75 +138,62 @@ class TestNativeFlagOff:
             dry_run=False,
         )
 
-        assert result["reply_sent"] is False
-        zernio.send_message.assert_not_called()
-        assert handoff.await_args.kwargs["draft_reply"] == ""
-        assert handoff.await_args.kwargs["objection_type"] is None
-        log_row = next(
-            c for c in nocodb.upsert_record.call_args_list
-            if c.args[2].get("tur") == "Itiraz Handoff"
-        )
-        assert log_row is not None
-
-
-class TestNativeFlagOn:
-    @pytest.mark.asyncio
-    async def test_flag_on_uses_draft_and_oneri_log(self, mock_clients, monkeypatch):
-        nocodb, zernio = mock_clients
-        monkeypatch.setenv("AUTO_REPLY_ITIRAZ_NATIVE", "true")
-
-        async def fake_decide(message, **kwargs):
-            return _itiraz_decision()
-
-        monkeypatch.setattr(runner, "decide_reply", fake_decide)
-        handoff = AsyncMock(return_value=True)
-        monkeypatch.setattr(runner, "_handoff_to_n8n_itiraz", handoff)
-
-        result = await runner.handle_one(
-            inbound_row={
-                "Id": 7,
-                "mesaj_icerigi": "Fiyatınız yüksek",
-                "lead_adi": "Otel A",
-            },
-            config=AutoReplyConfig(),
-            leads_table="leads_tbl",
-            messages_table="msgs_tbl",
-            dry_run=False,
-        )
-
-        assert result["reply_sent"] is False
-        zernio.send_message.assert_not_called()
+        assert result["reply_sent"] is True
+        assert result["intent"] == "itiraz"
         assert result["objection_type"] == "fiyat"
-
-        kw = handoff.await_args.kwargs
-        assert kw["draft_reply"].startswith("Bütçe")
-        assert kw["objection_type"] == "fiyat"
-
-        log_row = next(
-            c for c in nocodb.upsert_record.call_args_list
-            if c.args[2].get("tur") == "Itiraz Önerisi"
+        zernio.send_message.assert_awaited_once_with(
+            "conv-1", "Bütçe tarafını anlıyorum, 30 dakika görüşelim mi?"
         )
-        assert "ONERI taslagi" in log_row.args[2]["mesaj_icerigi"]
-        assert "tip=fiyat" in log_row.args[2]["mesaj_icerigi"]
+
+        out = nocodb.upsert_record.call_args.args[2]
+        assert out["tur"] == "Itiraz Yanit"
+        assert out["yon"] == "Giden"
+
+        lead_update = next(
+            c for c in nocodb.update_record.call_args_list
+            if c.args[0] == "leads_tbl"
+        )
+        assert lead_update.args[2]["asama"] == "Itiraz"
 
     @pytest.mark.asyncio
-    async def test_flag_on_dry_run_writes_nothing(self, mock_clients, monkeypatch):
+    async def test_itiraz_low_confidence_no_send(self, mock_clients, monkeypatch):
         nocodb, zernio = mock_clients
-        monkeypatch.setenv("AUTO_REPLY_ITIRAZ_NATIVE", "1")
+
+        async def fake_decide(message, **kwargs):
+            return _itiraz_decision(conf=0.3)
+
+        monkeypatch.setattr(runner, "decide_reply", fake_decide)
+
+        result = await runner.handle_one(
+            inbound_row={"Id": 8, "mesaj_icerigi": "?", "lead_adi": "Otel B"},
+            config=AutoReplyConfig(),
+            leads_table="leads_tbl",
+            messages_table="msgs_tbl",
+            dry_run=False,
+        )
+        assert result["reply_sent"] is False
+        zernio.send_message.assert_not_called()
+        nocodb.update_record.assert_called_with(
+            "msgs_tbl", 8, {"auto_reply_processed": True}
+        )
+
+    @pytest.mark.asyncio
+    async def test_itiraz_dry_run_writes_nothing(self, mock_clients, monkeypatch):
+        nocodb, zernio = mock_clients
 
         async def fake_decide(message, **kwargs):
             return _itiraz_decision()
 
         monkeypatch.setattr(runner, "decide_reply", fake_decide)
-        handoff = AsyncMock(return_value=True)
-        monkeypatch.setattr(runner, "_handoff_to_n8n_itiraz", handoff)
 
-        await runner.handle_one(
-            inbound_row={"Id": 7, "mesaj_icerigi": "pahalı", "lead_adi": "A"},
+        result = await runner.handle_one(
+            inbound_row={"Id": 9, "mesaj_icerigi": "pahalı", "lead_adi": "A"},
             config=AutoReplyConfig(),
             leads_table="leads_tbl",
             messages_table="msgs_tbl",
             dry_run=True,
         )
-        handoff.assert_not_called()
+        assert result["dry_run"] is True
+        assert result["reply_sent"] is False
+        zernio.send_message.assert_not_called()
         nocodb.upsert_record.assert_not_called()

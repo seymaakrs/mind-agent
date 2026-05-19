@@ -6,12 +6,13 @@ Tek bir OpenAI Agents SDK call. Pydantic structured output:
 
 intent in {"olumlu", "olumsuz", "soru", "spam", "itiraz"}.
 
-olumlu/soru: reply_text doludur, musteriye gonderilir (runner should_send).
+olumlu/soru/itiraz: reply_text doludur, musteriye GONDERILIR (runner
+should_send, confidence >= 0.5). itiraz icin ek olarak ``objection_type``
+siniflandirilir ve cevap ``ITIRAZ_PLAYBOOK`` anchor'larina dayanir.
 olumsuz/spam: reply_text bos, yanit yok.
-itiraz (Faz 1): reply_text artik bir ONERI TASLAGI olarak doldurulur ve
-``objection_type`` siniflandirilir. Bu taslak musteriye OTOMATIK GITMEZ —
-runner sadece olumlu/soru'da gonderir; itiraz taslagi Seyma onayina dusen
-oneri olarak loglanir/iletilir.
+
+Insan onayi YOKTUR — itiraz cevabi da sistemce kararlastirilip dogrudan
+musteriye gider (kullanici karari).
 
 LLM gets the inbound message PLUS a randomly-sampled base template from
 ``FALLBACK_TEMPLATES`` (or NocoDB message_templates) for the matching
@@ -46,15 +47,14 @@ class AutoReplyDecision(BaseModel):
     )
     reply_text: str = Field(
         default="",
-        description="TR yanit. olumlu/soru: musteriye gidecek yanit. "
-        "itiraz: Seyma onayina dusen ONERI taslagi (otomatik gitmez). "
-        "olumsuz/spam: BOS birak.",
+        description="TR yanit. olumlu/soru/itiraz: musteriye GIDECEK yanit "
+        "(otomatik gonderilir). olumsuz/spam: BOS birak.",
     )
     confidence: float = Field(
         default=0.5,
         ge=0.0,
         le=1.0,
-        description="Siniflandirma guven skoru 0-1.",
+        description="Siniflandirma guven skoru 0-1. <0.5 ise yanit gitmez.",
     )
     objection_type: ObjectionType | None = Field(
         default=None,
@@ -67,7 +67,7 @@ class AutoReplyDecision(BaseModel):
 _INSTRUCTIONS = """\
 Sen Slowdays satis ekibinin WhatsApp asistanisin. Otel sahiplerinden gelen
 inbound mesajlari okur, niyetini siniflandirir ve KISA, SAMIMI, TR bir yanit
-yazarsin.
+yazarsin. Yanitin DOGRUDAN musteriye gider; insan onayi yoktur.
 
 Kurallar:
 - intent: olumlu | soru | olumsuz | spam | itiraz
@@ -77,9 +77,8 @@ Kurallar:
 - itiraz: musteri fiyat/rekabet/erteleme/olcek/teknoloji/kanit itirazi
   yapiyorsa intent=itiraz. objection_type'i bu tiplerden biri olarak SEC.
   reply_text'i, asagidaki ITIRAZ OYUN KITABI'ndaki ESLESEN anchor'i baz
-  alarak yaz — bu bir ONERI taslagidir, musteriye otomatik gitmez, Seyma
-  onaylar. Anchor'in tonunu/uzunlugunu KOPYALA, mesaja gore kucuk
-  varyasyon yap.
+  alarak yaz — bu cevap dogrudan musteriye gider. Anchor'in tonunu/
+  uzunlugunu KOPYALA, mesaja gore kucuk varyasyon yap.
 - ANCHOR'daki gercek bilgileri AYNEN KORU — bu detaylar halusine edilemez:
     * "Bodrumdayim", "Marmaris", "Fethiye yoluna cikiyorum"
     * "30 dakikalik gorusme", "yuz yuze", "kahve"
@@ -89,7 +88,7 @@ Kurallar:
 - Link yok, fiyat yok, garanti yok. Sadece bir sonraki adim (gorusme talebi).
 - Anchor template'te emoji varsa kopyala; yoksa ekleme.
 - confidence: siniflandirmadan ne kadar emin oldugun (0-1). Belirsiz
-  mesajlarda dusuk skor ver -> insan ele alir.
+  mesajlarda dusuk skor ver -> yanit gonderilmez (sessiz kalinir).
 """
 
 
