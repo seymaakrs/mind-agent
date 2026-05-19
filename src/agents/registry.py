@@ -10,6 +10,7 @@ from src.agents.marketing_agent import create_marketing_agent
 from src.agents.analysis_agent import create_analysis_agent
 from src.agents.orchestrator_agent import create_orchestrator_agent
 from src.agents.sales.meta_agent import create_meta_agent
+from src.agents.sales.sales_analyst_agent import create_sales_analyst_agent
 
 # Agent factory tipi: parametresiz cagrida yeni agent dondurur.
 AgentFactory = Callable[[], Agent[dict[str, Any]]]
@@ -51,6 +52,11 @@ def create_meta() -> Agent[dict[str, Any]]:
     return create_meta_agent()
 
 
+def create_sales_analyst() -> Agent[dict[str, Any]]:
+    """Sales Analyst agenti olusturur (read-only NocoDB CRM raporu)."""
+    return create_sales_analyst_agent()
+
+
 def get_agent_registry() -> dict[str, AgentFactory]:
     """
     Tum agent olusturucularini isim bazli dondurur.
@@ -63,6 +69,7 @@ def get_agent_registry() -> dict[str, AgentFactory]:
         "marketing": create_marketing,
         "analysis": create_analysis,
         "meta": create_meta,
+        "sales_analyst": create_sales_analyst,
     }
 
 
@@ -73,6 +80,7 @@ __all__ = [
     "create_marketing",
     "create_analysis",
     "create_meta",
+    "create_sales_analyst",
     "get_agent_registry",
     "AgentFactory",
 ]

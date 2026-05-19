@@ -3,14 +3,16 @@ from __future__ import annotations
 import asyncio
 import json
 import traceback
+from contextlib import asynccontextmanager
 from typing import Any
 
 from agents import set_default_openai_key
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from src.app import zernio_webhook
 from src.app.capabilities import CAPABILITIES
 from src.app.config import get_settings
 from src.app.orchestrator_runner import run_orchestrator_async
@@ -19,7 +21,23 @@ from src.infra.thread_manager import generate_thread_id
 settings = get_settings()
 set_default_openai_key(settings.openai_api_key)
 
-app = FastAPI(title="Agents Orchestrator API", version="0.1.0")
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """Startup/shutdown hooks. MCP server'lari burada connect ediliyor
+    (SDK 0.6.2 Agent(mcp_servers=...) otomatik connect etmiyor)."""
+    from src.infra.zernio.mcp_server import start_mcp_servers, stop_mcp_servers
+    await start_mcp_servers()
+    try:
+        yield
+    finally:
+        await stop_mcp_servers()
+
+
+app = FastAPI(
+    title="Agents Orchestrator API",
+    version="0.1.0",
+    lifespan=_lifespan,
+)
 
 # CORS middleware
 app.add_middleware(
@@ -193,6 +211,33 @@ async def get_capabilities():
     Does not invoke any AI model; response is static.
     """
     return CAPABILITIES
+
+
+@app.post("/zernio/webhook")
+async def zernio_inbox_webhook(
+    request: Request,
+    x_zernio_signature: str | None = Header(default=None, alias="X-Zernio-Signature"),
+):
+    """Zernio Inbox webhook receiver — bypasses n8n Lead Toplama Agent.
+
+    Verifies HMAC-SHA256 (when ZERNIO_WEBHOOK_SECRET is set), then upserts a
+    Lead row + logs the inbound message into Etkilesimler. ``message.received``
+    + ``direction=incoming`` events become leads; everything else is acked
+    with ``skipped=true``.
+    """
+    raw_body = await request.body()
+    ok, reason = zernio_webhook.verify_signature(raw_body, x_zernio_signature)
+    if not ok:
+        raise HTTPException(status_code=401, detail=f"signature: {reason}")
+
+    try:
+        payload = json.loads(raw_body or b"{}")
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail=f"invalid JSON: {exc}")
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="payload must be an object")
+
+    return zernio_webhook.handle(payload)
 
 
 @app.get("/health")

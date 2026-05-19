@@ -57,6 +57,17 @@ class Settings(BaseModel):
     nocodb_messages_table_id: str | None = Field(default=None, alias="NOCODB_MESSAGES_TABLE_ID")
     nocodb_notifications_table_id: str | None = Field(default=None, alias="NOCODB_NOTIFICATIONS_TABLE_ID")
 
+    # Zernio (WhatsApp Business + Inbox + Social — Late muadili, Slowdays kampanyasinda kullaniliyor)
+    zernio_api_key: str | None = Field(default=None, alias="ZERNIO_API_KEY")
+    zernio_base_url: str = Field(default="https://api.zernio.com/v1", alias="ZERNIO_BASE_URL")
+    zernio_wa_account_id: str = Field(
+        default="69ecc2273a63baf2053dfc21", alias="ZERNIO_WA_ACCOUNT_ID"
+    )
+    # Webhook HMAC secret (X-Zernio-Signature). Optional in dev — when unset
+    # the webhook accepts unsigned payloads with a warning log; in production
+    # set this and Zernio computes sha256(secret, body) on its end.
+    zernio_webhook_secret: str | None = Field(default=None, alias="ZERNIO_WEBHOOK_SECRET")
+
     # Dry-run mode - Google API'lerine gercek cagri yapmadan prompt'lari loglar
     dry_run: bool = Field(default=False, alias="DRY_RUN")
 
@@ -84,6 +95,12 @@ class Settings(BaseModel):
                 "nocodb_leads_table_id": os.getenv("NOCODB_LEADS_TABLE_ID"),
                 "nocodb_messages_table_id": os.getenv("NOCODB_MESSAGES_TABLE_ID"),
                 "nocodb_notifications_table_id": os.getenv("NOCODB_NOTIFICATIONS_TABLE_ID"),
+                "zernio_api_key": os.getenv("ZERNIO_API_KEY"),
+                "zernio_base_url": os.getenv("ZERNIO_BASE_URL", "https://api.zernio.com/v1"),
+                "zernio_wa_account_id": os.getenv(
+                    "ZERNIO_WA_ACCOUNT_ID", "69ecc2273a63baf2053dfc21"
+                ),
+                "zernio_webhook_secret": os.getenv("ZERNIO_WEBHOOK_SECRET"),
             }
         )
 

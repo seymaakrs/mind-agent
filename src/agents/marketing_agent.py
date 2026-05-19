@@ -52,11 +52,18 @@ def create_marketing_agent(
     if video_agent_tool:
         tools.append(video_agent_tool)
 
+    # Zernio MCP — posts_create / cross_post / boost_post / ad campaigns
+    # (Late API'nin tamamlayıcısı; 14 platforma direkt yayın yapabilir).
+    # Lifespan ile connect edilmis aktif server'lari al.
+    from src.infra.zernio.mcp_server import get_active_mcp_servers
+    mcp_servers = get_active_mcp_servers()
+
     return Agent(
         name="marketing",
         handoff_description="Sosyal medya yönetim agenti - planlama, içerik üretimi, paylaşım, analiz.",
         instructions=MARKETING_AGENT_INSTRUCTIONS,
         tools=tools,
+        mcp_servers=mcp_servers,
         tool_use_behavior="run_llm_again",
         output_type=str,
         model=model or model_settings.marketing_agent_model or settings.openai_model,

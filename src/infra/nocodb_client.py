@@ -29,6 +29,48 @@ from src.infra.errors import ServiceError, classify_error
 _TIMEOUT_SECONDS = 30.0
 
 
+def iso_for_nocodb_filter(dt: "datetime") -> str:
+    """DEPRECATED: NocoDB v2 datetime filter SQL ISO format kabul etmiyor.
+    Yerine ``today_filter_clause`` veya ``days_ago_filter_clause`` kullan.
+
+    Bu fonksiyon hala mevcut kodlar icin geriye-uyumluluk amaciyla durur,
+    sadece UTC formatli string doner (debug/log icin yararli)."""
+    from datetime import timezone as _tz
+    if dt.tzinfo is None:
+        utc = dt
+    else:
+        utc = dt.astimezone(_tz.utc).replace(tzinfo=None)
+    return utc.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def today_filter_clause(field: str, now: "datetime | None" = None) -> str:
+    """NocoDB v2 'where' clause: bugun (UTC) 00:00 ve sonrasi.
+
+    NocoDB v2 DateTime kolonlari ISO datetime string'i kabul etmiyor (422);
+    bunun yerine ``exactDate`` operator'unu istiyor:
+        (field,gte,exactDate,YYYY-MM-DD)
+
+    Production test (2026-05-12): `2026-05-12T00:00:00+00:00`, `Z` ve
+    space-separated formatlar HEPSI 422 verdi. Sadece exactDate calisiyor.
+    """
+    from datetime import datetime as _dt, timezone as _tz
+    now = now or _dt.now(_tz.utc)
+    date_str = now.strftime("%Y-%m-%d")
+    return f"({field},gte,exactDate,{date_str})"
+
+
+def days_ago_filter_clause(field: str, days: int) -> str:
+    """NocoDB v2 'where' clause: son N gun (today inclusive).
+
+        (field,gt,daysAgo,N)
+
+    Saat hassasiyetli pencereler icin (son 60dk vs.) bu filter'i kaba
+    pencere olarak kullan, sonra Python tarafinda `tarih` field'ini parse
+    edip ince filter et — NocoDB v2'de saat-bazli operator yok.
+    """
+    return f"({field},gt,daysAgo,{days})"
+
+
 class NocoDBClient:
     """Thin httpx wrapper around NocoDB v2 REST API.
 
@@ -121,6 +163,7 @@ class NocoDBClient:
         where: str | None = None,
         limit: int = 25,
         sort: str | None = None,
+        offset: int | None = None,
     ) -> dict[str, Any]:
         """List rows with optional `where` filter (NocoDB syntax: '(field,eq,value)')."""
         params: dict[str, Any] = {"limit": limit}
@@ -128,7 +171,28 @@ class NocoDBClient:
             params["where"] = where
         if sort:
             params["sort"] = sort
+        if offset:
+            params["offset"] = offset
         return self._request("GET", self._records_url(table_id), params=params)
+
+    def count_records(self, table_id: str, *, where: str | None = None) -> int:
+        """True total row count via NocoDB v2 `/records/count`.
+
+        Unlike paging through `list_records`, this returns the real total and
+        is not capped by any page size / hard cap.
+        """
+        params: dict[str, Any] = {}
+        if where:
+            params["where"] = where
+        url = f"{self._records_url(table_id)}/count"
+        result = self._request("GET", url, params=params or None)
+        if isinstance(result, dict):
+            value = result.get("count")
+            if isinstance(value, bool):
+                return 0
+            if isinstance(value, (int, float)):
+                return int(value)
+        return 0
 
     def find_by_field(
         self, table_id: str, field: str, value: Any

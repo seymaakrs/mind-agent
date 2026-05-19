@@ -9,6 +9,7 @@ from .tiktok import post_carousel_on_tiktok, post_on_tiktok
 from .linkedin import post_on_linkedin, post_carousel_on_linkedin
 from .youtube import post_on_youtube
 from .business import fetch_business, report_error
+from src.tools.n8n_bridge_tools import get_n8n_bridge_tools
 
 
 def get_orchestrator_tools() -> list[FunctionTool]:
@@ -28,6 +29,7 @@ def get_orchestrator_tools() -> list[FunctionTool]:
         post_on_linkedin,
         post_carousel_on_linkedin,
         report_error,
+        *get_n8n_bridge_tools(),  # Adim 9: n8n köprüsü (list/call/health)
     ]
 
 
