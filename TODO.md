@@ -35,10 +35,9 @@ Her madde:
 - **auto_reply_template_update** — Auto-reply Yanıtlayıcı template'ını güncelleme.
 - **outreach_daily_limit_set** — günlük outreach kapasitesini ayarla (ban riskine göre).
 
-### B. Yatay iletişim — Meta (Reklam Uzmanı) ile
-- Sales Manager'a `meta_agent_tool` (mevcut) doğrudan emrinde olsun (şu an Şef paralel çağırıyor).
-- "Reklam Uzmanı'na sor: Meta'da en çok dönüş alan reklam grubu hangisi" → tek prompt'ta koordine.
-- Lead kalite geri bildirimi: Müdür "şu kaynak düşük dönüştü" derse Meta agent bütçeyi öbür gruba kaydırsın.
+### B. Yatay iletişim — Meta (Reklam Uzmanı) ile ⏳ (2026-05-20 kısmi)
+- ✅ **Peer handoff onerisi** instructions'ta: Müdür çıktısında "[Reklam Uzmanı'na yönlendir]" bloğu üretir → Şef `meta_agent_tool`'u tetikler. Tasarım kararı: meta_agent_tool Şef'te kalsın (peer via Şef).
+- 🔜 Lead kalite geri bildirimi: Müdür "şu kaynak düşük dönüştü" derse Meta agent bütçeyi öbür gruba kaydırsın (otomasyon).
 
 ### C. Alt birim kontrolü (Avcı + DM Yanıtlayıcı)
 - Otonom runner'lar şu an cron ile çalışıyor. Müdür **olay bazlı tetikleme** yapabilmeli:
@@ -50,14 +49,14 @@ Her madde:
 - `get_sales_memory(business_id)` / `update_sales_memory` — kullanıcı tercihlerini, geçmiş kararları hatırla.
 - "Beyza her pazartesi sıcak lead listesi ister" → öneri olarak sun.
 
-### E. Marka kimliği
-- BRAND_AWARE_PREFIX bu agent'a da ekle (Faz C tamamlama). Rapor sonu marka tonuna uygun.
+### E. Marka kimliği ✅ (2026-05-20)
+- ~~BRAND_AWARE_PREFIX bu agent'a da ekle.~~ Çözüldü: Sales Manager artık `fetch_brand_identity` tool'una sahip + BRAND_AWARE_PREFIX instructions'a prepend edildi. Raporlar marka tonuna göre yorumlanabilir.
 
 ### F. Trend / karşılaştırma
 - `compare_periods(metric, from1, to1, from2, to2)` — bu hafta vs geçen hafta otomatik karşılaştırma.
 
-### G. `outreach_health` ↔ `get_guardian_status` çakışmasını çöz
-- Bekçi pause durumunu iki ayrı tool döndürüyor (`outreach_health` Sales Manager'da, `get_guardian_status` Şef'te). Tutarsızlık riski. Tek kaynak olsun (önerim: `get_guardian_status` kalsın, `outreach_health` deprecate).
+### G. `outreach_health` ↔ `get_guardian_status` çakışmasını çöz ✅ (2026-05-20)
+- ~~Bekçi pause durumunu iki ayrı tool döndürüyor.~~ Çözüldü: `outreach_health` artık `get_guardian_status` sonucunu sarmalıyor (tek SoT). Geri uyumlu API (paused/active/reason) korundu.
 
 ### H. Sales Analyst tamamen kaldır
 - Eski `sales_analyst` registry kaydı + factory + wrapper hâlâ duruyor (deprecate ama silinmedi). REST API + portal hazır olduğunda tamamen kaldırılır.
@@ -135,10 +134,8 @@ Image / Video / Marketing artık brand_identity okuyor.
 - **Niye:** Tutarlılık + retry azaltma.
 - **Ne zaman:** Faz C tamamlandı; tekrar değerlendir — brand_identity zaten doğrudan okunduğu için belki gereksiz.
 
-### `post_on_instagram` tool'unu Şef listesinden çıkar
-- **Ne:** Şu an Şef bu tool'a teknik olarak erişebiliyor (talimatla yasak ama dosyada erişim var). `orchestrator_tools`'tan tamamen kaldır.
-- **Niye:** Güvenlik temizliği.
-- **Ne zaman:** İlk uygun fırsatta küçük PR.
+### `post_on_instagram` tool'unu Şef listesinden çıkar ✅ (2026-05-20)
+- ~~Şef bu tool'a teknik olarak erişebiliyor.~~ Çözüldü: tüm `post_on_*` tool'ları (instagram/tiktok/youtube/linkedin + carousel'ler) Şef'in `get_orchestrator_tools()` return listesinden çıkarıldı. Marketing/Video agent'lar üzerinden delege edilir. Defense-in-depth: instruction yasağı + dosya erişimi yok.
 
 ---
 

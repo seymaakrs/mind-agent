@@ -442,6 +442,10 @@ async def test_outreach_health_no_settings_table_assumes_active(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_outreach_health_paused_row(monkeypatch):
+    # outreach_health artik get_guardian_status'i sarmaliyor (tek SoT).
+    # Guardian impl'i NocoDB'den system_settings okur → orayi mock'la.
+    from src.tools import guardian_tools as gt
+
     monkeypatch.setenv("NOCODB_SETTINGS_TABLE_ID", "settings_tbl")
     client = MagicMock()
     client.list_records.return_value = {
@@ -451,7 +455,7 @@ async def test_outreach_health_paused_row(monkeypatch):
             "paused_at": "2026-05-11T14:32:00Z",
         }]
     }
-    monkeypatch.setattr(rt, "get_nocodb_client", lambda: client)
+    monkeypatch.setattr(gt, "get_nocodb_client", lambda: client)
 
     result = await rt._outreach_health_impl()
     assert result["success"] is True
@@ -463,10 +467,12 @@ async def test_outreach_health_paused_row(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_outreach_health_active_row(monkeypatch):
+    from src.tools import guardian_tools as gt
+
     monkeypatch.setenv("NOCODB_SETTINGS_TABLE_ID", "settings_tbl")
     client = MagicMock()
     client.list_records.return_value = {"list": [{"outreach_paused": False}]}
-    monkeypatch.setattr(rt, "get_nocodb_client", lambda: client)
+    monkeypatch.setattr(gt, "get_nocodb_client", lambda: client)
 
     result = await rt._outreach_health_impl()
     assert result["success"] is True

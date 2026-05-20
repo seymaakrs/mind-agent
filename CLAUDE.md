@@ -1,5 +1,17 @@
 # Claude Session Notes
 
+## 🎯 STRATEJIK ÖNCELIK (2026-05-20)
+
+**Sales + Marketing = şirketin para kazanma motoru.** Yatırım/zaman/token
+bütçesi öncelik sırası:
+
+1. **Sales Manager (Satış Müdürü)** + alt birimleri (Outreach/Auto-reply/Follow-up)
+2. **Marketing Agent** + alt birimleri (Image/Video, brand-aware üretim)
+3. Diğer her şey (infra, observability, dev experience) sonra gelir.
+
+Yeni özellik / refactor önerisinde önce şu soru: *"Bu Sales veya Marketing'in
+para kazandırma gücünü artırır mı?"* Hayırsa, sıraya en altta gider.
+
 ## ⚡ YENI SESSION? ÖNCE BURAYI OKU — DURUM (2026-05-12)
 
 **Branch (3 repo):** `claude/add-hot-leads-count-LJNi7`

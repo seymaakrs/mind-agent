@@ -19,7 +19,9 @@ from typing import Any
 from agents import Agent
 
 from src.tools.sales.reporting_tools import get_reporting_tools
+from src.tools.brand import fetch_brand_identity
 from src.agents.instructions.sales import SALES_MANAGER_INSTRUCTIONS
+from src.agents.instructions.brand_aware import BRAND_AWARE_PREFIX
 
 
 def create_sales_manager_agent(
@@ -36,7 +38,7 @@ def create_sales_manager_agent(
             calistigi icin daha yuksek modele cikilabilir, ancak rapor
             anlatimi icin mini yeterli + ucuz).
     """
-    tools = list(get_reporting_tools())
+    tools = list(get_reporting_tools()) + [fetch_brand_identity]
 
     # Zernio MCP — Sales Manager'in ihtiyaci olabilir (reklam analitik,
     # post performansi). Lifespan ile connect edilmis aktif server'lari al.
@@ -51,7 +53,7 @@ def create_sales_manager_agent(
             "Yanitlayici) durumlarini izler; yan birim (Reklam Uzmani) "
             "ile koordine olur. Yazma yapmaz — su an okuma + danismanlik."
         ),
-        instructions=SALES_MANAGER_INSTRUCTIONS,
+        instructions=BRAND_AWARE_PREFIX + SALES_MANAGER_INSTRUCTIONS,
         tools=tools,
         mcp_servers=mcp_servers,
         tool_use_behavior="run_llm_again",

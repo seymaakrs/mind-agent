@@ -126,3 +126,55 @@ class TestOrchestratorWiring:
         tool_names = {t.name for t in agent.tools}
         # sales_analyst_tool artik wiring'de yok
         assert "sales_analyst_tool" not in tool_names
+
+    def test_orchestrator_does_not_have_direct_post_tools(self):
+        """Defense-in-depth: Şef post atmaz, marketing/video agent'a delege eder.
+
+        post_on_instagram + post_carousel_on_instagram + tiktok/youtube/linkedin
+        post tool'lari Şef'in elinde OLMAMALI (instructions yasak diyor zaten,
+        ama dosya erisimi de olmasin).
+        """
+        from src.tools.orchestrator import get_orchestrator_tools
+
+        tool_names = {t.name for t in get_orchestrator_tools()}
+        forbidden = {
+            "post_on_instagram",
+            "post_carousel_on_instagram",
+            "post_on_tiktok",
+            "post_carousel_on_tiktok",
+            "post_on_youtube",
+            "post_on_linkedin",
+            "post_carousel_on_linkedin",
+        }
+        leaked = forbidden & tool_names
+        assert not leaked, f"Şef'in elinde olmamasi gereken post tool'lari: {leaked}"
+
+
+class TestSalesManagerBrandAndPeer:
+    """QA paketi: #4 (peer wiring) + #7 (brand awareness)."""
+
+    def test_agent_has_fetch_brand_identity(self):
+        from src.agents.sales.sales_manager_agent import create_sales_manager_agent
+
+        agent = create_sales_manager_agent()
+        tool_names = {t.name for t in agent.tools}
+        assert "fetch_brand_identity" in tool_names, (
+            "Sales Manager markaya gore yorum yapabilmek icin "
+            "fetch_brand_identity tool'unu kullanmali."
+        )
+
+    def test_instructions_include_brand_aware_prefix(self):
+        from src.agents.sales.sales_manager_agent import create_sales_manager_agent
+
+        agent = create_sales_manager_agent()
+        # BRAND_AWARE_PREFIX'in karakteristik basligi
+        assert "ZORUNLU ILK ADIM" in agent.instructions
+        assert "fetch_brand_identity" in agent.instructions
+
+    def test_instructions_describe_peer_handoff_with_meta(self):
+        """Sales Manager Reklam Uzmani'na Şef üzerinden handoff onerisi vermeli."""
+        from src.agents.instructions import SALES_MANAGER_INSTRUCTIONS
+
+        text = SALES_MANAGER_INSTRUCTIONS.lower()
+        assert "peer" in text or "es duzey" in text or "eş düzey" in text or "yatay" in text
+        assert "yonlendir" in text or "handoff" in text

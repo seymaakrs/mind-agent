@@ -609,17 +609,22 @@ async def _auto_reply_status_impl() -> dict[str, Any]:
 
 
 async def _outreach_health_impl() -> dict[str, Any]:
-    """Outreach Robotu su an PAUSE durumunda mi? (Bekci Robot Adim 8 bunu set eder.)
+    """Outreach Robotu su an PAUSE durumunda mi?
 
-    `NOCODB_SETTINGS_TABLE_ID` env'i yoksa: Guardian henuz kurulmamis
-    demek -> 'active' varsayilir. Set ise system_settings tablosundan
-    outreach_paused field'i okunur (tek satir bekleniyor).
+    SINGLE SOURCE OF TRUTH: `get_guardian_status` Bekci'nin tum durumunu
+    okur (level, metrics, pause flag). `outreach_health` artik onu
+    sarmalar ve geri uyumlu (paused/active/reason) sekle map eder.
+    Iki tool'un ayni flag'i bagimsiz okumasi tutarsizlik riski idi.
     """
-    tbl = _settings_table()
-    if not tbl:
+    from src.tools.guardian_tools import _get_guardian_status_impl
+
+    status = await _get_guardian_status_impl()
+
+    if not status.get("success"):
+        # Guardian env yok veya read hatasi → eski "aktif varsayilir" davranisi
         return {
             "success": True,
-            "configured": False,
+            "configured": status.get("configured", False),
             "active": True,
             "paused": False,
             "reason": None,
@@ -628,30 +633,24 @@ async def _outreach_health_impl() -> dict[str, Any]:
                 "kurulmamis — manuel pause kontrolu yok.)"
             ),
         }
-    try:
-        client = get_nocodb_client()
-        result = client.list_records(tbl, limit=1)
-        rows = result.get("list") if isinstance(result, dict) else None
-        row = (rows or [{}])[0]
-        paused = bool(row.get("outreach_paused"))
-        reason = row.get("pause_reason") or None
-        pause_ts = row.get("paused_at") or None
-        return {
-            "success": True,
-            "configured": True,
-            "active": not paused,
-            "paused": paused,
-            "reason": reason,
-            "paused_at": pause_ts,
-            "summary_tr": (
-                f"Outreach Robotu DURDURULDU. Sebep: {reason or 'belirtilmemis'}."
-                + (f" (Pause zamani: {pause_ts})" if pause_ts else "")
-                if paused else
-                "Outreach Robotu aktif, kampanya devam ediyor."
-            ),
-        }
-    except Exception as exc:
-        return classify_error(exc, "nocodb")
+
+    paused = bool(status.get("outreach_paused"))
+    reason = status.get("pause_reason") or None
+    pause_ts = status.get("paused_at") or None
+    return {
+        "success": True,
+        "configured": True,
+        "active": not paused,
+        "paused": paused,
+        "reason": reason,
+        "paused_at": pause_ts,
+        "summary_tr": (
+            f"Outreach Robotu DURDURULDU. Sebep: {reason or 'belirtilmemis'}."
+            + (f" (Pause zamani: {pause_ts})" if pause_ts else "")
+            if paused else
+            "Outreach Robotu aktif, kampanya devam ediyor."
+        ),
+    }
 
 
 # ---------------------------------------------------------------------------
