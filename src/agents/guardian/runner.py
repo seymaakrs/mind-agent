@@ -2,6 +2,9 @@
 
     python -m src.agents.guardian.runner
 
+Cloud Run Job mode (one-shot — tek tick sonra exit):
+    RUN_ONCE=true python -m src.agents.guardian.runner
+
 Her tick:
 1. Etkilesimler'den 24h metric'lerini hesapla
 2. decide() ile karar al
@@ -166,7 +169,8 @@ async def loop(
     config = config or GuardianConfig.from_env()
     log.info(
         "guardian starting: window=%dh poll=%ds reply_thresholds=%.1f/%.1f%% "
-        "engagement_thresholds=%.1f/%.1f%% min_outreach=%d (auto-resume on GREEN)",
+        "engagement_thresholds=%.1f/%.1f%% min_outreach=%d max_iter=%s "
+        "(auto-resume on GREEN)",
         config.window_hours,
         config.poll_interval_sec,
         config.reply_rate_yellow_pct,
@@ -174,15 +178,20 @@ async def loop(
         config.engagement_rate_yellow_pct,
         config.engagement_rate_red_pct,
         config.min_outreach_for_eval,
+        max_iterations or "infinite",
     )
     iteration = 0
     while max_iterations is None or iteration < max_iterations:
         iteration += 1
         try:
             await tick(config)
+            if max_iterations == 1:
+                return
             await asyncio.sleep(config.poll_interval_sec)
         except Exception as exc:
             log.exception("guardian: tick failed: %s", exc)
+            if max_iterations == 1:
+                return
             await asyncio.sleep(_PAUSE_ERROR_SEC)
 
 
@@ -197,6 +206,13 @@ def _install_sigterm_handler() -> None:
         pass
 
 
+def _resolve_max_iterations() -> int | None:
+    """Cloud Run Job mode: RUN_ONCE=true env -> max_iterations=1."""
+    if os.environ.get("RUN_ONCE", "").lower() in ("1", "true", "yes"):
+        return 1
+    return None
+
+
 def main() -> int:
     logging.basicConfig(
         level=logging.INFO,
@@ -204,7 +220,7 @@ def main() -> int:
     )
     _install_sigterm_handler()
     try:
-        asyncio.run(loop())
+        asyncio.run(loop(max_iterations=_resolve_max_iterations()))
     except KeyboardInterrupt:
         pass
     return 0
