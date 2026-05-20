@@ -8,6 +8,7 @@ from src.app.config import get_settings, get_model_settings
 from src.tools.instagram_tools import get_instagram_tools
 from src.tools.marketing_tools import get_marketing_tools
 from src.tools.analysis_tools import get_report_tools
+from src.tools.brand import fetch_brand_identity
 from src.tools.orchestrator_tools import (
     post_on_instagram,
     post_carousel_on_instagram,
@@ -15,7 +16,10 @@ from src.tools.orchestrator_tools import (
     save_document,
     query_documents,
 )
-from src.agents.instructions import MARKETING_AGENT_INSTRUCTIONS
+from src.agents.instructions import (
+    MARKETING_AGENT_INSTRUCTIONS,
+    BRAND_AWARE_PREFIX,
+)
 
 
 def create_marketing_agent(
@@ -25,6 +29,11 @@ def create_marketing_agent(
 ) -> Agent[dict[str, Any]]:
     """
     Marketing agent: Sosyal medya yönetimi - planlama, içerik üretimi, paylaşım, analiz.
+
+    Faz C: BRAND_AWARE_PREFIX talimatin basina prepend, fetch_brand_identity
+    tool listesine eklenir. Marketing agent her uretim/yayim adimindan once
+    brand_identity okur, voice.tone/avoid_words/preferred_words'u caption
+    yazimina yansitir.
 
     Args:
         model: Opsiyonel model override.
@@ -44,6 +53,7 @@ def create_marketing_agent(
         get_document,              # Firestore doc okuma (instagram_stats için)
         save_document,             # Firestore doc yazma (summary için)
         query_documents,           # Firestore query (önceki haftalar için)
+        fetch_brand_identity,      # Faz C: brand_identity okuma
     ]
 
     # Add sub-agent tools if provided
@@ -61,7 +71,7 @@ def create_marketing_agent(
     return Agent(
         name="marketing",
         handoff_description="Sosyal medya yönetim agenti - planlama, içerik üretimi, paylaşım, analiz.",
-        instructions=MARKETING_AGENT_INSTRUCTIONS,
+        instructions=BRAND_AWARE_PREFIX + MARKETING_AGENT_INSTRUCTIONS,
         tools=tools,
         mcp_servers=mcp_servers,
         tool_use_behavior="run_llm_again",

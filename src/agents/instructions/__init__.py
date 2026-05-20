@@ -6,6 +6,7 @@ from .orchestrator import build_orchestrator_instructions
 from .image import IMAGE_AGENT_CORE_INSTRUCTIONS, DEFAULT_IMAGE_PERSONA
 from .video import VIDEO_AGENT_CORE_INSTRUCTIONS, DEFAULT_VIDEO_PERSONA
 from .brand_synthesis import BRAND_SYNTHESIS_AGENT_INSTRUCTIONS
+from .brand_aware import BRAND_AWARE_PREFIX
 
 __all__ = [
     "MARKETING_AGENT_INSTRUCTIONS",
@@ -16,4 +17,5 @@ __all__ = [
     "VIDEO_AGENT_CORE_INSTRUCTIONS",
     "DEFAULT_VIDEO_PERSONA",
     "BRAND_SYNTHESIS_AGENT_INSTRUCTIONS",
+    "BRAND_AWARE_PREFIX",
 ]
