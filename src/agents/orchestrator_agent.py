@@ -13,6 +13,7 @@ from src.agents.analysis_agent import create_analysis_agent
 from src.agents.sales.meta_agent import create_meta_agent
 from src.agents.sales.sales_analyst_agent import create_sales_analyst_agent
 from src.tools.orchestrator_tools import fetch_business, get_orchestrator_tools
+from src.tools.guardian_tools import get_guardian_status
 from src.tools.agent_wrapper_tools import (
     create_image_agent_wrapper_tool,
     create_video_agent_wrapper_tool,
@@ -108,6 +109,7 @@ def create_orchestrator_agent(
             meta_tool,
             sales_analyst_tool,
             fetch_business,
+            get_guardian_status,   # Faz: Sef Bekci durumunu okuyabilsin
             *orchestrator_tools,
         ],
         mcp_servers=mcp_servers,
