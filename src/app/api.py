@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from src.app import zernio_webhook
 from src.app.capabilities import CAPABILITIES
 from src.app.config import get_settings
+from src.app.sales_api import router as sales_router
 from src.app.orchestrator_runner import run_orchestrator_async
 from src.infra.thread_manager import generate_thread_id
 
@@ -54,6 +55,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Sales REST API — portal Sales dashboard'i direkt cagirir (LLM yok).
+app.include_router(sales_router)
 
 
 class Reference(BaseModel):
