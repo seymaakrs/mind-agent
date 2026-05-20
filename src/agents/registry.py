@@ -10,7 +10,8 @@ from src.agents.marketing_agent import create_marketing_agent
 from src.agents.analysis_agent import create_analysis_agent
 from src.agents.orchestrator_agent import create_orchestrator_agent
 from src.agents.sales.meta_agent import create_meta_agent
-from src.agents.sales.sales_analyst_agent import create_sales_analyst_agent
+from src.agents.sales.sales_analyst_agent import create_sales_analyst_agent  # deprecated
+from src.agents.sales.sales_manager_agent import create_sales_manager_agent
 from src.agents.brand_synthesis_agent import create_brand_synthesis_agent
 
 # Agent factory tipi: parametresiz cagrida yeni agent dondurur.
@@ -54,8 +55,13 @@ def create_meta() -> Agent[dict[str, Any]]:
 
 
 def create_sales_analyst() -> Agent[dict[str, Any]]:
-    """Sales Analyst agenti olusturur (read-only NocoDB CRM raporu)."""
+    """DEPRECATED — use create_sales_manager. Eski read-only Sales Analyst."""
     return create_sales_analyst_agent()
+
+
+def create_sales_manager() -> Agent[dict[str, Any]]:
+    """Sales Manager (Satis Muduru) — yonetici, koordine eden, aksiyon onerici."""
+    return create_sales_manager_agent()
 
 
 def create_brand_synthesis() -> Agent[dict[str, Any]]:
@@ -75,7 +81,8 @@ def get_agent_registry() -> dict[str, AgentFactory]:
         "marketing": create_marketing,
         "analysis": create_analysis,
         "meta": create_meta,
-        "sales_analyst": create_sales_analyst,
+        "sales_analyst": create_sales_analyst,  # deprecated, alias
+        "sales_manager": create_sales_manager,
         "brand_synthesis": create_brand_synthesis,
     }
 
@@ -87,7 +94,8 @@ __all__ = [
     "create_marketing",
     "create_analysis",
     "create_meta",
-    "create_sales_analyst",
+    "create_sales_analyst",  # deprecated
+    "create_sales_manager",
     "create_brand_synthesis",
     "get_agent_registry",
     "AgentFactory",
