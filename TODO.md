@@ -11,62 +11,133 @@ Her madde:
 
 ## 🟢 Aktif sırada (yapılacak)
 
-### Langfuse entegrasyonu (LiteLLM'den önce)
-- **Ne:** Her LLM çağrısını izleyen observability aracı. Self-hosted, ücretsiz.
-- **Niye:** Maliyeti düşürmeden önce **ölçmek gerek** — baseline olmadan optimizasyon körü körüne. LiteLLM koymadan önce şart.
-- **Ne zaman:** Sıradaki iş. Plan onaylanınca başlanır.
+### Langfuse entegrasyonu v2 (MCP'yi kırmadan)
+- **Ne:** Her LLM çağrısını izleyen observability aracı. v1 denendi (PR #16), MCP ile çakıştı, geri alındı (PR #17).
+- **Niye:** Maliyeti düşürmeden önce **ölçmek gerek**. LiteLLM'den önce şart.
+- **Yöntem:** `@observe` decorator (manuel sarma) veya `OTEL_PYTHON_DISABLED_INSTRUMENTATIONS=httpx` env var ile httpx auto-instrumentation'ı kapatma.
+- **Ne zaman:** Sıradaki teknik adım.
 
 ### LiteLLM entegrasyonu (Langfuse'den sonra)
 - **Ne:** 100+ LLM sağlayıcısını tek OpenAI formatında kullanılır kılar. Basit görevleri Groq/Gemini Flash'a yıkayıp Claude'u sadece kritik işlere bırakmak.
-- **Niye:** Fatura %50-80 düşebilir. Ama önce Langfuse ile baseline alınmadan denenmemeli (kalite kaybını fark etmeyebiliriz).
+- **Niye:** Fatura %50-80 düşebilir. Ama önce Langfuse ile baseline alınmadan denenmemeli.
 - **Ne zaman:** Langfuse 1 hafta veri topladıktan sonra.
+
+---
+
+## 🛒 Satış Müdürü (Sales Manager) — Mimari Yol Haritası
+
+Önceki "Sales Analyst" agent'ı **Sales Manager (Satış Müdürü)** olarak yeniden konumlandı. Şu anki versiyon iskelet: persona güncel, mevcut read tool'lar koruldu, orchestrator yeni wrapper'a bağlandı. Aşağıdaki yetenekler **bilinçli olarak** sonraki PR'lara bırakıldı.
+
+### A. Yazma yetkileri (manager aksiyonları)
+- **outreach_pause / outreach_resume** — Bekçi otomatik pause yapıyor; Müdür manuel override edebilmeli (ve gerekçe NocoDB system_settings'e yazılmalı).
+- **lead_reassign(lead_id, new_owner)** — Bir lead'i Şeyma'dan başka birine devret.
+- **lead_priority_set(lead_id, priority)** — Önceliğe göre sıralama.
+- **auto_reply_template_update** — Auto-reply Yanıtlayıcı template'ını güncelleme.
+- **outreach_daily_limit_set** — günlük outreach kapasitesini ayarla (ban riskine göre).
+
+### B. Yatay iletişim — Meta (Reklam Uzmanı) ile
+- Sales Manager'a `meta_agent_tool` (mevcut) doğrudan emrinde olsun (şu an Şef paralel çağırıyor).
+- "Reklam Uzmanı'na sor: Meta'da en çok dönüş alan reklam grubu hangisi" → tek prompt'ta koordine.
+- Lead kalite geri bildirimi: Müdür "şu kaynak düşük dönüştü" derse Meta agent bütçeyi öbür gruba kaydırsın.
+
+### C. Alt birim kontrolü (Avcı + DM Yanıtlayıcı)
+- Otonom runner'lar şu an cron ile çalışıyor. Müdür **olay bazlı tetikleme** yapabilmeli:
+  - `trigger_outreach_for_lead(lead_id)` — bir kişiye hemen outreach gönder.
+  - `trigger_auto_reply_for_message(message_id)` — beklemiş mesaja hemen yanıt.
+- Bu tool'lar runner'ların `_handle_single` fonksiyonlarını sarmalı.
+
+### D. Hafıza
+- `get_sales_memory(business_id)` / `update_sales_memory` — kullanıcı tercihlerini, geçmiş kararları hatırla.
+- "Beyza her pazartesi sıcak lead listesi ister" → öneri olarak sun.
+
+### E. Marka kimliği
+- BRAND_AWARE_PREFIX bu agent'a da ekle (Faz C tamamlama). Rapor sonu marka tonuna uygun.
+
+### F. Trend / karşılaştırma
+- `compare_periods(metric, from1, to1, from2, to2)` — bu hafta vs geçen hafta otomatik karşılaştırma.
+
+### G. `outreach_health` ↔ `get_guardian_status` çakışmasını çöz
+- Bekçi pause durumunu iki ayrı tool döndürüyor (`outreach_health` Sales Manager'da, `get_guardian_status` Şef'te). Tutarsızlık riski. Tek kaynak olsun (önerim: `get_guardian_status` kalsın, `outreach_health` deprecate).
+
+### H. Sales Analyst tamamen kaldır
+- Eski `sales_analyst` registry kaydı + factory + wrapper hâlâ duruyor (deprecate ama silinmedi). REST API + portal hazır olduğunda tamamen kaldırılır.
+- **TODO 6 ay** sonra: Sales Analyst kullanımı sıfıra inerse silinir.
+
+---
+
+## 🔌 REST API + Portal Render (Sales Manager için)
+
+Hedef: Sales raporlarının **kullanıcıya doğrudan portal butonu** ile sunulması. LLM'den geçmeden, ucuz, hızlı, deterministik.
+
+### Mimari hedef
+```
+Portal (mind-id, Next.js)
+   └─► /api/sales/* (Next.js proxy)
+        └─► mind-agent /sales/* (FastAPI, REST)
+             └─► reporting_tools (mevcut Python kodu)
+                  └─► NocoDB
+```
+
+### Yapılacak adımlar
+1. `mind-agent/src/app/sales_api.py` — FastAPI router, mevcut `_impl` fonksiyonlarını HTTP olarak expose et.
+2. Endpoint'ler:
+   - `GET /sales/leads/count?asama=Sicak&kaynak=Meta+Ads&date_from=&date_to=`
+   - `GET /sales/leads/list?asama=&sort=&limit=`
+   - `GET /sales/leads/funnel?date_from=&date_to=`
+   - `GET /sales/leads/channel-breakdown?date_from=&date_to=`
+   - `GET /sales/leads/stale?asama=&days=`
+   - `GET /sales/leads/timeline?ad_soyad=&limit=`
+   - `GET /sales/digest/daily?date=`
+   - `GET /sales/outreach/status`
+   - `GET /sales/outreach/health`
+   - `GET /sales/auto-reply/status`
+3. Auth: Bearer token (env var, mind-id ile paylaşılan secret).
+4. `mind-id/app/api/sales/[...path]/route.ts` — proxy route, server-side, token saklı.
+5. `mind-id/app/businesses/[id]/sales/page.tsx` — Sales dashboard sayfası, recharts ile chart.
+6. **Doğal dil katmanı şu an kapalı** — Sales Manager LLM hâlâ var ama portal artık ona ihtiyaç duymadan rapor üretir. LLM geri eklenirse "intent router" rolünde kullanılır.
+
+### NocoDB → mind-agent webhook (event-driven mimari)
+- Avcı + DM Yanıtlayıcı şu an cron polling yapıyor (her saat). Event-driven daha verimli.
+- NocoDB webhook → `mind-agent /webhook/nocodb` → ilgili lob tetiklenir.
+- İlk hedef: yeni lead eklendiğinde DM Yanıtlayıcı'yı anında çağır.
+- TODO: webhook signature doğrulama (HMAC), idempotency key (aynı olay 2 kere gelirse).
 
 ---
 
 ## 🟡 Pazarlamacı (Marketing Agent) İyileştirmeleri
 
-### #4 — Best-time-to-post
-- **Ne:** Pazarlamacı içerik planı yaparken veya kullanıcı saat belirtmediğinde Zernio MCP'nin `get_best_time_to_post` tool'unu çağırsın.
-- **Niye:** Şu an saat tahminle seçiliyor. Zernio'da hazır tool var, sadece talimat güncellemesi gerek (kod yok).
-- **Ne zaman:** Langfuse sonrası — etkisini ölçebilmek için.
-
-### #2 — Caption örnek bloğu
-- **Ne:** `src/agents/instructions/marketing.py` içindeki iyi/kötü caption örneklerini genişlet. Şu an Şef'tekinden daha kısa.
-- **Niye:** Az örnek = tutarsız caption kalitesi.
-- **Ne zaman:** Küçük PR, ne zaman olsa olur.
+### #2 — Caption örnek bloğu (yapıldı, PR #18) ✅
+### #4 — Best-time-to-post (yapıldı, PR #18) ✅
 
 ### A/B test desteği
 - **Ne:** Pazarlamacı iki farklı caption üretsin, hangi etkileşim aldıysa kazananı not etsin.
 - **Niye:** Şu an tek caption deniyor, en iyiyi bulma şansı yok.
-- **Ne zaman:** Faz C (brand_identity entegrasyonu) sonrası.
+- **Ne zaman:** Langfuse hazır olduktan sonra (ölçülebilmesi için).
 
 ### DM Yanıtlayıcı ↔ Pazarlamacı bağlantısı
 - **Ne:** Ortak Firestore event log koleksiyonu. DM Yanıtlayıcı sıcak lead'i konuşunca, Pazarlamacı yeni post atınca → kuyruğa olay yazılır.
-- **Niye:** Otonom loblar (DM, Avcı, Takipçi, Bekçi) şu an tek yönlü çalışıyor; şef bunlardan haber alamıyor.
-- **Ne zaman:** Pazarlamacı iyileştirmeleri sonrası.
+- **Niye:** Otonom loblar tek yönlü çalışıyor; şef + diğer agentlar haberdar olmuyor.
+- **Ne zaman:** Pazarlamacı + Sales Manager iyileştirmeleri sonrası.
 
 ---
 
 ## 🔵 Mimari / Departman İşleri
 
-### Faz C — Marka kimliğini agent'lara bağla
-- **Ne:** Image / Video / Marketing agent'ları Firestore'dan `brand_identity/v1` okusun (`fetch_brand_identity` tool'u).
-- **Niye:** Şema (Faz A) + Brand Synthesis Agent (Faz B1, PR #10) tamamlandı ama agent'lar henüz **okumuyor**. Talimat dosyalarındaki jenerik stili kullanıyorlar. Bu yapılmadan tutarlı görsel/video/caption üretimi tam çalışmaz.
-- **Ne zaman:** Pazarlamacı iyileştirmelerinden sonra.
+### Faz C — Marka kimliği (yapıldı, PR #20) ✅
+Image / Video / Marketing artık brand_identity okuyor.
 
-### Bekçi'yi Şef akışına bağla
-- **Ne:** Bekçi (`src/agents/guardian/`) şu an ayrı çalışıyor. Şef bir aksiyon almadan önce Bekçi'ye "onay verir misin?" diye sorsun.
-- **Niye:** Kural ihlali en pahalı hata. Küçük PR, yüksek değer.
-- **Ne zaman:** Faz C sonrası.
+### TODO: Faz C-2 — Brand Synthesis Agent'ı Şef'e bağla
+- Şu an Brand Synthesis Agent registry'de ama orchestrator çağırmıyor.
+- Şef'e bir "marka kimliği oluştur" niyeti gelirse otomatik çağırsın.
 
 ### Art Direktör katmanı
 - **Ne:** Pazarlamacı'nın altına bir "Art Direktör" lobu — görsel/video brief'ini yapılandıran (JSON çıktılı) küçük model.
-- **Niye:** Tutarlılık + retry azaltma (token tasarrufu). Carousel/kampanya gibi çok-asset işlerde değer üretir.
-- **Ne zaman:** Faz C tamamlanırsa belki gereksiz olur — önce onu yap, sonra karar ver.
+- **Niye:** Tutarlılık + retry azaltma.
+- **Ne zaman:** Faz C tamamlandı; tekrar değerlendir — brand_identity zaten doğrudan okunduğu için belki gereksiz.
 
 ### `post_on_instagram` tool'unu Şef listesinden çıkar
 - **Ne:** Şu an Şef bu tool'a teknik olarak erişebiliyor (talimatla yasak ama dosyada erişim var). `orchestrator_tools`'tan tamamen kaldır.
-- **Niye:** Önceki oturumdan devir — güvenlik için temizlik.
+- **Niye:** Güvenlik temizliği.
 - **Ne zaman:** İlk uygun fırsatta küçük PR.
 
 ---
@@ -74,10 +145,10 @@ Her madde:
 ## ⏰ Tarihli Yeniden Değerlendirme
 
 ### 2026-08-20 — Grafana yeniden değerlendir
-- **Bağlam:** Grafana endüstri-standart dashboard aracı, ücretsiz. Şu an gerekli değil çünkü:
-  - Langfuse LLM tarafını izleyecek
-  - Backend servis sayısı az (mind-agent + mind-id)
-- **Yeniden değerlendirme tetikleyicisi:** Backend servis sayısı 3'ü aşarsa veya log/metrik karmaşası başlarsa.
+- Şu an gerekli değil (Langfuse LLM tarafını izleyecek). Backend servis sayısı 3'ü aşarsa düşün.
+
+### 2026-11-20 — Sales Analyst dosyalarını sil
+- 6 ay sonra `sales_analyst_agent.py` + `sales_analyst_wrapper` + `SALES_ANALYST_INSTRUCTIONS` + registry alias kaldırılabilir mi kontrol et.
 
 ---
 
