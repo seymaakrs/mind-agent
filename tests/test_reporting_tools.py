@@ -298,7 +298,7 @@ async def test_daily_digest_returns_metrics(monkeypatch):
     won_today: list[dict[str, Any]] = []
     seyma_waiting = [{"Id": 1}, {"Id": 2}]
 
-    def list_records(table_id, *, where=None, limit=25, sort=None):
+    def list_records(table_id, *, where=None, limit=25, sort=None, offset=0):
         if where and where.startswith("(asama,eq,Sicak)") and limit == 1:
             return {
                 "list": [{"Id": 99}],
