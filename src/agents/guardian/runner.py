@@ -11,11 +11,13 @@ Her tick:
    - level (GREEN/YELLOW/RED)
    - reason_summary
    - pause_outreach=True ise: outreach_paused=True + pause_reason + paused_at
+   - resume_outreach=True ise (GREEN): outreach_paused=False + resumed_at
+     + pause_reason temizlenir (insan onayi YOK — kapali dongu)
 4. Mail icin n8n "Bekci Alert" webhook'una POST (env: GUARDIAN_ALERT_WEBHOOK_URL)
-   — yoksa sadece log.
+   — yoksa sadece log. YELLOW/RED ve RESUME olaylarinda tetiklenir.
 
 NOT: Outreach Robotu her tick basinda system_settings.outreach_paused'i
-kontrol eder (ayri PR — runner.py guncellenir).
+kontrol eder; GREEN'de Bekci bayragi kaldirinca otomatik devam eder.
 """
 from __future__ import annotations
 
@@ -77,11 +79,18 @@ def _persist_health_check(
         "last_metrics_json": json.dumps(metrics_dict, ensure_ascii=False),
         "last_decision_level": decision.level.value,
         "last_decision_reason": decision.reason_summary(),
+        "last_recommended_action": decision.recommended_action,
     }
     if decision.pause_outreach:
         fields["outreach_paused"] = True
         fields["pause_reason"] = decision.reason_summary()
         fields["paused_at"] = timestamp
+    elif decision.resume_outreach:
+        # Kapali dongu: GREEN'de Bekci insan onayi beklemeden outreach'i
+        # yeniden baslatir. Idempotent — zaten acikken de zararsiz.
+        fields["outreach_paused"] = False
+        fields["pause_reason"] = ""
+        fields["resumed_at"] = timestamp
     try:
         nocodb.update_record(settings_tbl, 1, fields)
     except Exception as exc:
@@ -105,8 +114,10 @@ async def tick(config: GuardianConfig) -> dict[str, Any]:
     timestamp = datetime.now(timezone.utc).isoformat()
 
     log.info(
-        "guardian: level=%s reply=%.2f%% engagement=%.2f%% failure=%.2f%% (out=%d, in=%d, auto=%d) — %s",
+        "guardian: level=%s action=%s reply=%.2f%% engagement=%.2f%% failure=%.2f%% "
+        "(out=%d, in=%d, auto=%d) — %s",
         decision.level.value,
+        decision.recommended_action,
         metrics.reply_rate_pct,
         metrics.engagement_rate_pct,
         metrics.failure_rate_pct,
@@ -125,22 +136,25 @@ async def tick(config: GuardianConfig) -> dict[str, Any]:
         )
     else:
         log.warning(
-            "guardian: NOCODB_SETTINGS_TABLE_ID not set — pause flag CANNOT be "
-            "persisted; Outreach won't see it. Set it before going live."
+            "guardian: NOCODB_SETTINGS_TABLE_ID not set — pause/resume flag "
+            "CANNOT be persisted; Outreach won't see it. Set it before going live."
         )
 
-    if decision.level in (DecisionLevel.YELLOW, DecisionLevel.RED):
+    if decision.level in (DecisionLevel.YELLOW, DecisionLevel.RED) or decision.resume_outreach:
         await _send_alert_webhook({
             "level": decision.level.value,
+            "action": decision.recommended_action,
             "reason": decision.reason_summary(),
             "metrics": metrics.to_dict(),
             "timestamp": timestamp,
             "pause_outreach": decision.pause_outreach,
+            "resume_outreach": decision.resume_outreach,
         })
 
     return {
         "ok": True,
         "level": decision.level.value,
+        "action": decision.recommended_action,
         "metrics": metrics.to_dict(),
         "reason": decision.reason_summary(),
     }
@@ -152,7 +166,7 @@ async def loop(
     config = config or GuardianConfig.from_env()
     log.info(
         "guardian starting: window=%dh poll=%ds reply_thresholds=%.1f/%.1f%% "
-        "engagement_thresholds=%.1f/%.1f%% min_outreach=%d",
+        "engagement_thresholds=%.1f/%.1f%% min_outreach=%d (auto-resume on GREEN)",
         config.window_hours,
         config.poll_interval_sec,
         config.reply_rate_yellow_pct,

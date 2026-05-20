@@ -2,6 +2,12 @@
 
 Pure function (no I/O) so test'ler hizli ve net. Runner bu kararı alip
 NocoDB'ye yazar / mail tetikler.
+
+Kapali dongu (sessiz ucluyu canlandirma):
+- RED  -> outreach PAUSE (pause_outreach=True)
+- GREEN -> outreach otomatik RESUME (resume_outreach=True). Insan onayi
+  YOK; metrikler toparlayinca Bekci kendisi yeniden baslatir.
+- YELLOW / INSUFFICIENT -> aksiyon yok (belirsiz; mevcut durum korunur).
 """
 from __future__ import annotations
 
@@ -19,18 +25,26 @@ class DecisionLevel(str, Enum):
     INSUFFICIENT = "INSUFFICIENT"  # min_outreach altinda, karar verme
 
 
+# recommended_action degerleri
+ACTION_PAUSE = "PAUSE"
+ACTION_RESUME = "RESUME"
+ACTION_NONE = "NONE"
+
+
 @dataclass
 class Decision:
     level: DecisionLevel
     reasons: list[str] = field(default_factory=list)
     pause_outreach: bool = False
+    resume_outreach: bool = False
+    recommended_action: str = ACTION_NONE
 
     def reason_summary(self) -> str:
         return "; ".join(self.reasons) if self.reasons else "all green"
 
 
 def decide(metrics: GuardianMetrics, config: GuardianConfig) -> Decision:
-    """Karari ver: GREEN / YELLOW / RED / INSUFFICIENT."""
+    """Karari ver: GREEN / YELLOW / RED / INSUFFICIENT (+ otomatik resume)."""
     if metrics.outreach_sent < config.min_outreach_for_eval:
         return Decision(
             level=DecisionLevel.INSUFFICIENT,
@@ -87,10 +101,25 @@ def decide(metrics: GuardianMetrics, config: GuardianConfig) -> Decision:
         )
         level = _max_level(level, DecisionLevel.YELLOW)
 
+    pause = level == DecisionLevel.RED
+    # GREEN = net toparlama. Daha once PAUSE edilmis olabilir; Bekci insan
+    # onayi beklemeden outreach'i kendi yeniden baslatir (idempotent: zaten
+    # acikken tekrar False yazmak zararsiz). YELLOW belirsiz — resume yok.
+    resume = level == DecisionLevel.GREEN
+
+    if pause:
+        action = ACTION_PAUSE
+    elif resume:
+        action = ACTION_RESUME
+    else:
+        action = ACTION_NONE
+
     return Decision(
         level=level,
         reasons=reasons,
-        pause_outreach=(level == DecisionLevel.RED),
+        pause_outreach=pause,
+        resume_outreach=resume,
+        recommended_action=action,
     )
 
 

@@ -1,18 +1,18 @@
-"""Outreach Agent main loop — Cloud Run job entry-point.
+"""Follow-up Agent main loop — Cloud Run job entry-point.
 
-Long-running worker. Reads NocoDB Leadler for eligible cold-outreach
-targets, sends a Meta-approved WhatsApp template via Zernio, logs the
-attempt to Etkilesimler and flips the lead's ``asama`` to ``Soguk``.
+    python -m src.agents.followup.runner
 
-DRY_RUN mode (``DRY_RUN=true``) skips Zernio API calls and logs only —
-keeps NocoDB writes off too, so it is safe in staging.
+Genel akis:
+1. Guardian outreach_paused mi? Evet -> uyu (kapali dongu; outreach'la
+   ayni bayrak, follow-up ayri flag actirmaz).
+2. Business hours + daily limit kontrolu.
+3. find_followup_targets: cevapsiz, 3+ gunluk soguk leadler.
+4. send_one: Zernio takip template'ini at, lead.notlar'a 'Takip
+   gonderildi' isareti koy (idempotency), asama 'Takipte' yap,
+   Etkilesimler 'Takip' satiri ekle, contact tag'a 'takip_atildi'.
+5. Jitter + batch break.
 
-Run:
-    python -m src.agents.outreach.runner
-
-Stop the loop with SIGTERM (Cloud Run job termination signal). One iteration
-is wrapped in try/except so a transient NocoDB or Zernio hiccup pauses for
-60 seconds rather than crash-looping the container.
+DRY_RUN: tum yazma/gonderim atlanir, sadece sinflandirma + log.
 """
 from __future__ import annotations
 
@@ -24,43 +24,31 @@ import sys
 from datetime import datetime, timezone
 from typing import Any
 
-from src.agents.outreach.policy import OutreachConfig, OutreachPolicy
-from src.agents.outreach.targeting import count_sent_today, pick_next_target
+from src.agents.followup.policy import FollowupConfig, FollowupPolicy
+from src.agents.followup.targeting import (
+    _FOLLOWUP_MARKER,
+    count_sent_today,
+    find_followup_targets,
+)
 from src.app.config import get_settings
 from src.infra.nocodb_client import get_nocodb_client
 from src.infra.zernio import get_zernio_client
 
 
-log = logging.getLogger("outreach")
+log = logging.getLogger("followup")
 
-
-_PAUSE_NO_TARGET_SEC = 120
-_PAUSE_OFF_HOURS_SEC = 300
-_PAUSE_DAILY_LIMIT_SEC = 1800  # 30 min — re-check whether the day rolled over
+_PAUSE_NO_TARGET_SEC = 600     # 10dk — takip listesi yavas dolar
+_PAUSE_OFF_HOURS_SEC = 600
+_PAUSE_DAILY_LIMIT_SEC = 1800
 _PAUSE_ERROR_SEC = 60
-_PAUSE_GUARDIAN_SEC = 300       # 5dk — Guardian pause sirasinda bayrak re-check
+_PAUSE_GUARDIAN_SEC = 300
 
-# Mirror Seyma's otel_gonderim.py: 2 retries, 30sn between. Transient Zernio
-# hiccups (502/timeout/rate-limit) should not lose a lead — without retry the
-# whole worker would pause 60sn AND skip the lead on next iteration since
-# asama already flipped to Soguk in some failure modes.
 _SEND_RETRIES = 2
 _SEND_RETRY_DELAY_SEC = 30
 
 
-# ---------------------------------------------------------------------------
-# Send pipeline (one lead)
-# ---------------------------------------------------------------------------
-
-
 def _is_outreach_paused() -> bool:
-    """Bekci Robot tarafindan PAUSE bayragi atildi mi? (system_settings tablosu)
-
-    NOCODB_SETTINGS_TABLE_ID env'i yoksa: Guardian henuz kurulu degil, daima
-    False (Outreach normal çalisir). NocoDB hatasinda da False — yanlis
-    pozitiften (yanlis durdurma) yanlis negatif (gerçi pause vardi ama biz
-    durmadik) daha az kotu cunku metric'ler hatayi yine yakalar.
-    """
+    """Guardian PAUSE bayragi (outreach ile ayni flag — sistem bozuksa hicbiri yazmaz)."""
     table_id = os.environ.get("NOCODB_SETTINGS_TABLE_ID")
     if not table_id:
         return False
@@ -71,7 +59,7 @@ def _is_outreach_paused() -> bool:
             return False
         return bool(rows[0].get("outreach_paused"))
     except Exception as exc:
-        log.warning("outreach: pause-flag check failed: %s — assuming active", exc)
+        log.warning("followup: pause-flag check failed: %s — assuming active", exc)
         return False
 
 
@@ -85,7 +73,6 @@ async def _send_with_retry(
     retries: int,
     retry_delay_sec: int,
 ) -> dict[str, Any]:
-    """Call Zernio send_template with N retries on exception."""
     last_exc: Exception | None = None
     for attempt in range(retries + 1):
         try:
@@ -99,7 +86,7 @@ async def _send_with_retry(
             last_exc = exc
             if attempt < retries:
                 log.warning(
-                    "outreach: send_template failed (attempt %d/%d): %s — retry in %ds",
+                    "followup: send_template failed (attempt %d/%d): %s — retry in %ds",
                     attempt + 1,
                     retries + 1,
                     exc,
@@ -112,21 +99,17 @@ async def _send_with_retry(
 async def send_one(
     *,
     lead: dict[str, Any],
-    config: OutreachConfig,
+    config: FollowupConfig,
     leads_table: str,
     messages_table: str | None,
     dry_run: bool,
 ) -> dict[str, Any]:
-    """Drive a single send + log + state transition.
-
-    Returns a dict for diagnostics (used by tests + log lines).
-    """
     phone = (lead.get("telefon") or "").strip()
     name = lead.get("ad_soyad") or lead.get("sirket_adi") or "Lead"
     lead_id = lead.get("Id")
 
     if dry_run:
-        log.info("[DRY_RUN] would send template to %s (%s) lead_id=%s", name, phone, lead_id)
+        log.info("[DRY_RUN] would send followup template to %s (%s) lead_id=%s", name, phone, lead_id)
         return {"success": True, "dry_run": True, "phone": phone, "lead_id": lead_id}
 
     zernio = get_zernio_client()
@@ -143,23 +126,23 @@ async def send_one(
     nocodb = get_nocodb_client()
     timestamp = datetime.now(timezone.utc).isoformat()
 
-    # Lead lifecycle: Yeni -> Soguk (gonderildi, yanit bekleniyor)
+    # Lead: asama Takipte + notlar'a 'Takip gonderildi' isareti (idempotency)
     nocodb.update_record(
         leads_table,
         int(lead_id),
         {
-            "asama": "Soguk",
+            "asama": "Takipte",
+            "son_temas": timestamp,
             "notlar": (lead.get("notlar") or "")
-            + f"\n[{timestamp}] Cold outreach gonderildi (template={config.template_name})",
+            + f"\n[{timestamp}] {_FOLLOWUP_MARKER} (template={config.template_name})",
         },
     )
 
     if messages_table:
-        message_text = f"Template: {config.template_name} variables=[{name}]"
         platform_message_id = (
             send_result.get("messageId")
             or send_result.get("message_id")
-            or f"outreach_{lead_id}_{int(datetime.now(timezone.utc).timestamp())}"
+            or f"followup_{lead_id}_{int(datetime.now(timezone.utc).timestamp())}"
         )
         try:
             nocodb.upsert_record(
@@ -170,36 +153,25 @@ async def send_one(
                     "tarih": timestamp,
                     "kanal": "WhatsApp",
                     "yon": "Giden",
-                    "tur": "Ilk Mesaj",
-                    "mesaj_icerigi": message_text,
+                    "tur": "Takip",
+                    "mesaj_icerigi": f"Template: {config.template_name} variables=[{name}]",
                     "external_message_id": platform_message_id,
-                    "agent": "Outreach Agent",
+                    "agent": "Followup Agent",
                     "otomatik_mi": True,
                 },
             )
         except Exception as exc:
-            log.warning("outreach: Etkilesimler log failed (lead_id=%s): %s", lead_id, exc)
+            log.warning("followup: Etkilesimler log failed (lead_id=%s): %s", lead_id, exc)
 
-    # Zernio contact tagging — Beyza's CRM segmentation lives here (her segment
-    # filtreleri tag bazinda). Seyma's local script set 'hot_lead/yaniti_var';
-    # outreach's role is set 'kontak_atildi' + workflow marker.
-    await _tag_zernio_contact(
-        zernio, phone, to_add=["kontak_atildi", "outreach_v1"]
-    )
+    await _tag_zernio_contact(zernio, phone, to_add=["takip_atildi", "followup_v1"])
 
-    log.info("outreach: sent to %s (%s) lead_id=%s", name, phone, lead_id)
+    log.info("followup: sent to %s (%s) lead_id=%s", name, phone, lead_id)
     return {"success": True, "lead_id": lead_id, "phone": phone, "raw": send_result}
 
 
 async def _tag_zernio_contact(
     zernio: Any, phone: str, *, to_add: list[str]
 ) -> None:
-    """Best-effort: find contact by phone, merge tags into existing set.
-
-    Zernio ``PATCH /contacts/{id}`` does FULL REPLACE of tags so we must
-    fetch existing first and merge. Failure here doesn't roll back the
-    message — it's downstream CRM segmentation, not message delivery.
-    """
     digits = "".join(ch for ch in phone if ch.isdigit())
     if not digits:
         return
@@ -212,51 +184,45 @@ async def _tag_zernio_contact(
                 match = c
                 break
         if not match:
-            log.info("outreach: zernio contact not found for phone=%s (tag skipped)", phone)
+            log.info("followup: zernio contact not found for phone=%s (tag skipped)", phone)
             return
         existing = list(match.get("tags") or [])
         merged = sorted(set(existing + to_add))
         await zernio.tag_contact(match["id"], merged)
     except Exception as exc:
-        log.warning("outreach: tag_contact failed phone=%s: %s", phone, exc)
+        log.warning("followup: tag_contact failed phone=%s: %s", phone, exc)
 
 
-# ---------------------------------------------------------------------------
-# Main loop
-# ---------------------------------------------------------------------------
-
-
-async def loop(config: OutreachConfig | None = None, *, max_iterations: int | None = None) -> None:
-    """Outreach worker loop. ``max_iterations`` is for tests only (None = forever)."""
-    config = config or OutreachConfig.from_env()
-    policy = OutreachPolicy(config)
+async def loop(
+    config: FollowupConfig | None = None, *, max_iterations: int | None = None
+) -> None:
+    config = config or FollowupConfig.from_env()
+    policy = FollowupPolicy(config)
     settings = get_settings()
     leads_table = settings.nocodb_leads_table_id
     messages_table = settings.nocodb_messages_table_id
     dry_run = settings.dry_run
 
     if not leads_table:
-        log.error("NOCODB_LEADS_TABLE_ID not configured — outreach cannot pick targets")
+        log.error("NOCODB_LEADS_TABLE_ID not configured — followup cannot run")
         return
 
-    # Restart-safe daily counter: rebuild from NocoDB so a Cloud Run job
-    # restart at 14:00 doesn't reset us to zero and let us blast another
-    # full daily_limit (would trigger WhatsApp ban). Best-effort: if NocoDB
-    # is unreachable we start at zero and live with the risk.
+    # Restart-safe daily counter: outreach ile ayni desen
     if messages_table and not dry_run:
         try:
             already = count_sent_today(get_nocodb_client(), messages_table)
             policy.sent_today = already
-            log.info("Outreach: recovered sent_today=%d from NocoDB", already)
+            log.info("Followup: recovered sent_today=%d from NocoDB", already)
         except Exception as exc:
-            log.warning("Outreach: count_sent_today failed (%s) — starting from 0", exc)
+            log.warning("Followup: count_sent_today failed (%s) — starting from 0", exc)
 
     log.info(
-        "Outreach starting: tz=%s hours=%d-%d daily_limit=%d sent_today=%d dry_run=%s template=%s",
+        "Followup starting: tz=%s hours=%d-%d daily_limit=%d days_since=%d sent_today=%d dry_run=%s template=%s",
         config.timezone,
         config.hour_start,
         config.hour_end,
         config.daily_limit,
+        config.days_since_outreach,
         policy.sent_today,
         dry_run,
         config.template_name,
@@ -266,13 +232,8 @@ async def loop(config: OutreachConfig | None = None, *, max_iterations: int | No
     while max_iterations is None or iteration < max_iterations:
         iteration += 1
         try:
-            # Bekci kontrolu: NOCODB_SETTINGS_TABLE_ID set ise outreach_paused
-            # bayragina bak. RED kararla durdurulduysak hicbir mesaj atma —
-            # sadece bekle ve bayragi re-check et. Yeniden baslatma OTOMATIK:
-            # Guardian metrikler GREEN'e donunce outreach_paused=false yapar
-            # (kapali dongu, insan onayi gerekmez).
             if _is_outreach_paused():
-                log.info("outreach: PAUSED by Guardian, sleeping %ds", _PAUSE_GUARDIAN_SEC)
+                log.info("followup: PAUSED by Guardian, sleeping %ds", _PAUSE_GUARDIAN_SEC)
                 await asyncio.sleep(_PAUSE_GUARDIAN_SEC)
                 continue
 
@@ -283,18 +244,22 @@ async def loop(config: OutreachConfig | None = None, *, max_iterations: int | No
                     if reason == "outside business hours"
                     else _PAUSE_DAILY_LIMIT_SEC
                 )
-                log.info("outreach: not eligible (%s), sleeping %ds", reason, pause)
+                log.info("followup: not eligible (%s), sleeping %ds", reason, pause)
                 await asyncio.sleep(pause)
                 continue
 
-            target = pick_next_target(
-                get_nocodb_client(), leads_table, config.source_workflow_id
+            targets = find_followup_targets(
+                get_nocodb_client(),
+                leads_table,
+                config.source_workflow_id,
+                days_since_outreach=config.days_since_outreach,
             )
-            if not target:
-                log.info("outreach: no eligible targets, sleeping %ds", _PAUSE_NO_TARGET_SEC)
+            if not targets:
+                log.info("followup: no eligible targets, sleeping %ds", _PAUSE_NO_TARGET_SEC)
                 await asyncio.sleep(_PAUSE_NO_TARGET_SEC)
                 continue
 
+            target = targets[0]  # en eski temas ilk (sort=son_temas asc)
             await send_one(
                 lead=target,
                 config=config,
@@ -306,12 +271,12 @@ async def loop(config: OutreachConfig | None = None, *, max_iterations: int | No
 
             if policy.should_take_batch_break():
                 pause = policy.batch_break_sec()
-                log.info("outreach: batch break (%ds)", int(pause))
+                log.info("followup: batch break (%ds)", int(pause))
                 await asyncio.sleep(pause)
             else:
                 await asyncio.sleep(policy.next_delay_sec())
         except Exception as exc:
-            log.exception("outreach: loop iteration failed: %s", exc)
+            log.exception("followup: loop iteration failed: %s", exc)
             await asyncio.sleep(_PAUSE_ERROR_SEC)
 
 
@@ -319,14 +284,13 @@ def _install_sigterm_handler() -> asyncio.Event:
     stop_event = asyncio.Event()
 
     def _stop(*_: object) -> None:
-        log.info("outreach: SIGTERM received, draining")
+        log.info("followup: SIGTERM received, draining")
         stop_event.set()
 
     try:
         signal.signal(signal.SIGTERM, _stop)
         signal.signal(signal.SIGINT, _stop)
     except ValueError:
-        # Not on main thread (test runner) — skip
         pass
     return stop_event
 

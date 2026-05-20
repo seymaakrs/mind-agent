@@ -22,11 +22,6 @@ from src.agents.auto_reply.responder import (  # noqa: E402
 from src.agents.auto_reply import runner  # noqa: E402
 
 
-# ---------------------------------------------------------------------------
-# Config
-# ---------------------------------------------------------------------------
-
-
 class TestAutoReplyConfig:
     def test_defaults(self):
         c = AutoReplyConfig()
@@ -49,11 +44,6 @@ class TestAutoReplyConfig:
             assert 5 <= d <= 7
 
 
-# ---------------------------------------------------------------------------
-# Templates
-# ---------------------------------------------------------------------------
-
-
 class TestTemplates:
     def test_has_active_for_olumlu_and_soru(self):
         assert has_active_templates("olumlu") is True
@@ -63,8 +53,9 @@ class TestTemplates:
         assert has_active_templates("olumsuz") is False
         assert has_active_templates("spam") is False
 
-    def test_itiraz_is_handoff_no_template(self):
-        # itiraz intent Auto-reply yanit atmaz, n8n handoff yapilir
+    def test_itiraz_uses_playbook_not_fallback_pool(self):
+        # itiraz cevabi FALLBACK_TEMPLATES'ten degil ITIRAZ_PLAYBOOK'tan
+        # anchor alir; bu yuzden FALLBACK_TEMPLATES['itiraz'] bos kalir.
         assert has_active_templates("itiraz") is False
 
     def test_no_emoji_or_link(self):
@@ -72,11 +63,6 @@ class TestTemplates:
             for v in variants:
                 assert "http" not in v.lower()
                 assert "₺" not in v
-
-
-# ---------------------------------------------------------------------------
-# Responder helpers
-# ---------------------------------------------------------------------------
 
 
 class TestResponderHelpers:
@@ -109,11 +95,6 @@ class TestResponderHelpers:
         assert t in FALLBACK_TEMPLATES["olumlu"]
 
 
-# ---------------------------------------------------------------------------
-# Targeting
-# ---------------------------------------------------------------------------
-
-
 class TestTargeting:
     def test_where_filter_shape(self):
         now = datetime(2026, 5, 10, 12, 0, tzinfo=timezone.utc)
@@ -128,9 +109,7 @@ class TestTargeting:
         client = MagicMock()
         client.list_records.return_value = {
             "list": [
-                # Eski satir — cutoff disinda (max_age_minutes=60 -> 11:00 oncesi)
                 {"Id": 1, "tarih": "2026-05-10T10:30:00+00:00"},
-                # Taze satirlar
                 {"Id": 2, "tarih": "2026-05-10T11:15:00+00:00"},
                 {"Id": 3, "tarih": "2026-05-10T11:45:00+00:00"},
             ]
@@ -138,7 +117,6 @@ class TestTargeting:
         rows = find_pending_inbounds(
             client, "msgs_tbl", batch_size=10, max_age_minutes=60, now=now
         )
-        # Python filter eski satiri eler
         assert [r["Id"] for r in rows] == [2, 3]
         kwargs = client.list_records.call_args.kwargs
         assert kwargs["sort"] == "tarih"
@@ -152,13 +130,13 @@ class TestTargeting:
         assert rows == []
 
 
-# ---------------------------------------------------------------------------
-# handle_one (the core pipeline)
-# ---------------------------------------------------------------------------
-
-
-def _make_decision(intent, reply="", conf=0.9):
-    return AutoReplyDecision(intent=intent, reply_text=reply, confidence=conf)
+def _make_decision(intent, reply="", conf=0.9, objection_type=None):
+    return AutoReplyDecision(
+        intent=intent,
+        reply_text=reply,
+        confidence=conf,
+        objection_type=objection_type,
+    )
 
 
 @pytest.fixture
@@ -209,12 +187,10 @@ class TestHandleOne:
         assert result["reply_sent"] is True
         assert result["intent"] == "olumlu"
 
-        # Zernio send
         zernio.send_message.assert_awaited_once_with(
             "conv-1", "Tesekkurler, ne zaman gorusebiliriz?"
         )
 
-        # Etkilesimler outgoing log
         upsert_args = nocodb.upsert_record.call_args.args
         assert upsert_args[0] == "msgs_tbl"
         assert upsert_args[1] == "external_message_id"
@@ -223,13 +199,11 @@ class TestHandleOne:
         assert out_fields["tur"] == "Auto Reply"
         assert out_fields["agent"] == "Auto-reply Agent"
 
-        # Lead promoted Sicak -> Takipte
         update_calls = nocodb.update_record.call_args_list
         lead_update = next(c for c in update_calls if c.args[0] == "leads_tbl")
         assert lead_update.args[1] == 42
         assert lead_update.args[2]["asama"] == "Takipte"
 
-        # Inbound row marked processed
         msg_update = next(
             c for c in update_calls
             if c.args[0] == "msgs_tbl" and c.args[2].get("auto_reply_processed") is True
@@ -301,11 +275,6 @@ class TestHandleOne:
         nocodb.upsert_record.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
-# Loop
-# ---------------------------------------------------------------------------
-
-
 class TestLoop:
     @pytest.mark.asyncio
     async def test_loop_returns_when_tables_missing(self, monkeypatch):
@@ -336,11 +305,6 @@ class TestLoop:
         assert 42 in sleeps
 
 
-# ---------------------------------------------------------------------------
-# Webhook integration (Adim 5 — auto_reply_processed=False on incoming)
-# ---------------------------------------------------------------------------
-
-
 class TestWebhookIntegrationField:
     def test_incoming_message_has_auto_reply_processed_false(self):
         from src.app.zernio_webhook import map_to_message_fields
@@ -363,7 +327,6 @@ class TestAutoReplyContactTagging:
     @pytest.mark.asyncio
     async def test_tags_contact_when_conversation_has_contact(self, mock_clients, monkeypatch):
         nocodb, zernio = mock_clients
-        # Conversation now returns a `contact` payload so the runner can tag it.
         zernio.find_conversation_by_phone = AsyncMock(
             return_value={"id": "conv-1", "contact": {"id": "c-9", "tags": ["bolge_bodrum"]}}
         )
@@ -384,13 +347,11 @@ class TestAutoReplyContactTagging:
         zernio.tag_contact.assert_awaited_once()
         contact_id, tags = zernio.tag_contact.await_args.args
         assert contact_id == "c-9"
-        # Existing 'bolge_bodrum' must be preserved (Zernio PATCH is full replace)
         assert set(tags) == {"bolge_bodrum", "hot_lead", "oto_yanit_gonderildi"}
 
     @pytest.mark.asyncio
     async def test_skips_tag_when_no_contact_in_conversation(self, mock_clients, monkeypatch):
         nocodb, zernio = mock_clients
-        # No `contact` key — older Zernio responses
         zernio.find_conversation_by_phone = AsyncMock(return_value={"id": "conv-1"})
         zernio.tag_contact = AsyncMock(return_value={})
 
@@ -412,7 +373,6 @@ class TestAutoReplyContactTagging:
 class TestFallbackTemplatesFromSeyma:
     def test_olumlu_contains_seyma_anchors(self):
         joined = " ".join(FALLBACK_TEMPLATES["olumlu"])
-        # Slowdays-specific anchors that LLM is told to preserve verbatim.
         assert "Bodrum" in joined
         assert "Marmaris" in joined
         assert "Fethiye" in joined
@@ -420,36 +380,26 @@ class TestFallbackTemplatesFromSeyma:
         assert "30 dakika" in joined
 
 
-# ---------------------------------------------------------------------------
-# Itiraz handoff (Tier 1.2)
-# ---------------------------------------------------------------------------
-
-
-class TestItirazHandoff:
+class TestItirazAutoReply:
     @pytest.mark.asyncio
-    async def test_itiraz_intent_triggers_n8n_handoff_no_reply(self, mock_clients, monkeypatch):
-        """intent=itiraz olunca:
-        - Otomatik yanit ATILMAZ
-        - n8n Itiraz Agent webhook'una POST atilir
-        - Lead asama -> Itiraz
-        - Etkilesimler'e 'Itiraz Handoff' satir yazilir
-        """
+    async def test_itiraz_intent_sends_reply_and_sets_asama(self, mock_clients, monkeypatch):
+        """intent=itiraz: cevap dogrudan gonderilir, asama->Itiraz,
+        'Itiraz Yanit' loglanir (insan onayi / n8n handoff yok)."""
         nocodb, zernio = mock_clients
 
         async def fake_decide(message, **kwargs):
-            return _make_decision("itiraz", "", 0.9)
+            return _make_decision(
+                "itiraz", "Butce tarafini anliyorum, gorusebilir miyiz?",
+                0.9, objection_type="fiyat",
+            )
 
         monkeypatch.setattr(runner, "decide_reply", fake_decide)
-
-        handoff_mock = AsyncMock(return_value=True)
-        monkeypatch.setattr(runner, "_handoff_to_n8n_itiraz", handoff_mock)
 
         result = await runner.handle_one(
             inbound_row={
                 "Id": 7,
-                "mesaj_icerigi": "Fiyatınız çok yüksek, biraz indirim yapabilir misiniz?",
+                "mesaj_icerigi": "Fiyatınız çok yüksek, indirim olur mu?",
                 "lead_adi": "Otel A",
-                "lead_email": "otel@example.com",
             },
             config=AutoReplyConfig(),
             leads_table="leads_tbl",
@@ -457,51 +407,42 @@ class TestItirazHandoff:
             dry_run=False,
         )
 
-        # Otomatik yanit YOK
-        assert result["reply_sent"] is False
-        assert result["handoff_sent"] is True
-        zernio.send_message.assert_not_called()
+        assert result["reply_sent"] is True
+        assert result["intent"] == "itiraz"
+        assert result["objection_type"] == "fiyat"
+        zernio.send_message.assert_awaited_once_with(
+            "conv-1", "Butce tarafini anliyorum, gorusebilir miyiz?"
+        )
 
-        # n8n webhook tetiklendi
-        handoff_mock.assert_awaited_once()
-        kwargs = handoff_mock.await_args.kwargs
-        assert kwargs["inbound_text"].startswith("Fiyatınız")
-        assert kwargs["lead_name"] == "Otel A"
+        out_fields = nocodb.upsert_record.call_args.args[2]
+        assert out_fields["tur"] == "Itiraz Yanit"
+        assert out_fields["yon"] == "Giden"
 
-        # Lead asama -> Itiraz
-        update_calls = nocodb.update_record.call_args_list
         lead_update = next(
-            c for c in update_calls
-            if c.args[0] == "leads_tbl" and c.args[2].get("asama") == "Itiraz"
+            c for c in nocodb.update_record.call_args_list
+            if c.args[0] == "leads_tbl"
         )
-        assert lead_update is not None
-
-        # Etkilesimler 'Itiraz Handoff' log
-        upsert_calls = nocodb.upsert_record.call_args_list
-        handoff_log = next(
-            c for c in upsert_calls
-            if c.args[2].get("tur") == "Itiraz Handoff"
-        )
-        assert handoff_log is not None
+        assert lead_update.args[2]["asama"] == "Itiraz"
 
     @pytest.mark.asyncio
-    async def test_itiraz_low_confidence_no_handoff(self, mock_clients, monkeypatch):
-        """conf < 0.5 ise insan eli — handoff yok, log yok, sessiz."""
+    async def test_itiraz_low_confidence_no_send(self, mock_clients, monkeypatch):
+        """conf < 0.5 ise sessiz kal — gonderim yok."""
         nocodb, zernio = mock_clients
 
         async def fake_decide(message, **kwargs):
-            return _make_decision("itiraz", "", 0.3)
+            return _make_decision("itiraz", "taslak", 0.3, objection_type="fiyat")
 
         monkeypatch.setattr(runner, "decide_reply", fake_decide)
-        handoff_mock = AsyncMock(return_value=True)
-        monkeypatch.setattr(runner, "_handoff_to_n8n_itiraz", handoff_mock)
 
-        await runner.handle_one(
+        result = await runner.handle_one(
             inbound_row={"Id": 8, "mesaj_icerigi": "?", "lead_adi": "Otel B"},
             config=AutoReplyConfig(),
             leads_table="leads_tbl",
             messages_table="msgs_tbl",
             dry_run=False,
         )
-        handoff_mock.assert_not_called()
+        assert result["reply_sent"] is False
         zernio.send_message.assert_not_called()
+        nocodb.update_record.assert_called_with(
+            "msgs_tbl", 8, {"auto_reply_processed": True}
+        )

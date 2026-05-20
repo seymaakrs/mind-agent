@@ -4,6 +4,8 @@ What it adds (idempotent — safe to re-run):
 1. Etkilesimler.auto_reply_processed  (Checkbox, default false)
 2. Leadler.asama option 'Takipte'    (SingleSelect option)
 3. Leadler.son_temas                  (DateTime — auto-reply runner yaziyor)
+4. Etkilesimler.tur option 'Itiraz Yanit' (otonom itiraz yaniti logu)
+5. Leadler.asama option 'Itiraz'     (itiraz yaniti sonrasi lead asama)
 
 Run (Cloud Shell or SSH):
     export NOCODB_BASE_URL=https://nocodb.example.com
@@ -143,6 +145,14 @@ def main() -> int:
             (
                 "Leadler.son_temas (DateTime)",
                 lambda: ensure_datetime_column(c, leads_tbl, "son_temas"),
+            ),
+            (
+                "Etkilesimler.tur option 'Itiraz Yanit'",
+                lambda: ensure_select_option(c, msgs_tbl, "tur", "Itiraz Yanit"),
+            ),
+            (
+                "Leadler.asama option 'Itiraz'",
+                lambda: ensure_select_option(c, leads_tbl, "asama", "Itiraz"),
             ),
         ]
         any_fail = False

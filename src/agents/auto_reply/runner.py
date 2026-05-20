@@ -4,10 +4,14 @@
 
 Polling-based (60sn). Each tick:
 1. Query Etkilesimler for unprocessed inbound rows (oldest first, max age 60dk).
-2. For each row: jitter 30-60sn (Seyma's lead_monitor cadence), call
+2. For each row: jitter 30-60sn, fetch lead konusma gecmisi, call
    ``responder.decide_reply``, optionally send via Zernio, log outgoing
    message, mark inbound row processed, flip lead.asama.
 3. DRY_RUN gates Zernio + NocoDB writes (still classifies for shadow log).
+
+Itiraz: olumlu/soru ile AYNI akis. Insan onayi YOK, n8n handoff YOK.
+HAFIZA: lead bazli son 10 mesaj decide_reply'a anchor olarak verilir;
+hata olursa bos history ile devam edilir (defansif).
 """
 from __future__ import annotations
 
@@ -20,7 +24,7 @@ from typing import Any
 
 from src.agents.auto_reply.policy import AutoReplyConfig
 from src.agents.auto_reply.responder import AutoReplyDecision, decide_reply
-from src.agents.auto_reply.targeting import find_pending_inbounds
+from src.agents.auto_reply.targeting import fetch_recent_history, find_pending_inbounds
 from src.app.config import get_settings
 from src.infra.nocodb_client import get_nocodb_client
 from src.infra.zernio import get_zernio_client
@@ -29,6 +33,9 @@ from src.infra.zernio import get_zernio_client
 log = logging.getLogger("auto_reply")
 
 _PAUSE_ERROR_SEC = 60
+_HISTORY_LIMIT = 10
+
+_SENDABLE_INTENTS = {"olumlu", "soru", "itiraz"}
 
 
 async def handle_one(
@@ -52,12 +59,31 @@ async def handle_one(
             )
         return {"row_id": row_id, "skipped": "empty"}
 
-    decision: AutoReplyDecision = await decide_reply(text, config=config)
+    # Konusma hafizasi (defansif — hata bos liste demek)
+    history: list[dict[str, Any]] = []
+    if lead_name:
+        try:
+            history = fetch_recent_history(
+                get_nocodb_client(),
+                messages_table,
+                lead_name,
+                limit=_HISTORY_LIMIT,
+                exclude_row_id=int(row_id) if row_id is not None else None,
+            )
+        except Exception as exc:
+            log.warning("auto_reply: history fetch failed row_id=%s: %s", row_id, exc)
+            history = []
+
+    decision: AutoReplyDecision = await decide_reply(
+        text, config=config, conversation_history=history
+    )
     log.info(
-        "auto_reply: classify row_id=%s intent=%s conf=%.2f will_reply=%s",
+        "auto_reply: classify row_id=%s intent=%s conf=%.2f obj=%s history=%d will_reply=%s",
         row_id,
         decision.intent,
         decision.confidence,
+        decision.objection_type,
+        len(history),
         bool(decision.reply_text),
     )
 
@@ -65,17 +91,16 @@ async def handle_one(
     timestamp = datetime.now(timezone.utc).isoformat()
     reply_sent = False
     send_raw: dict[str, Any] | None = None
+    is_itiraz = decision.intent == "itiraz"
 
     should_send = (
         bool(decision.reply_text.strip())
-        and decision.intent in {"olumlu", "soru"}
+        and decision.intent in _SENDABLE_INTENTS
         and decision.confidence >= 0.5
     )
 
     if should_send and not dry_run:
         zernio = get_zernio_client()
-        # Inbound just arrived — we're inside the 24h CS window, free-form OK.
-        # We need a conversation_id; look it up by lead phone.
         lead_row = _resolve_lead_row(nocodb, leads_table, inbound_row)
         phone = (lead_row or {}).get("telefon") or ""
         if not phone:
@@ -88,9 +113,6 @@ async def handle_one(
             else:
                 send_raw = await zernio.send_message(conv_id, decision.reply_text)
                 reply_sent = True
-                # Mirror Seyma's lead_monitor.py tagging behaviour: mark the
-                # contact as hot + auto-reply sent so Beyza's Zernio panel
-                # segments stay in sync.
                 contact = (conv or {}).get("contact") or {}
                 contact_id = contact.get("id")
                 if contact_id:
@@ -121,7 +143,7 @@ async def handle_one(
                     "tarih": timestamp,
                     "kanal": inbound_row.get("kanal") or "WhatsApp",
                     "yon": "Giden",
-                    "tur": "Auto Reply",
+                    "tur": "Itiraz Yanit" if is_itiraz else "Auto Reply",
                     "mesaj_icerigi": decision.reply_text,
                     "external_message_id": platform_message_id,
                     "agent": "Auto-reply Agent",
@@ -132,7 +154,6 @@ async def handle_one(
         except Exception as exc:
             log.warning("auto_reply: outgoing log failed row_id=%s: %s", row_id, exc)
 
-        # Promote lead lifecycle: Sicak -> Takipte
         lead_row = _resolve_lead_row(nocodb, leads_table, inbound_row)
         if lead_row:
             try:
@@ -140,60 +161,12 @@ async def handle_one(
                     leads_table,
                     int(lead_row["Id"]),
                     {
-                        "asama": "Takipte",
+                        "asama": "Itiraz" if is_itiraz else "Takipte",
                         "son_temas": timestamp,
                     },
                 )
             except Exception as exc:
                 log.warning("auto_reply: lead update failed: %s", exc)
-
-    # ----- Itiraz handoff (intent=itiraz) -----
-    # Auto-reply otomatik yanit ATMAZ. Bunun yerine n8n Itiraz Agent
-    # webhook'una POST: Gemini siniflandirir, Seyma'ya oneri maili gonderir.
-    handoff_sent = False
-    if decision.intent == "itiraz" and decision.confidence >= 0.5 and not dry_run:
-        try:
-            handoff_sent = await _handoff_to_n8n_itiraz(
-                inbound_text=text,
-                lead_name=lead_name,
-                lead_email=(inbound_row.get("lead_email") or ""),
-            )
-        except Exception as exc:
-            log.warning("auto_reply: itiraz handoff failed row_id=%s: %s", row_id, exc)
-
-        # Lead asama: Itiraz (yeni SingleSelect option — migration ile eklenir)
-        lead_row = _resolve_lead_row(nocodb, leads_table, inbound_row)
-        if lead_row:
-            try:
-                nocodb.update_record(
-                    leads_table,
-                    int(lead_row["Id"]),
-                    {"asama": "Itiraz", "son_temas": timestamp},
-                )
-            except Exception as exc:
-                log.warning("auto_reply: lead asama->Itiraz failed: %s", exc)
-
-        # Etkilesimler'e handoff log (yon=Sistem, tur=Itiraz Handoff)
-        if messages_table:
-            try:
-                nocodb.upsert_record(
-                    messages_table,
-                    "external_message_id",
-                    {
-                        "lead_adi": lead_name,
-                        "tarih": timestamp,
-                        "kanal": inbound_row.get("kanal") or "WhatsApp",
-                        "yon": "Giden",
-                        "tur": "Itiraz Handoff",
-                        "mesaj_icerigi": f"Auto-reply intent=itiraz tespit etti, n8n Itiraz Agent'a handoff edildi. Orijinal: {text[:200]}",
-                        "external_message_id": f"itiraz_handoff_{row_id}_{int(datetime.now(timezone.utc).timestamp())}",
-                        "agent": "Auto-reply Agent",
-                        "otomatik_mi": True,
-                        "auto_reply_processed": True,
-                    },
-                )
-            except Exception as exc:
-                log.warning("auto_reply: itiraz log failed: %s", exc)
 
     if not dry_run:
         try:
@@ -204,47 +177,19 @@ async def handle_one(
             log.warning("auto_reply: cannot mark processed row_id=%s: %s", row_id, exc)
 
     return {
-        "handoff_sent": handoff_sent,
         "row_id": row_id,
         "intent": decision.intent,
         "confidence": decision.confidence,
+        "objection_type": decision.objection_type,
         "reply_sent": reply_sent,
+        "history_size": len(history),
         "dry_run": dry_run,
     }
-
-
-async def _handoff_to_n8n_itiraz(
-    *, inbound_text: str, lead_name: str, lead_email: str
-) -> bool:
-    """Auto-reply intent=itiraz tespit ettiginde n8n Itiraz Agent
-    webhook'una POST. n8n Gemini ile siniflandirir + Seyma'ya oneri maili
-    gonderir (insan onayli, otomatik musteriye yollamaz).
-
-    Returns True if webhook 2xx donduyse.
-    """
-    from src.tools.n8n_bridge_tools import _call_n8n_workflow_impl
-    result = await _call_n8n_workflow_impl(
-        name="itiraz_agent",
-        body={
-            "musteri_email": lead_email or f"{lead_name.replace(' ', '_')}@unknown",
-            "mesaj": inbound_text,
-        },
-    )
-    ok = bool(result.get("success"))
-    if ok:
-        log.info("auto_reply: itiraz handoff to n8n OK (lead=%s)", lead_name)
-    else:
-        log.warning(
-            "auto_reply: itiraz handoff to n8n FAILED: %s",
-            result.get("user_message_tr") or result.get("error"),
-        )
-    return ok
 
 
 def _resolve_lead_row(
     client: Any, leads_table: str, inbound_row: dict[str, Any]
 ) -> dict[str, Any] | None:
-    """Best-effort lookup of the lead behind an Etkilesimler row by lead_adi."""
     name = inbound_row.get("lead_adi")
     if not name:
         return None
@@ -269,13 +214,14 @@ async def loop(
         return
 
     log.info(
-        "auto_reply starting: poll=%ds batch=%d delay=%d-%ds model=%s dry_run=%s",
+        "auto_reply starting: poll=%ds batch=%d delay=%d-%ds model=%s dry_run=%s history_limit=%d",
         config.poll_interval_sec,
         config.batch_size,
         config.reply_min_delay_sec,
         config.reply_max_delay_sec,
         config.model,
         dry_run,
+        _HISTORY_LIMIT,
     )
 
     iteration = 0

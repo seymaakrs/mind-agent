@@ -112,9 +112,14 @@ def get_settings() -> Settings:
 
 
 class ModelSettings(BaseModel):
-    """Firebase'den okunan model ayarlari."""
+    """Firebase'den okunan model ayarlari.
 
-    orchestrator_model: str = "gpt-4o"
+    Orchestrator artik bir dispatcher — ucuz gpt-4.1-mini yeterli. Asil
+    zeka departman mudurlerinde (image / video / marketing / analysis / sales
+    analyst). Onlar gpt-4o seviyesinde kalir.
+    """
+
+    orchestrator_model: str = "gpt-4.1-mini"
     image_agent_model: str = "gpt-4o"
     video_agent_model: str = "gpt-4o"
     marketing_agent_model: str = "gpt-4o"
@@ -162,7 +167,7 @@ def get_model_settings() -> ModelSettings:
         doc = _load_model_settings_from_firebase()
 
         _model_settings_cache = ModelSettings(
-            orchestrator_model=doc.get("orchestratorModel", "gpt-4o"),
+            orchestrator_model=doc.get("orchestratorModel", "gpt-4.1-mini"),
             image_agent_model=doc.get("imageAgentModel", "gpt-4o"),
             video_agent_model=doc.get("videoAgentModel", "gpt-4o"),
             marketing_agent_model=doc.get("marketingModel", "gpt-4o"),  # Firebase uses "marketingModel"

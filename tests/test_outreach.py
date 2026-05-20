@@ -3,7 +3,7 @@
 Covers:
 - OutreachConfig.from_env (defaults + env override)
 - OutreachPolicy: business hours, daily limit, batch break logic, jitter range
-- pick_next_target: where filter shape, oldest-first, empty queue
+- pick_next_target: where filter shape, scored pool, empty queue
 - send_one: dry-run skips IO, real send writes lead update + Etkilesimler log
 - runner.loop: skips when off-hours, exits cleanly with max_iterations
 - send_whatsapp_template tool: phone+template validation, Zernio call shape
@@ -21,16 +21,12 @@ os.environ.setdefault("OPENAI_API_KEY", "test")
 
 from src.agents.outreach.policy import OutreachConfig, OutreachPolicy  # noqa: E402
 from src.agents.outreach.targeting import (  # noqa: E402
+    _CANDIDATE_POOL_SIZE,
     _build_where,
     count_sent_today,
     pick_next_target,
 )
 from src.agents.outreach import runner  # noqa: E402
-
-
-# ---------------------------------------------------------------------------
-# Config
-# ---------------------------------------------------------------------------
 
 
 class TestOutreachConfig:
@@ -58,14 +54,7 @@ class TestOutreachConfig:
         assert cfg.daily_limit == 240
 
 
-# ---------------------------------------------------------------------------
-# Policy
-# ---------------------------------------------------------------------------
-
-
 def _utc(hour: int, minute: int = 0) -> datetime:
-    """UTC time which, in Istanbul (UTC+3), corresponds to (hour, minute) local."""
-    # naive: TR is UTC+3 year-round. ZoneInfo handles DST if any.
     return datetime(2026, 5, 9, hour - 3, minute, tzinfo=timezone.utc)
 
 
@@ -108,7 +97,7 @@ class TestPolicyDailyLimit:
         p.record_send()
         ok, reason = p.is_eligible(_utc(10))
         assert not ok and reason == "daily limit reached"
-        ok, reason = p.is_eligible(_utc(8))  # before-hours wins
+        ok, reason = p.is_eligible(_utc(8))
         assert not ok and reason == "outside business hours"
 
 
@@ -129,11 +118,6 @@ class TestPolicyPacing:
         assert p.should_take_batch_break() is True
 
 
-# ---------------------------------------------------------------------------
-# Targeting
-# ---------------------------------------------------------------------------
-
-
 class TestTargeting:
     def test_where_filter_shape(self):
         where = _build_where("outreach_agent_v1")
@@ -142,26 +126,22 @@ class TestTargeting:
         assert "(telefon,notblank)" in where
         assert "~and" in where
 
-    def test_pick_next_returns_first_row(self):
+    def test_pick_next_returns_best_in_pool(self):
         client = MagicMock()
         client.list_records.return_value = {
             "list": [{"Id": 1, "ad_soyad": "Otel A"}, {"Id": 2}],
         }
         target = pick_next_target(client, "leads_tbl", "outreach_agent_v1")
+        # Id=1 has ad_soyad (+1), Id=2 has nothing -> Id=1 wins
         assert target == {"Id": 1, "ad_soyad": "Otel A"}
         kwargs = client.list_records.call_args.kwargs
-        assert kwargs["limit"] == 1
+        assert kwargs["limit"] == _CANDIDATE_POOL_SIZE
         assert kwargs["sort"] == "CreatedAt"
 
     def test_pick_next_returns_none_when_empty(self):
         client = MagicMock()
         client.list_records.return_value = {"list": []}
         assert pick_next_target(client, "leads_tbl", "outreach_agent_v1") is None
-
-
-# ---------------------------------------------------------------------------
-# send_one
-# ---------------------------------------------------------------------------
 
 
 class TestSendOne:
@@ -202,13 +182,11 @@ class TestSendOne:
         )
         assert result["success"] is True
 
-        # Zernio called with template + variables=[name]
         send_kwargs = zernio_mock.send_template.await_args.kwargs
         assert send_kwargs["phone"] == "+905551112233"
         assert send_kwargs["template_name"] == "ege_otel_yaz_sezon_v1"
         assert send_kwargs["variables"] == ["Otel A"]
 
-        # Lead -> Soguk + notlar appended
         update_call = nocodb_mock.update_record.call_args
         assert update_call.args[0] == "leads_tbl"
         assert update_call.args[1] == 7
@@ -216,7 +194,6 @@ class TestSendOne:
         assert fields["asama"] == "Soguk"
         assert "Cold outreach" in fields["notlar"]
 
-        # Etkilesimler upsert keyed by external_message_id
         upsert_call = nocodb_mock.upsert_record.call_args
         assert upsert_call.args[0] == "msgs_tbl"
         assert upsert_call.args[1] == "external_message_id"
@@ -241,14 +218,8 @@ class TestSendOne:
             messages_table="msgs_tbl",
             dry_run=False,
         )
-        # Lead update happened; Etkilesimler swallowed
         assert result["success"] is True
         nocodb_mock.update_record.assert_called_once()
-
-
-# ---------------------------------------------------------------------------
-# Loop
-# ---------------------------------------------------------------------------
 
 
 class TestLoop:
@@ -257,7 +228,6 @@ class TestLoop:
         monkeypatch.delenv("NOCODB_LEADS_TABLE_ID", raising=False)
         from src.app.config import get_settings
         get_settings.cache_clear()
-        # Should log & return without crashing
         await runner.loop(max_iterations=1)
 
     @pytest.mark.asyncio
@@ -266,7 +236,6 @@ class TestLoop:
         from src.app.config import get_settings
         get_settings.cache_clear()
 
-        # Force "outside business hours"
         monkeypatch.setattr(
             OutreachPolicy, "within_business_hours", lambda self, now=None: False
         )
@@ -283,7 +252,7 @@ class TestLoop:
     async def test_loop_picks_target_and_records_send(self, monkeypatch):
         monkeypatch.setenv("NOCODB_LEADS_TABLE_ID", "leads_tbl")
         monkeypatch.setenv("NOCODB_MESSAGES_TABLE_ID", "msgs_tbl")
-        monkeypatch.setenv("DRY_RUN", "true")  # safe path, no real Zernio
+        monkeypatch.setenv("DRY_RUN", "true")
         from src.app.config import get_settings
         get_settings.cache_clear()
 
@@ -294,24 +263,17 @@ class TestLoop:
         monkeypatch.setattr(runner, "get_nocodb_client", lambda: nocodb_mock)
         monkeypatch.setattr(runner, "get_zernio_client", lambda: MagicMock())
 
-        # Skip real sleeps
         async def fake_sleep(secs):
             pass
 
         monkeypatch.setattr(asyncio, "sleep", fake_sleep)
 
-        # Force "in business hours"
         monkeypatch.setattr(
             OutreachPolicy, "within_business_hours", lambda self, now=None: True
         )
 
         await runner.loop(max_iterations=1)
         assert nocodb_mock.list_records.call_count == 1
-
-
-# ---------------------------------------------------------------------------
-# send_whatsapp_template tool
-# ---------------------------------------------------------------------------
 
 
 class TestSendWhatsappTemplateTool:
@@ -369,11 +331,6 @@ class TestSendWhatsappTemplateTool:
         }
 
 
-# ---------------------------------------------------------------------------
-# Adim 7 fix-1: Daily limit persistence (count_sent_today)
-# ---------------------------------------------------------------------------
-
-
 class TestCountSentToday:
     def test_where_filter_uses_utc_midnight(self):
         client = MagicMock()
@@ -398,17 +355,11 @@ class TestCountSentToday:
         assert count_sent_today(client, "msgs_tbl") == 0
 
 
-# ---------------------------------------------------------------------------
-# Adim 7 fix-2: send_with_retry
-# ---------------------------------------------------------------------------
-
-
 class TestSendWithRetry:
     @pytest.mark.asyncio
     async def test_succeeds_on_first_attempt(self, monkeypatch):
         zernio = MagicMock()
         zernio.send_template = AsyncMock(return_value={"messageId": "ok"})
-        # No sleep needed when first attempt wins
         monkeypatch.setattr(runner.asyncio, "sleep", AsyncMock())
 
         result = await runner._send_with_retry(
@@ -452,13 +403,7 @@ class TestSendWithRetry:
                 zernio, phone="+9", template_name="t", variables=["x"],
                 language="tr", retries=2, retry_delay_sec=30,
             )
-        # 1 initial + 2 retries = 3 attempts
         assert zernio.send_template.await_count == 3
-
-
-# ---------------------------------------------------------------------------
-# Adim 7 fix-3: Zernio contact tagging
-# ---------------------------------------------------------------------------
 
 
 class TestTagZernioContact:
@@ -493,7 +438,6 @@ class TestTagZernioContact:
     async def test_swallows_exception(self):
         zernio = MagicMock()
         zernio.list_contacts = AsyncMock(side_effect=RuntimeError("zernio down"))
-        # Should not raise
         await runner._tag_zernio_contact(zernio, "+905551112233", to_add=["x"])
 
     @pytest.mark.asyncio
