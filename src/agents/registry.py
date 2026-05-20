@@ -11,6 +11,7 @@ from src.agents.analysis_agent import create_analysis_agent
 from src.agents.orchestrator_agent import create_orchestrator_agent
 from src.agents.sales.meta_agent import create_meta_agent
 from src.agents.sales.sales_analyst_agent import create_sales_analyst_agent
+from src.agents.brand_synthesis_agent import create_brand_synthesis_agent
 
 # Agent factory tipi: parametresiz cagrida yeni agent dondurur.
 AgentFactory = Callable[[], Agent[dict[str, Any]]]
@@ -57,6 +58,11 @@ def create_sales_analyst() -> Agent[dict[str, Any]]:
     return create_sales_analyst_agent()
 
 
+def create_brand_synthesis() -> Agent[dict[str, Any]]:
+    """Brand Synthesis agenti olusturur (Faz B1 — marka kimligi sentezi)."""
+    return create_brand_synthesis_agent()
+
+
 def get_agent_registry() -> dict[str, AgentFactory]:
     """
     Tum agent olusturucularini isim bazli dondurur.
@@ -70,6 +76,7 @@ def get_agent_registry() -> dict[str, AgentFactory]:
         "analysis": create_analysis,
         "meta": create_meta,
         "sales_analyst": create_sales_analyst,
+        "brand_synthesis": create_brand_synthesis,
     }
 
 
@@ -81,6 +88,7 @@ __all__ = [
     "create_analysis",
     "create_meta",
     "create_sales_analyst",
+    "create_brand_synthesis",
     "get_agent_registry",
     "AgentFactory",
 ]
