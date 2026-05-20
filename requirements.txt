@@ -31,6 +31,13 @@ fal-client>=0.13
 # Kling AI (JWT authentication for video generation API)
 PyJWT>=2.8
 
+# Langfuse — LLM observability (her agent cagrisinin token/cost/latency izlenmesi).
+# OpenInference instrumentation Agents SDK trace'lerini OTEL spanlarina cevirir,
+# Langfuse SDK bunlari cloud'a (veya self-host'a) gonderir. Anahtarlar yoksa
+# init sessizce skip eder; agent calismasi etkilenmez.
+langfuse>=2.50
+openinference-instrumentation-openai-agents>=0.1
+
 # Testing
 pytest>=8.0
 pytest-asyncio>=0.23
