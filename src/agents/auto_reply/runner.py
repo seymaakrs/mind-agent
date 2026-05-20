@@ -2,6 +2,9 @@
 
     python -m src.agents.auto_reply.runner
 
+Cloud Run Job mode (one-shot — bir batch islemden sonra exit):
+    RUN_ONCE=true python -m src.agents.auto_reply.runner
+
 Polling-based (60sn). Each tick:
 1. Query Etkilesimler for unprocessed inbound rows (oldest first, max age 60dk).
 2. For each row: jitter 30-60sn, fetch lead konusma gecmisi, call
@@ -17,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import signal
 import sys
 from datetime import datetime, timezone
@@ -214,7 +218,7 @@ async def loop(
         return
 
     log.info(
-        "auto_reply starting: poll=%ds batch=%d delay=%d-%ds model=%s dry_run=%s history_limit=%d",
+        "auto_reply starting: poll=%ds batch=%d delay=%d-%ds model=%s dry_run=%s history_limit=%d max_iter=%s",
         config.poll_interval_sec,
         config.batch_size,
         config.reply_min_delay_sec,
@@ -222,6 +226,7 @@ async def loop(
         config.model,
         dry_run,
         _HISTORY_LIMIT,
+        max_iterations or "infinite",
     )
 
     iteration = 0
@@ -235,6 +240,9 @@ async def loop(
                 max_age_minutes=config.max_inbound_age_minutes,
             )
             if not inbounds:
+                if max_iterations == 1:
+                    log.info("auto_reply: no pending inbounds, exiting one-shot mode")
+                    return
                 await asyncio.sleep(config.poll_interval_sec)
                 continue
 
@@ -247,9 +255,16 @@ async def loop(
                     messages_table=messages_table,
                     dry_run=dry_run,
                 )
+
+            if max_iterations == 1:
+                log.info("auto_reply: batch processed (%d rows), exiting one-shot mode", len(inbounds))
+                return
+
             await asyncio.sleep(config.poll_interval_sec)
         except Exception as exc:
             log.exception("auto_reply: loop iteration failed: %s", exc)
+            if max_iterations == 1:
+                return
             await asyncio.sleep(_PAUSE_ERROR_SEC)
 
 
@@ -264,6 +279,13 @@ def _install_sigterm_handler() -> None:
         pass
 
 
+def _resolve_max_iterations() -> int | None:
+    """Cloud Run Job mode: RUN_ONCE=true env -> max_iterations=1."""
+    if os.environ.get("RUN_ONCE", "").lower() in ("1", "true", "yes"):
+        return 1
+    return None
+
+
 def main() -> int:
     logging.basicConfig(
         level=logging.INFO,
@@ -271,7 +293,7 @@ def main() -> int:
     )
     _install_sigterm_handler()
     try:
-        asyncio.run(loop())
+        asyncio.run(loop(max_iterations=_resolve_max_iterations()))
     except KeyboardInterrupt:
         pass
     return 0
