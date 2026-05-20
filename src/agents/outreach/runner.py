@@ -10,6 +10,9 @@ keeps NocoDB writes off too, so it is safe in staging.
 Run:
     python -m src.agents.outreach.runner
 
+Cloud Run Job mode (one-shot — exit after first iteration):
+    RUN_ONCE=true python -m src.agents.outreach.runner
+
 Stop the loop with SIGTERM (Cloud Run job termination signal). One iteration
 is wrapped in try/except so a transient NocoDB or Zernio hiccup pauses for
 60 seconds rather than crash-looping the container.
@@ -252,7 +255,7 @@ async def loop(config: OutreachConfig | None = None, *, max_iterations: int | No
             log.warning("Outreach: count_sent_today failed (%s) — starting from 0", exc)
 
     log.info(
-        "Outreach starting: tz=%s hours=%d-%d daily_limit=%d sent_today=%d dry_run=%s template=%s",
+        "Outreach starting: tz=%s hours=%d-%d daily_limit=%d sent_today=%d dry_run=%s template=%s max_iter=%s",
         config.timezone,
         config.hour_start,
         config.hour_end,
@@ -260,6 +263,7 @@ async def loop(config: OutreachConfig | None = None, *, max_iterations: int | No
         policy.sent_today,
         dry_run,
         config.template_name,
+        max_iterations or "infinite",
     )
 
     iteration = 0
@@ -272,12 +276,18 @@ async def loop(config: OutreachConfig | None = None, *, max_iterations: int | No
             # Guardian metrikler GREEN'e donunce outreach_paused=false yapar
             # (kapali dongu, insan onayi gerekmez).
             if _is_outreach_paused():
+                if max_iterations == 1:
+                    log.info("outreach: PAUSED by Guardian, exiting one-shot mode")
+                    return
                 log.info("outreach: PAUSED by Guardian, sleeping %ds", _PAUSE_GUARDIAN_SEC)
                 await asyncio.sleep(_PAUSE_GUARDIAN_SEC)
                 continue
 
             eligible, reason = policy.is_eligible()
             if not eligible:
+                if max_iterations == 1:
+                    log.info("outreach: not eligible (%s), exiting one-shot mode", reason)
+                    return
                 pause = (
                     _PAUSE_OFF_HOURS_SEC
                     if reason == "outside business hours"
@@ -291,6 +301,9 @@ async def loop(config: OutreachConfig | None = None, *, max_iterations: int | No
                 get_nocodb_client(), leads_table, config.source_workflow_id
             )
             if not target:
+                if max_iterations == 1:
+                    log.info("outreach: no eligible targets, exiting one-shot mode")
+                    return
                 log.info("outreach: no eligible targets, sleeping %ds", _PAUSE_NO_TARGET_SEC)
                 await asyncio.sleep(_PAUSE_NO_TARGET_SEC)
                 continue
@@ -304,6 +317,10 @@ async def loop(config: OutreachConfig | None = None, *, max_iterations: int | No
             )
             policy.record_send()
 
+            if max_iterations == 1:
+                # One-shot: send one and exit, no batch/delay loop
+                return
+
             if policy.should_take_batch_break():
                 pause = policy.batch_break_sec()
                 log.info("outreach: batch break (%ds)", int(pause))
@@ -312,6 +329,8 @@ async def loop(config: OutreachConfig | None = None, *, max_iterations: int | No
                 await asyncio.sleep(policy.next_delay_sec())
         except Exception as exc:
             log.exception("outreach: loop iteration failed: %s", exc)
+            if max_iterations == 1:
+                return
             await asyncio.sleep(_PAUSE_ERROR_SEC)
 
 
@@ -331,6 +350,13 @@ def _install_sigterm_handler() -> asyncio.Event:
     return stop_event
 
 
+def _resolve_max_iterations() -> int | None:
+    """Cloud Run Job mode: RUN_ONCE=true env -> max_iterations=1 (exit after first iteration)."""
+    if os.environ.get("RUN_ONCE", "").lower() in ("1", "true", "yes"):
+        return 1
+    return None
+
+
 def main() -> int:
     logging.basicConfig(
         level=logging.INFO,
@@ -338,7 +364,7 @@ def main() -> int:
     )
     _install_sigterm_handler()
     try:
-        asyncio.run(loop())
+        asyncio.run(loop(max_iterations=_resolve_max_iterations()))
     except KeyboardInterrupt:
         pass
     return 0
