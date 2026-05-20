@@ -12,17 +12,17 @@ siniflandirilir ve cevap ``ITIRAZ_PLAYBOOK`` anchor'larina dayanir.
 olumsuz/spam: reply_text bos, yanit yok.
 
 Insan onayi YOKTUR — itiraz cevabi da sistemce kararlastirilip dogrudan
-musteriye gider (kullanici karari).
+musteriye gider.
 
-LLM gets the inbound message PLUS a randomly-sampled base template from
-``FALLBACK_TEMPLATES`` (or NocoDB message_templates) for the matching
-intent so its rephrase stays on-brand. Itiraz icin ek olarak
-``ITIRAZ_PLAYBOOK`` anchor ozeti prompt'a eklenir.
+KONUSMA HAFIZASI: ``conversation_history`` opsiyonel parametresiyle
+responder onceki Gelen+Giden mesajlari (kronolojik) prompt'a anchor olarak
+alir. Boylece musteri haftalar sonra geri yazdiginda ajan onu taniyor gibi
+davranir, tekrar etmez. None birakilirsa eski davranis aynen calisir.
 """
 from __future__ import annotations
 
 import random
-from typing import Literal
+from typing import Any, Literal
 
 from agents import Agent, Runner
 from pydantic import BaseModel, Field
@@ -38,8 +38,6 @@ ObjectionType = Literal[
 
 
 class AutoReplyDecision(BaseModel):
-    """Structured output for the auto-reply LLM call."""
-
     intent: Intent = Field(
         description="Inbound mesajin niyeti. olumlu=ilgi var, soru=bilgi "
         "soruyor, olumsuz=red/iptal, spam=alakasiz, itiraz=fiyat/rekabet/"
@@ -58,9 +56,7 @@ class AutoReplyDecision(BaseModel):
     )
     objection_type: ObjectionType | None = Field(
         default=None,
-        description="Sadece intent=itiraz iken doldur: itirazin tipi "
-        "(fiyat/rekabet/erteleme/olcek/teknoloji/kanit). Diger intent'lerde "
-        "None birak.",
+        description="Sadece intent=itiraz iken doldur: itirazin tipi.",
     )
 
 
@@ -76,24 +72,26 @@ Kurallar:
   cumlelerde kucuk varyasyonlar yap.
 - itiraz: musteri fiyat/rekabet/erteleme/olcek/teknoloji/kanit itirazi
   yapiyorsa intent=itiraz. objection_type'i bu tiplerden biri olarak SEC.
-  reply_text'i, asagidaki ITIRAZ OYUN KITABI'ndaki ESLESEN anchor'i baz
-  alarak yaz — bu cevap dogrudan musteriye gider. Anchor'in tonunu/
-  uzunlugunu KOPYALA, mesaja gore kucuk varyasyon yap.
-- ANCHOR'daki gercek bilgileri AYNEN KORU — bu detaylar halusine edilemez:
+  reply_text'i ITIRAZ OYUN KITABI'ndaki eslesen anchor'i baz alarak yaz.
+- ANCHOR'daki gercek bilgileri AYNEN KORU — halusine edilemez:
     * "Bodrumdayim", "Marmaris", "Fethiye yoluna cikiyorum"
     * "30 dakikalik gorusme", "yuz yuze", "kahve"
     * "Booking komisyonu odemeden direkt rezervasyon"
-  Bu bilgiler Slowdays satis ekibinin gercek sahadaki durumunu yansitir.
-- olumsuz / spam: reply_text BOS birak (yanit verilmeyecek).
+- ONCEKI KONUSMA verildiyse:
+  * Musteriyi taniyormus gibi davran; ilk defa karsilasmis havasina girme.
+  * Daha once soyledigin SOZU TEKRAR ETME ("Bodrumdayim" zaten dediysen tekrar
+    deme, sadece gerektiginde an).
+  * Yeni gelen mesajdaki NOKTAYA odaklan; konuyu degistirme.
+  * Ton ve hitap sekli onceki giden mesajlarinla TUTARLI olsun.
+- olumsuz / spam: reply_text BOS birak.
 - Link yok, fiyat yok, garanti yok. Sadece bir sonraki adim (gorusme talebi).
 - Anchor template'te emoji varsa kopyala; yoksa ekleme.
 - confidence: siniflandirmadan ne kadar emin oldugun (0-1). Belirsiz
-  mesajlarda dusuk skor ver -> yanit gonderilmez (sessiz kalinir).
+  mesajlarda dusuk skor ver -> yanit gonderilmez.
 """
 
 
 def _format_playbook(playbook: dict[str, list[str]] | None) -> str | None:
-    """Compact one-anchor-per-objection summary for the prompt."""
     if not playbook:
         return None
     lines: list[str] = []
@@ -103,17 +101,42 @@ def _format_playbook(playbook: dict[str, list[str]] | None) -> str | None:
     return "\n\n".join(lines) if lines else None
 
 
+def _format_history(history: list[dict[str, Any]] | None) -> str | None:
+    """Onceki konusmayi LLM icin kompakt formatta render et (eski->yeni)."""
+    if not history:
+        return None
+    lines: list[str] = []
+    for row in history:
+        yon = row.get("yon") or "?"
+        tur = row.get("tur") or "-"
+        tarih = (row.get("tarih") or "")[:10]  # YYYY-MM-DD
+        body = (row.get("mesaj_icerigi") or "").strip()
+        if not body:
+            continue
+        # Cok uzun mesajlari kirp
+        if len(body) > 280:
+            body = body[:280] + "…"
+        lines.append(f"[{yon} {tur} {tarih}] {body}")
+    return "\n".join(lines) if lines else None
+
+
 def _build_user_prompt(
     message: str,
     intent_guess: str | None,
     base_template: str | None,
     *,
     playbook: dict[str, list[str]] | None = None,
+    history: list[dict[str, Any]] | None = None,
 ) -> str:
     lines = [
         "Gelen mesaj:",
         f'"""{message.strip()}"""',
     ]
+    history_text = _format_history(history)
+    if history_text:
+        lines.append("")
+        lines.append("ONCEKI KONUSMA (eski -> yeni):")
+        lines.append(f'"""{history_text}"""')
     if base_template:
         lines.append("")
         lines.append("Ornek ton / yapidaki sablon:")
@@ -136,14 +159,11 @@ def _pick_base_template(
     intent_guess: str | None,
     rng: random.Random | None = None,
 ) -> str | None:
-    """Pick a random base template for the LLM to anchor its rephrase."""
     rng = rng or random
     pool: list[str] = []
     if templates and intent_guess:
         pool = templates.get(intent_guess) or []
     if not pool:
-        # Fall back to the broadest reservoir (olumlu) so the model has SOME
-        # anchor even when we don't yet know the intent.
         pool = FALLBACK_TEMPLATES.get("olumlu") or []
     return rng.choice(pool) if pool else None
 
@@ -164,13 +184,18 @@ async def decide_reply(
     intent_guess: str | None = None,
     templates: dict[str, list[str]] | None = None,
     rng: random.Random | None = None,
+    conversation_history: list[dict[str, Any]] | None = None,
 ) -> AutoReplyDecision:
-    """Classify + draft a reply. Pure function over (message, templates)."""
+    """Classify + draft a reply. Pure function over (message, templates, history)."""
     config = config or AutoReplyConfig.from_env()
     templates = templates or FALLBACK_TEMPLATES
     base = _pick_base_template(templates, intent_guess, rng=rng)
     prompt = _build_user_prompt(
-        message, intent_guess, base, playbook=ITIRAZ_PLAYBOOK
+        message,
+        intent_guess,
+        base,
+        playbook=ITIRAZ_PLAYBOOK,
+        history=conversation_history,
     )
     agent = _create_agent(config.model)
     result = await Runner.run(starting_agent=agent, input=prompt)
