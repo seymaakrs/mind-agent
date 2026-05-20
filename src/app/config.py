@@ -68,6 +68,14 @@ class Settings(BaseModel):
     # set this and Zernio computes sha256(secret, body) on its end.
     zernio_webhook_secret: str | None = Field(default=None, alias="ZERNIO_WEBHOOK_SECRET")
 
+    # Langfuse — LLM observability (token/cost/latency tracing). Cloud free tier
+    # default. Anahtarlar yoksa init sessizce skip eder.
+    langfuse_public_key: str | None = Field(default=None, alias="LANGFUSE_PUBLIC_KEY")
+    langfuse_secret_key: str | None = Field(default=None, alias="LANGFUSE_SECRET_KEY")
+    langfuse_host: str = Field(
+        default="https://cloud.langfuse.com", alias="LANGFUSE_HOST"
+    )
+
     # Dry-run mode - Google API'lerine gercek cagri yapmadan prompt'lari loglar
     dry_run: bool = Field(default=False, alias="DRY_RUN")
 
@@ -101,6 +109,9 @@ class Settings(BaseModel):
                     "ZERNIO_WA_ACCOUNT_ID", "69ecc2273a63baf2053dfc21"
                 ),
                 "zernio_webhook_secret": os.getenv("ZERNIO_WEBHOOK_SECRET"),
+                "langfuse_public_key": os.getenv("LANGFUSE_PUBLIC_KEY"),
+                "langfuse_secret_key": os.getenv("LANGFUSE_SECRET_KEY"),
+                "langfuse_host": os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com"),
             }
         )
 
