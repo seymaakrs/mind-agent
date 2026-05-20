@@ -23,14 +23,26 @@ set_default_openai_key(settings.openai_api_key)
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    """Startup/shutdown hooks. MCP server'lari burada connect ediliyor
-    (SDK 0.6.2 Agent(mcp_servers=...) otomatik connect etmiyor)."""
+    """Startup/shutdown hooks.
+
+    Sira:
+    1. Langfuse observability'i ac (anahtarlar yoksa sessizce skip).
+       OpenAI Agents SDK trace'leri otomatik yakalanir — instrument()
+       once gelmeli, sonra MCP/agent baslar.
+    2. Zernio MCP server'lari connect et (SDK 0.6.2 otomatik connect
+       etmiyor).
+    Shutdown'da ters sira: MCP cleanup, sonra Langfuse flush.
+    """
+    from src.infra.langfuse_client import flush_langfuse, start_langfuse
     from src.infra.zernio.mcp_server import start_mcp_servers, stop_mcp_servers
+
+    start_langfuse()
     await start_mcp_servers()
     try:
         yield
     finally:
         await stop_mcp_servers()
+        flush_langfuse()
 
 
 app = FastAPI(
