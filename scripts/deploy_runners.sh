@@ -1,5 +1,7 @@
 #!/bin/bash
-# scripts/deploy_runners.sh — 4 otonom lobu Cloud Run Job + Scheduler olarak kurar.
+# scripts/deploy_runners.sh — 5 otonom lobu Cloud Run Job + Scheduler olarak kurar.
+#
+# Loblar: Bekci, Avci, Takipci, DM Yanitlayici, Pazarlamaci Dispatcher.
 #
 # ÖN KOŞUL:
 # - Cloud Run servisi (agents-sdk-api) zaten deploy edilmiş olmalı
@@ -55,13 +57,14 @@ echo ""
 read -p "Devam etmek için ENTER (iptal için Ctrl+C)..." _
 
 # ─────────────────────────────────────────────────────────────────
-# 1. CLOUD RUN JOBS — 4 lob için
+# 1. CLOUD RUN JOBS — 5 lob için
 # ─────────────────────────────────────────────────────────────────
 
 create_job() {
   local job_name=$1
   local module=$2
   local description=$3
+  local timeout=${4:-600}
 
   echo "→ Job oluşturuluyor: $job_name ($description)"
 
@@ -75,7 +78,7 @@ create_job() {
       --args="-m,$module" \
       --set-env-vars="RUN_ONCE=true" \
       --max-retries=1 \
-      --task-timeout=600 \
+      --task-timeout="$timeout" \
       --memory=512Mi \
       --cpu=1
   else
@@ -87,20 +90,23 @@ create_job() {
       --args="-m,$module" \
       --set-env-vars="RUN_ONCE=true" \
       --max-retries=1 \
-      --task-timeout=600 \
+      --task-timeout="$timeout" \
       --memory=512Mi \
       --cpu=1
   fi
   echo "  ✓ $job_name hazır"
 }
 
-create_job "guardian-tick" "src.agents.guardian.runner" "Bekçi — kampanya sağlık monitörü"
-create_job "outreach-tick" "src.agents.outreach.runner" "Avcı — soğuk outreach"
-create_job "followup-tick" "src.agents.followup.runner" "Takipçi — geç kalmış lead'lere takip"
-create_job "auto-reply-tick" "src.agents.auto_reply.runner" "DM Yanıtlayıcı — gelen mesajlara cevap"
+create_job "guardian-tick" "src.agents.guardian.runner" "Bekçi — kampanya sağlık monitörü" 600
+create_job "outreach-tick" "src.agents.outreach.runner" "Avcı — soğuk outreach" 600
+create_job "followup-tick" "src.agents.followup.runner" "Takipçi — geç kalmış lead'lere takip" 600
+create_job "auto-reply-tick" "src.agents.auto_reply.runner" "DM Yanıtlayıcı — gelen mesajlara cevap" 600
+# Pazarlamaci dispatcher: orchestrator + LLM + image/video gen alabilir,
+# daha uzun timeout gerekli (3000sn = 50dk).
+create_job "marketing-tick" "src.agents.marketing.runner" "Pazarlamacı — planlanan postları tetikler" 3000
 
 echo ""
-echo "✓ 4 Cloud Run Job oluşturuldu/güncellendi."
+echo "✓ 5 Cloud Run Job oluşturuldu/güncellendi."
 echo ""
 
 # ─────────────────────────────────────────────────────────────────
@@ -168,20 +174,23 @@ create_scheduler "guardian-every-30min" "guardian-tick" "*/30 * * * *" "Bekçi h
 # Outreach: çalışma saatleri 09:00-18:00, her 10 dk
 create_scheduler "outreach-every-10min" "outreach-tick" "*/10 9-18 * * 1-5" "Avcı iş günleri 09-18 arası 10 dk'da bir"
 
-# Followup: günde 3 kez (10:00, 14:00, 16:30)
-create_scheduler "followup-3x-daily" "followup-tick" "0 10,14 * * 1-5" "Takipçi günde 2 kez iş günleri"
+# Followup: günde 2 kez (10:00, 14:00)
+create_scheduler "followup-2x-daily" "followup-tick" "0 10,14 * * 1-5" "Takipçi günde 2 kez iş günleri"
 
 # Auto-reply: her 5 dk (24/7, çünkü müşteri her saat yazabilir)
 create_scheduler "auto-reply-every-5min" "auto-reply-tick" "*/5 * * * *" "DM Yanıtlayıcı her 5 dk"
 
+# Marketing dispatcher: sabah 08:00 (Europe/Istanbul) — gunluk plan tetikleyici
+create_scheduler "marketing-daily-8am" "marketing-tick" "0 8 * * *" "Pazarlamacı dispatcher her sabah 08:00"
+
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
-echo "  ✓ TAMAM — 4 Job + 4 Scheduler kuruldu"
+echo "  ✓ TAMAM — 5 Job + 5 Scheduler kuruldu"
 echo "═══════════════════════════════════════════════════════════════"
 echo ""
 echo "SONRAKİ ADIMLAR:"
 echo "  1. Her job için env var'ları Cloud Run UI'den ekle"
-echo "     (NOCODB_API_TOKEN, ZERNIO_API_KEY, FIREBASE_*, vs.)"
+echo "     (NOCODB_API_TOKEN, ZERNIO_API_KEY, FIREBASE_*, OPENAI_API_KEY, vs.)"
 echo "     Detay: docs/RUNNERS_DEPLOY.md"
 echo ""
 echo "  2. Manuel tetik ile test et:"
