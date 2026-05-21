@@ -9,7 +9,7 @@ from src.agents.video_agent import create_video_agent
 from src.agents.marketing_agent import create_marketing_agent
 from src.agents.analysis_agent import create_analysis_agent
 from src.agents.orchestrator_agent import create_orchestrator_agent
-from src.agents.sales.meta_agent import create_meta_agent
+from src.agents.sales.reklam_uzmani_agent import create_reklam_uzmani_agent
 from src.agents.sales.sales_analyst_agent import create_sales_analyst_agent  # deprecated
 from src.agents.sales.sales_manager_agent import create_sales_manager_agent
 from src.agents.brand_synthesis_agent import create_brand_synthesis_agent
@@ -49,9 +49,13 @@ def create_analysis() -> Agent[dict[str, Any]]:
     return create_analysis_agent()
 
 
-def create_meta() -> Agent[dict[str, Any]]:
-    """Meta Reklam agenti olusturur (sales/Meta Lead Ads)."""
-    return create_meta_agent()
+def create_reklam_uzmani() -> Agent[dict[str, Any]]:
+    """Reklam Uzmani (eski: Meta) agenti olusturur (Facebook/Meta Lead Ads)."""
+    return create_reklam_uzmani_agent()
+
+
+# Deprecated alias — geriye dönük uyum, sonraki major versiyonda kalkacak.
+create_meta = create_reklam_uzmani
 
 
 def create_sales_analyst() -> Agent[dict[str, Any]]:
@@ -80,7 +84,8 @@ def get_agent_registry() -> dict[str, AgentFactory]:
         "video": create_video,
         "marketing": create_marketing,
         "analysis": create_analysis,
-        "meta": create_meta,
+        "reklam_uzmani": create_reklam_uzmani,
+        "meta": create_reklam_uzmani,  # deprecated alias
         "sales_analyst": create_sales_analyst,  # deprecated, alias
         "sales_manager": create_sales_manager,
         "brand_synthesis": create_brand_synthesis,
@@ -93,7 +98,8 @@ __all__ = [
     "create_video",
     "create_marketing",
     "create_analysis",
-    "create_meta",
+    "create_reklam_uzmani",
+    "create_meta",  # deprecated alias
     "create_sales_analyst",  # deprecated
     "create_sales_manager",
     "create_brand_synthesis",

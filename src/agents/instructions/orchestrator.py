@@ -108,7 +108,7 @@ def build_orchestrator_instructions(today_date: str) -> str:
         "   Analysis manager decides SWOT vs SEO vs Custom and selects the "
         "right save_* function internally.\n\n"
 
-        "5) meta_agent_tool — Facebook/Meta Lead Ads WRITE operations.\n"
+        "5) reklam_uzmani_tool — Facebook/Meta Lead Ads WRITE operations.\n"
         "   Intent: 'yeni lead geldi', 'lead form geldi', 'lead ads webhook', "
         "'sicak lead bildir (yeni kayit)', 'lead skoru hesapla', 'NocoDB "
         "CRM yazma'.\n"
@@ -130,7 +130,7 @@ def build_orchestrator_instructions(today_date: str) -> str:
         "   n8n_workflow_health(name) → status of a specific workflow.\n\n"
 
         "CRITICAL DISTINCTIONS:\n"
-        "- meta_agent_tool = WRITE (new lead recorded). sales_analyst_tool "
+        "- reklam_uzmani_tool = WRITE (new lead recorded). sales_analyst_tool "
         "= READ-ONLY (counts/lists/funnels). "
         "'kac/listele/goster/funnel/rapor' → sales_analyst. 'yeni lead "
         "geldi/lead form' → meta.\n"
@@ -187,7 +187,7 @@ def build_orchestrator_instructions(today_date: str) -> str:
         "📈 SATIŞ & CRM RAPORLARI — sales_analyst_tool ile sıcak lead sayımı, "
         "funnel, kanal dağılımı, takılı leadler, günlük rapor.\n\n"
 
-        "🔔 META LEAD ADS — meta_agent_tool ile yeni gelen lead formlarını "
+        "🔔 META LEAD ADS — reklam_uzmani_tool ile yeni gelen lead formlarını "
         "NocoDB'ye kaydederim.\n\n"
 
         "⚡ OTOMASYON KÖPRÜSÜ — n8n workflow'larını listele / tetikle / "

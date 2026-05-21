@@ -11,9 +11,9 @@ os.environ.setdefault("OPENAI_API_KEY", "test")
 
 class TestMetaAgentWiring:
     def test_meta_agent_has_six_nocodb_tools(self):
-        from src.agents.sales.meta_agent import create_meta_agent
+        from src.agents.sales.reklam_uzmani_agent import create_reklam_uzmani_agent
 
-        agent = create_meta_agent()
+        agent = create_reklam_uzmani_agent()
         tool_names = [t.name for t in agent.tools]
         assert agent.name == "meta"
         assert set(tool_names) == {
@@ -38,13 +38,13 @@ class TestMetaAgentWiring:
 
         orchestrator = create_orchestrator_agent()
         tool_names = [t.name for t in orchestrator.tools]
-        assert "meta_agent_tool" in tool_names
+        assert "reklam_uzmani_tool" in tool_names
 
     def test_orchestrator_instructions_mention_meta(self):
         from src.agents.instructions import build_orchestrator_instructions
 
         text = build_orchestrator_instructions("2026-04-28")
-        assert "meta_agent_tool" in text
+        assert "reklam_uzmani_tool" in text
         assert "META LEAD" in text or "meta lead" in text.lower()
 
 
