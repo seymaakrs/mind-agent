@@ -48,9 +48,27 @@ Her madde:
   - `trigger_auto_reply_for_message(message_id)` — beklemiş mesaja hemen yanıt.
 - Bu tool'lar runner'ların `_handle_single` fonksiyonlarını sarmalı.
 
-### D. Hafıza
-- `get_sales_memory(business_id)` / `update_sales_memory` — kullanıcı tercihlerini, geçmiş kararları hatırla.
-- "Beyza her pazartesi sıcak lead listesi ister" → öneri olarak sun.
+### D. Hafıza ✅ (2026-05-20 — A2)
+- ✅ `save_sales_memory(business_id, category, key, value, reason)` — Firestore'a yaz
+- ✅ `get_sales_memory(business_id, category=None)` — kategori bazlı oku
+- ✅ `delete_sales_memory(business_id, category, key, reason)` — sil
+- Kategoriler: decisions | preferences | learnings | contacts
+- Firestore path: `businesses/{id}/sales_memory/{category}/notes/{key}`
+- 13 test geçti.
+
+### F. Aylık hedef + KPI takibi ✅ (2026-05-20 — B1)
+- ✅ `set_monthly_goal(business_id, year, month, metric, target, reason)`
+- ✅ `get_monthly_progress(business_id)` — hedef vs gerçekleşen, on_track, daily_rate_needed
+- ✅ `list_goals(business_id, limit=12)` — geçmiş hedefler + sonuç
+- Firestore path: `businesses/{id}/sales_goals/{YYYY-MM}`
+- 13 test geçti.
+
+### G. Sıcak lead acil aksiyon (triage) ✅ (2026-05-20 — C1)
+- ✅ `triage_report(business_id, days_threshold=3)` — onizleme
+- ✅ `triage_stale_hot_leads(...)` — 3+ gün takılı sıcak'a otomatik müdahale
+  (priority=acil + atanan_kisi=Beyza)
+- Müdür her sabah ilk önce triage_report çağırır
+- 8 test geçti.
 
 ### E. Marka kimliği ✅ (2026-05-20)
 - ~~BRAND_AWARE_PREFIX bu agent'a da ekle.~~ Çözüldü: Sales Manager artık `fetch_brand_identity` tool'una sahip + BRAND_AWARE_PREFIX instructions'a prepend edildi. Raporlar marka tonuna göre yorumlanabilir.

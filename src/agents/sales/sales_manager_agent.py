@@ -20,6 +20,9 @@ from agents import Agent
 
 from src.tools.sales.reporting_tools import get_reporting_tools
 from src.tools.sales.manager_actions import get_manager_action_tools
+from src.tools.sales.memory_tools import get_sales_memory_tools
+from src.tools.sales.goals_tools import get_goal_tools
+from src.tools.sales.triage_tools import get_triage_tools
 from src.tools.brand import fetch_brand_identity
 from src.agents.instructions.sales import SALES_MANAGER_INSTRUCTIONS
 from src.agents.instructions.brand_aware import BRAND_AWARE_PREFIX
@@ -40,10 +43,13 @@ def create_sales_manager_agent(
             anlatimi icin mini yeterli + ucuz).
     """
     tools = (
-        list(get_reporting_tools())
-        + list(get_manager_action_tools())
-        + [fetch_brand_identity]
-    )
+        list(get_reporting_tools())          # 10 okuma
+        + list(get_manager_action_tools())   # 6 yazma (TODO A)
+        + list(get_sales_memory_tools())     # 3 memory (A2)
+        + list(get_goal_tools())             # 3 aylık hedef + KPI (B1)
+        + list(get_triage_tools())           # 2 sıcak lead triage (C1)
+        + [fetch_brand_identity]             # 1 brand
+    )  # toplam 25 tool
 
     # Zernio MCP — Sales Manager'in ihtiyaci olabilir (reklam analitik,
     # post performansi). Lifespan ile connect edilmis aktif server'lari al.

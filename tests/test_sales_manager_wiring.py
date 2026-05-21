@@ -153,6 +153,42 @@ class TestOrchestratorWiring:
         assert not leaked, f"Şef'in elinde olmamasi gereken post tool'lari: {leaked}"
 
 
+class TestSalesManagerMemoryGoalsTriage:
+    """A2 + B1 + C1 — Müdür v2 yetenekleri."""
+
+    def test_agent_has_memory_tools(self):
+        from src.agents.sales.sales_manager_agent import create_sales_manager_agent
+        agent = create_sales_manager_agent()
+        names = {t.name for t in agent.tools}
+        assert "save_sales_memory" in names
+        assert "get_sales_memory" in names
+        assert "delete_sales_memory" in names
+
+    def test_agent_has_goal_tools(self):
+        from src.agents.sales.sales_manager_agent import create_sales_manager_agent
+        agent = create_sales_manager_agent()
+        names = {t.name for t in agent.tools}
+        assert "set_monthly_goal" in names
+        assert "get_monthly_progress" in names
+        assert "list_goals" in names
+
+    def test_agent_has_triage_tools(self):
+        from src.agents.sales.sales_manager_agent import create_sales_manager_agent
+        agent = create_sales_manager_agent()
+        names = {t.name for t in agent.tools}
+        assert "triage_stale_hot_leads" in names
+        assert "triage_report" in names
+
+    def test_total_tool_count_is_25(self):
+        """10 read + 6 write + 3 memory + 3 goal + 2 triage + 1 brand = 25"""
+        from src.agents.sales.sales_manager_agent import create_sales_manager_agent
+        agent = create_sales_manager_agent()
+        assert len(agent.tools) == 25, (
+            f"Beklenen 25 tool, gelen {len(agent.tools)}: "
+            f"{sorted(t.name for t in agent.tools)}"
+        )
+
+
 class TestSalesManagerBrandAndPeer:
     """QA paketi: #4 (peer wiring) + #7 (brand awareness)."""
 
