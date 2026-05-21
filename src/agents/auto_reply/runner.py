@@ -57,7 +57,29 @@ def _count_auto_replies_sent_today(client: Any, messages_table: str) -> int:
 log = logging.getLogger("auto_reply")
 
 _PAUSE_ERROR_SEC = 60
+_PAUSE_MANAGER_SEC = 300  # 5dk — Direktor pause sirasinda bayrak re-check
 _HISTORY_LIMIT = 10
+
+
+def _is_paused() -> bool:
+    """Sales Director tarafindan auto_reply_paused bayragi atildi mi?
+
+    Mirror'i: src/agents/outreach/runner.py _is_outreach_paused. NOCODB_SETTINGS_TABLE_ID
+    yoksa (Guardian/Direktor altyapisi yok) -> False. NocoDB hatasinda da False
+    (defansif: yanlis durdurma > yanlis devam etmek burada degisiklik gerektirir).
+    """
+    table_id = os.environ.get("NOCODB_SETTINGS_TABLE_ID")
+    if not table_id:
+        return False
+    try:
+        result = get_nocodb_client().list_records(table_id, limit=1)
+        rows = result.get("list") or []
+        if not rows:
+            return False
+        return bool(rows[0].get("auto_reply_paused"))
+    except Exception as exc:
+        log.warning("auto_reply: pause-flag check failed: %s — assuming active", exc)
+        return False
 
 _SENDABLE_INTENTS = {"olumlu", "soru", "itiraz"}
 
@@ -301,6 +323,12 @@ async def loop(
     while max_iterations is None or iteration < max_iterations:
         iteration += 1
         try:
+            if _is_paused():
+                log.info("auto_reply: paused by manager, skipping tick")
+                if max_iterations == 1:
+                    return
+                await asyncio.sleep(_PAUSE_MANAGER_SEC)
+                continue
             inbounds = find_pending_inbounds(
                 get_nocodb_client(),
                 messages_table,

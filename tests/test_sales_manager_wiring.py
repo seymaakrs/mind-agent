@@ -21,7 +21,8 @@ class TestSalesManagerFactory:
         agent = create_sales_manager_agent()
         assert agent.name == "sales_manager"
         assert agent.handoff_description
-        assert "satis muduru" in agent.handoff_description.lower()
+        # Faz 1: Sales Manager -> Sales Director rename
+        assert "direktor" in agent.handoff_description.lower()
 
     def test_agent_has_all_read_tools(self):
         """Sales Manager mevcut 10 read tool'u korumalı."""
@@ -71,7 +72,8 @@ class TestSalesManagerInstructions:
         from src.agents.instructions import SALES_MANAGER_INSTRUCTIONS
 
         text = SALES_MANAGER_INSTRUCTIONS.lower()
-        assert "satis muduru" in text or "sales manager" in text
+        # Faz 1: rename to Sales Director
+        assert "satis direktoru" in text or "sales director" in text
         # Alt birimler ve yan birim referansi
         assert "avci" in text
         assert "dm yanitlayici" in text or "auto-reply" in text
