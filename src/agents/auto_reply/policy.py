@@ -18,6 +18,8 @@ class AutoReplyConfig:
     max_inbound_age_minutes: int = 60  # skip if older (likely missed window)
     model: str = "gpt-4o-mini"
     daily_cap: int = 100  # 0 = unlimited (cap disabled)
+    business_id: str = ""  # empty = no brand injection
+    enable_brand_aware: bool = True
 
     @classmethod
     def from_env(cls) -> "AutoReplyConfig":
@@ -27,6 +29,12 @@ class AutoReplyConfig:
                 return int(v) if v else default
             except ValueError:
                 return default
+
+        def _bool(name: str, default: bool) -> bool:
+            v = os.environ.get(name)
+            if v is None:
+                return default
+            return v.strip().lower() in ("1", "true", "yes")
 
         return cls(
             poll_interval_sec=_int("AUTO_REPLY_POLL_SEC", cls.poll_interval_sec),
@@ -38,6 +46,10 @@ class AutoReplyConfig:
             ),
             model=os.environ.get("AUTO_REPLY_MODEL", cls.model),
             daily_cap=_int("AUTO_REPLY_DAILY_CAP", cls.daily_cap),
+            business_id=os.environ.get("AUTO_REPLY_BUSINESS_ID", cls.business_id),
+            enable_brand_aware=_bool(
+                "AUTO_REPLY_BRAND_AWARE", cls.enable_brand_aware
+            ),
         )
 
     def jitter_delay(self, rng: random.Random | None = None) -> float:

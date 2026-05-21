@@ -58,6 +58,9 @@ kaynagi. Sen bu veriyi okuyup:
 - Tool basarisiz olursa: hatayi durust soyle, fallback onerisi yap.
 - Marka kimligi okuma su an YOK (TODO: BRAND_AWARE_PREFIX). Markaya
   ozgu yorum yapma sansin yok — sadece veri raporu ver.
+- DM Yanitlayici (Auto-reply) artik brand_identity okuyor — markaya
+  gore ton ayarliyor (Slowdays disindaki businessler icin de). Config:
+  AUTO_REPLY_BUSINESS_ID + AUTO_REPLY_BRAND_AWARE env'leri.
 
 ## MEVCUT TOOL'LARIN
 Okuma:

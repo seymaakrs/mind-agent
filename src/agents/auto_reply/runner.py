@@ -69,6 +69,7 @@ async def handle_one(
     leads_table: str,
     messages_table: str,
     dry_run: bool,
+    brand_prompt: str | None = None,
 ) -> dict[str, Any]:
     """End-to-end handling of a single inbound row."""
     row_id = inbound_row.get("Id")
@@ -99,7 +100,10 @@ async def handle_one(
             history = []
 
     decision: AutoReplyDecision = await decide_reply(
-        text, config=config, conversation_history=history
+        text,
+        config=config,
+        conversation_history=history,
+        brand_prompt=brand_prompt,
     )
     log.info(
         "auto_reply: classify row_id=%s intent=%s conf=%.2f obj=%s history=%d will_reply=%s",
@@ -261,6 +265,26 @@ async def loop(
         log.error("NOCODB tables not configured — auto_reply cannot run")
         return
 
+    brand_prompt: str | None = None
+    if config.enable_brand_aware and config.business_id:
+        try:
+            from src.tools.brand import load_brand_identity
+            bi = load_brand_identity(config.business_id)
+            if bi is not None:
+                brand_prompt = bi.prompt_summary()
+                log.info(
+                    "auto_reply: brand_identity loaded business=%s chars=%d",
+                    config.business_id, len(brand_prompt or ""),
+                )
+            else:
+                log.info(
+                    "auto_reply: no brand_identity for business=%s (fallback to anchors)",
+                    config.business_id,
+                )
+        except Exception as exc:
+            log.warning("auto_reply: brand identity load failed: %s", exc)
+            brand_prompt = None
+
     log.info(
         "auto_reply starting: poll=%ds batch=%d delay=%d-%ds model=%s dry_run=%s history_limit=%d max_iter=%s",
         config.poll_interval_sec,
@@ -298,6 +322,7 @@ async def loop(
                     leads_table=leads_table,
                     messages_table=messages_table,
                     dry_run=dry_run,
+                    brand_prompt=brand_prompt,
                 )
 
             if max_iterations == 1:
