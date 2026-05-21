@@ -30,8 +30,28 @@ from src.agents.auto_reply.policy import AutoReplyConfig
 from src.agents.auto_reply.responder import AutoReplyDecision, decide_reply
 from src.agents.auto_reply.targeting import fetch_recent_history, find_pending_inbounds
 from src.app.config import get_settings
-from src.infra.nocodb_client import get_nocodb_client
+from src.infra.nocodb_client import get_nocodb_client, today_filter_clause
 from src.infra.zernio import get_zernio_client
+
+
+def _count_auto_replies_sent_today(client: Any, messages_table: str) -> int:
+    """Bugun Auto-reply Agent tarafindan gonderilen Giden mesaj sayisi."""
+    try:
+        where = (
+            f"(yon,eq,Giden)~and(agent,eq,Auto-reply Agent)"
+            f"~and{today_filter_clause('tarih')}"
+        )
+        result = client.list_records(messages_table, where=where, limit=1)
+        if isinstance(result, dict):
+            page = result.get("pageInfo") or {}
+            total = page.get("totalRows")
+            if isinstance(total, int):
+                return total
+            return len(result.get("list", []))
+        return 0
+    except Exception as exc:
+        log.warning("auto_reply: daily count query failed: %s", exc)
+        return 0
 
 
 log = logging.getLogger("auto_reply")
@@ -102,6 +122,30 @@ async def handle_one(
         and decision.intent in _SENDABLE_INTENTS
         and decision.confidence >= 0.5
     )
+
+    if should_send and not dry_run and config.daily_cap > 0:
+        sent_today = _count_auto_replies_sent_today(nocodb, messages_table)
+        if sent_today >= config.daily_cap:
+            log.info(
+                "auto_reply: daily cap reached (%d/%d) - skipping send row_id=%s",
+                sent_today, config.daily_cap, row_id,
+            )
+            try:
+                nocodb.update_record(
+                    messages_table, int(row_id), {"auto_reply_processed": True}
+                )
+            except Exception as exc:
+                log.warning("auto_reply: cap-skip mark failed row_id=%s: %s", row_id, exc)
+            return {
+                "row_id": row_id,
+                "intent": decision.intent,
+                "confidence": decision.confidence,
+                "objection_type": decision.objection_type,
+                "reply_sent": False,
+                "skipped": "daily_cap",
+                "history_size": len(history),
+                "dry_run": dry_run,
+            }
 
     if should_send and not dry_run:
         zernio = get_zernio_client()

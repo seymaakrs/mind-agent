@@ -31,6 +31,7 @@ from typing import Any
 from src.app.config import get_settings
 from src.infra.errors import classify_error
 from src.infra.nocodb_client import get_nocodb_client
+from src.infra.phone import normalize_phone_e164
 
 
 log = logging.getLogger(__name__)
@@ -87,11 +88,14 @@ def derive_external_id(message: dict[str, Any]) -> str:
     sender = message.get("sender") or {}
     platform = (message.get("platform") or "unknown").lower()
     bsuid = sender.get("businessScopedUserId")
-    phone = sender.get("phoneNumber")
+    phone_raw = sender.get("phoneNumber")
     if bsuid:
         return f"zernio_{platform}_bsuid_{bsuid}"
-    if phone:
-        return f"zernio_{platform}_phone_{phone}"
+    if phone_raw:
+        # NOTE: existing rows pre-fix may have un-normalized phone in
+        # external_id; new rows will be canonical E.164.
+        normalized = normalize_phone_e164(phone_raw) or phone_raw
+        return f"zernio_{platform}_phone_{normalized}"
     sender_id = sender.get("id") or "unknown"
     return f"zernio_{platform}_id_{sender_id}"
 
@@ -99,9 +103,14 @@ def derive_external_id(message: dict[str, Any]) -> str:
 def _normalize_phone(sender: dict[str, Any]) -> str | None:
     phone = (sender.get("phoneNumber") or "").strip()
     if phone:
-        return phone
+        norm = normalize_phone_e164(phone)
+        if norm:
+            return norm
     sid = (sender.get("id") or "").strip()
     if sid.isdigit() and len(sid) >= 8:
+        norm = normalize_phone_e164("+" + sid)
+        if norm:
+            return norm
         return "+" + sid
     return None
 

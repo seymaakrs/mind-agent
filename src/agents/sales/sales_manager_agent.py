@@ -18,7 +18,7 @@ from typing import Any
 
 from agents import Agent
 
-from src.tools.sales.reporting_tools import get_reporting_tools
+from src.tools.sales.reporting_tools import get_management_tools, get_reporting_tools
 from src.agents.instructions.sales import SALES_MANAGER_INSTRUCTIONS
 
 
@@ -36,7 +36,7 @@ def create_sales_manager_agent(
             calistigi icin daha yuksek modele cikilabilir, ancak rapor
             anlatimi icin mini yeterli + ucuz).
     """
-    tools = list(get_reporting_tools())
+    tools = list(get_reporting_tools()) + list(get_management_tools())
 
     # Zernio MCP — Sales Manager'in ihtiyaci olabilir (reklam analitik,
     # post performansi). Lifespan ile connect edilmis aktif server'lari al.

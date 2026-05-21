@@ -18,6 +18,17 @@ from agents import function_tool
 from src.app.config import get_settings
 from src.infra.errors import classify_error
 from src.infra.nocodb_client import get_nocodb_client
+from src.infra.phone import normalize_phone_e164
+
+
+def _canonicalize_lead_fields(fields: dict[str, Any]) -> dict[str, Any]:
+    """Normalize telefon to E.164 in-place so dedup works across formats."""
+    raw = fields.get("telefon")
+    if raw:
+        norm = normalize_phone_e164(raw)
+        if norm:
+            fields["telefon"] = norm
+    return fields
 
 
 # ---------------------------------------------------------------------------
@@ -136,6 +147,7 @@ async def upsert_lead(
     if notlar:
         fields["notlar"] = notlar
 
+    _canonicalize_lead_fields(fields)
     try:
         result = get_nocodb_client().upsert_record(table_id, "external_id", fields)
         record = result["record"]

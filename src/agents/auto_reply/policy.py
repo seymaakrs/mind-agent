@@ -17,6 +17,7 @@ class AutoReplyConfig:
     batch_size: int = 10  # one poll handles up to N inbounds
     max_inbound_age_minutes: int = 60  # skip if older (likely missed window)
     model: str = "gpt-4o-mini"
+    daily_cap: int = 100  # 0 = unlimited (cap disabled)
 
     @classmethod
     def from_env(cls) -> "AutoReplyConfig":
@@ -36,6 +37,7 @@ class AutoReplyConfig:
                 "AUTO_REPLY_MAX_AGE_MIN", cls.max_inbound_age_minutes
             ),
             model=os.environ.get("AUTO_REPLY_MODEL", cls.model),
+            daily_cap=_int("AUTO_REPLY_DAILY_CAP", cls.daily_cap),
         )
 
     def jitter_delay(self, rng: random.Random | None = None) -> float:

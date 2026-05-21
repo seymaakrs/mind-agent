@@ -7,8 +7,10 @@ from .image import IMAGE_AGENT_CORE_INSTRUCTIONS, DEFAULT_IMAGE_PERSONA
 from .video import VIDEO_AGENT_CORE_INSTRUCTIONS, DEFAULT_VIDEO_PERSONA
 from .brand_synthesis import BRAND_SYNTHESIS_AGENT_INSTRUCTIONS
 from .brand_aware import BRAND_AWARE_PREFIX
+from .sales import SALES_MANAGER_INSTRUCTIONS
 
 __all__ = [
+    "SALES_MANAGER_INSTRUCTIONS",
     "MARKETING_AGENT_INSTRUCTIONS",
     "ANALYSIS_AGENT_INSTRUCTIONS",
     "build_orchestrator_instructions",
