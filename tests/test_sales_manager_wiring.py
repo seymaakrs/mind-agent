@@ -44,21 +44,22 @@ class TestSalesManagerFactory:
         missing = required - tool_names
         assert not missing, f"Missing read tools: {missing}"
 
-    def test_agent_has_no_write_tools_yet(self):
-        """Skeleton: yazma tool'lari TODO listesinde. Su an yok."""
+    def test_agent_has_all_write_tools(self):
+        """TODO A tamam: 6 yazma yetkisi Muduere bagli."""
         from src.agents.sales.sales_manager_agent import create_sales_manager_agent
 
         agent = create_sales_manager_agent()
         tool_names = {t.name for t in agent.tools}
-        forbidden = {
+        required_writes = {
             "outreach_pause",
             "outreach_resume",
             "lead_reassign",
+            "lead_priority_set",
             "auto_reply_template_update",
+            "outreach_daily_limit_set",
         }
-        # Su an hicbiri olmamali
-        leaked = forbidden & tool_names
-        assert not leaked, f"Skeleton aşamasında olmaması gereken yazma tool'lari: {leaked}"
+        missing = required_writes - tool_names
+        assert not missing, f"Eksik yazma tool'lari: {missing}"
 
 
 class TestSalesManagerInstructions:
@@ -81,13 +82,15 @@ class TestSalesManagerInstructions:
         # NocoDB tek SoT
         assert "nocodb" in text
 
-    def test_instructions_mention_no_write_yet(self):
-        """Persona yazma yetkisi olmadigini ve TODO'da oldugunu soylemeli."""
+    def test_instructions_describe_write_authority(self):
+        """TODO A sonrasi: persona yazma yetkilerini ve gerekce kuralini anlatmali."""
         from src.agents.instructions import SALES_MANAGER_INSTRUCTIONS
 
         text = SALES_MANAGER_INSTRUCTIONS.lower()
         assert "yazma" in text
-        assert "todo" in text or "okuma" in text
+        assert "outreach_pause" in text
+        assert "lead_reassign" in text
+        assert "gerekce" in text or "sebep" in text  # audit log icin sebep zorunlu
 
 
 class TestRegistry:

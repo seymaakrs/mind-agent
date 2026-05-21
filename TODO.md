@@ -28,12 +28,15 @@ Her madde:
 
 Önceki "Sales Analyst" agent'ı **Sales Manager (Satış Müdürü)** olarak yeniden konumlandı. Şu anki versiyon iskelet: persona güncel, mevcut read tool'lar koruldu, orchestrator yeni wrapper'a bağlandı. Aşağıdaki yetenekler **bilinçli olarak** sonraki PR'lara bırakıldı.
 
-### A. Yazma yetkileri (manager aksiyonları)
-- **outreach_pause / outreach_resume** — Bekçi otomatik pause yapıyor; Müdür manuel override edebilmeli (ve gerekçe NocoDB system_settings'e yazılmalı).
-- **lead_reassign(lead_id, new_owner)** — Bir lead'i Şeyma'dan başka birine devret.
-- **lead_priority_set(lead_id, priority)** — Önceliğe göre sıralama.
-- **auto_reply_template_update** — Auto-reply Yanıtlayıcı template'ını güncelleme.
-- **outreach_daily_limit_set** — günlük outreach kapasitesini ayarla (ban riskine göre).
+### A. Yazma yetkileri (manager aksiyonları) ✅ (2026-05-20)
+- ✅ **outreach_pause / outreach_resume** — kampanya manuel override
+- ✅ **lead_reassign(lead_id, new_owner, reason)** — atama değiştir
+- ✅ **lead_priority_set(lead_id, priority, reason)** — öncelik (acil/yuksek/normal/dusuk)
+- ✅ **auto_reply_template_update(intent, new_text, reason)** — DM template güncelle
+- ✅ **outreach_daily_limit_set(new_limit, reason)** — günlük kapasite (0-2000)
+- Her aksiyon `manager_actions` tablosuna audit log yazar (best-effort, tablo yoksa logging.info'ya düşer).
+- `NOCODB_MANAGER_ACTIONS_TABLE_ID` env eklenirse persistent log. Kurma migration scripti TODO.
+- Her aksiyon en az 5 karakterlik gerekçe ister (sebep audit'e geçer).
 
 ### B. Yatay iletişim — Meta (Reklam Uzmanı) ile ⏳ (2026-05-20 kısmi)
 - ✅ **Peer handoff onerisi** instructions'ta: Müdür çıktısında "[Reklam Uzmanı'na yönlendir]" bloğu üretir → Şef `meta_agent_tool`'u tetikler. Tasarım kararı: meta_agent_tool Şef'te kalsın (peer via Şef).
