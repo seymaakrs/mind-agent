@@ -1,64 +1,92 @@
-"""Sales Manager (Satis Muduru) — alt birim (Avci, DM Yanitlayici) yoneten,
-yan birim (Reklam Uzmani) ile koordine olan agent.
+"""Sales Director (Satis Direktoru) — Faz 1 yukseltmesi.
 
-Eski adi 'Sales Analyst' idi (sadece okuma, rapor). Bu yeni versiyon ayni
-read tool'larini koruyor ama persona yonetici — aksiyon onerici, oncelik
-verici, koordine eden. Yazma yetkisi henuz YOK; TODO listesinde:
+Eski adlari: Sales Analyst (read-only rapor) -> Sales Manager (read + outreach
+pause/resume) -> **Sales Director** (yazma + hafiza + brand + pipeline + KPI).
 
-- TODO: outreach_pause / outreach_resume tool'lari
-- TODO: auto_reply_template_update
-- TODO: lead_reassign
-- TODO: meta_agent_tool dogrudan emrinde (yatay iletisim)
-- TODO: brand_identity okuma (BRAND_AWARE_PREFIX)
-- TODO: sales memory (get_sales_memory / update_sales_memory)
+Faz 2 (alt mudurler — Avci Muduru, DM Muduru, Reklam Muduru) sonraki PR'da.
+Su an Direktor TEK figur, ~22 tool eline veriliyor.
+
+NOT: Agent.name STRING'i 'sales_manager' olarak KALIYOR — orchestrator routing
+'sales_manager_tool' uzerinden gidiyor. handoff_description 'Satis Direktoru'
+olarak guncellendi.
 """
 from __future__ import annotations
 
+import logging
+import os
 from typing import Any
 
 from agents import Agent
 
+from src.agents.instructions.sales import SALES_DIRECTOR_INSTRUCTIONS
+from src.tools.sales.management_tools import get_management_tools
 from src.tools.sales.reporting_tools import get_reporting_tools
-from src.agents.instructions.sales import SALES_MANAGER_INSTRUCTIONS
+
+
+log = logging.getLogger(__name__)
+
+
+def _build_brand_aware_instructions(base: str) -> str:
+    """Optionally prepend brand identity context to instructions.
+
+    Pattern mirror: src/agents/auto_reply/runner.py brand load. Env-controlled:
+    SALES_DIRECTOR_BUSINESS_ID set ise yuklemeyi dener; basarisizsa warn + skip.
+    """
+    business_id = os.environ.get("SALES_DIRECTOR_BUSINESS_ID")
+    if not business_id:
+        return base
+    try:
+        from src.tools.brand import load_brand_identity
+        bi = load_brand_identity(business_id)
+        if bi is None:
+            log.info(
+                "sales_director: no brand_identity for business=%s (skipping prefix)",
+                business_id,
+            )
+            return base
+        summary = bi.prompt_summary()
+        if not summary:
+            return base
+        log.info(
+            "sales_director: brand_identity loaded business=%s chars=%d",
+            business_id, len(summary),
+        )
+        return f"## BRAND CONTEXT\n{summary}\n\n" + base
+    except Exception as exc:
+        log.warning("sales_director: brand identity load failed: %s", exc)
+        return base
 
 
 def create_sales_manager_agent(
     model: str | None = None,
 ) -> Agent[dict[str, Any]]:
-    """Sales Manager agent factory.
+    """Sales Director agent factory.
 
-    Tool seti (su an okuma): count_leads, list_leads, lead_funnel,
-    channel_breakdown, stale_leads, lead_timeline, daily_digest,
-    outreach_status, auto_reply_status, outreach_health.
-
-    Args:
-        model: Opsiyonel override. Default gpt-4o-mini (Zernio MCP'siz
-            calistigi icin daha yuksek modele cikilabilir, ancak rapor
-            anlatimi icin mini yeterli + ucuz).
+    Tool seti (yaklasik 22): 10 read (reporting_tools) + 11 yonetim
+    (management_tools — outreach + auto_reply pause/resume, lead writes,
+    sales memory get/update, pipeline_forecast, weekly_kpi).
     """
-    tools = list(get_reporting_tools())
+    tools = list(get_reporting_tools()) + list(get_management_tools())
 
-    # Zernio MCP — Sales Manager'in ihtiyaci olabilir (reklam analitik,
-    # post performansi). Lifespan ile connect edilmis aktif server'lari al.
     from src.infra.zernio.mcp_server import get_active_mcp_servers
     mcp_servers = get_active_mcp_servers()
 
+    instructions = _build_brand_aware_instructions(SALES_DIRECTOR_INSTRUCTIONS)
+
     return Agent(
-        name="sales_manager",
+        name="sales_manager",  # IMMUTABLE — orchestrator routing kirilmasin
         handoff_description=(
-            "Satis Muduru: NocoDB CRM uzerinden lead/outreach/auto-reply "
-            "durumunu raporlar, aksiyon onerir. Alt birim (Avci, DM "
-            "Yanitlayici) durumlarini izler; yan birim (Reklam Uzmani) "
-            "ile koordine olur. Yazma yapmaz — su an okuma + danismanlik."
+            "Satis Direktoru: NocoDB CRM uzerinden lead/outreach/auto-reply "
+            "durumunu yonetir, lead atar, asama gunceller, pipeline tahmini "
+            "yapar, haftalik KPI takip eder, kalici hafizaya yazi yazar. "
+            "Faz 1 holding mimarisi — alt mudurler (Avci/DM/Reklam) sonraki "
+            "fazda."
         ),
-        instructions=SALES_MANAGER_INSTRUCTIONS,
+        instructions=instructions,
         tools=tools,
         mcp_servers=mcp_servers,
         tool_use_behavior="run_llm_again",
         output_type=str,
-        # gpt-4o-mini: ucuz, hizli, raporlama icin yeterli. Zernio MCP
-        # ~80 tool yuku gpt-4o'nun TPM limitini asiyordu (Sales Analyst
-        # zamani tespit edildi). mini'nin TPM limiti yuksek.
         model=model or "gpt-4o-mini",
     )
 

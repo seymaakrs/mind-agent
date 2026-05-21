@@ -21,7 +21,8 @@ class TestSalesManagerFactory:
         agent = create_sales_manager_agent()
         assert agent.name == "sales_manager"
         assert agent.handoff_description
-        assert "satis muduru" in agent.handoff_description.lower()
+        # Faz 1: Sales Manager -> Sales Director rename
+        assert "direktor" in agent.handoff_description.lower()
 
     def test_agent_has_all_read_tools(self):
         """Sales Manager mevcut 10 read tool'u korumalı."""
@@ -44,21 +45,19 @@ class TestSalesManagerFactory:
         missing = required - tool_names
         assert not missing, f"Missing read tools: {missing}"
 
-    def test_agent_has_no_write_tools_yet(self):
-        """Skeleton: yazma tool'lari TODO listesinde. Su an yok."""
+    def test_agent_has_limited_write_tools(self):
+        """Yazma yetkisi SINIRLI: yalniz outreach_pause/outreach_resume."""
         from src.agents.sales.sales_manager_agent import create_sales_manager_agent
 
         agent = create_sales_manager_agent()
         tool_names = {t.name for t in agent.tools}
-        forbidden = {
-            "outreach_pause",
-            "outreach_resume",
-            "lead_reassign",
-            "auto_reply_template_update",
-        }
-        # Su an hicbiri olmamali
+        # Bunlar olmali
+        assert "outreach_pause" in tool_names
+        assert "outreach_resume" in tool_names
+        # Bunlar HALA olmamali
+        forbidden = {"lead_reassign", "auto_reply_template_update"}
         leaked = forbidden & tool_names
-        assert not leaked, f"Skeleton aşamasında olmaması gereken yazma tool'lari: {leaked}"
+        assert not leaked, f"Olmamasi gereken yazma tool'lari: {leaked}"
 
 
 class TestSalesManagerInstructions:
@@ -73,7 +72,8 @@ class TestSalesManagerInstructions:
         from src.agents.instructions import SALES_MANAGER_INSTRUCTIONS
 
         text = SALES_MANAGER_INSTRUCTIONS.lower()
-        assert "satis muduru" in text or "sales manager" in text
+        # Faz 1: rename to Sales Director
+        assert "satis direktoru" in text or "sales director" in text
         # Alt birimler ve yan birim referansi
         assert "avci" in text
         assert "dm yanitlayici" in text or "auto-reply" in text

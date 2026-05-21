@@ -30,14 +30,56 @@ from src.agents.auto_reply.policy import AutoReplyConfig
 from src.agents.auto_reply.responder import AutoReplyDecision, decide_reply
 from src.agents.auto_reply.targeting import fetch_recent_history, find_pending_inbounds
 from src.app.config import get_settings
-from src.infra.nocodb_client import get_nocodb_client
+from src.infra.nocodb_client import get_nocodb_client, today_filter_clause
 from src.infra.zernio import get_zernio_client
+
+
+def _count_auto_replies_sent_today(client: Any, messages_table: str) -> int:
+    """Bugun Auto-reply Agent tarafindan gonderilen Giden mesaj sayisi."""
+    try:
+        where = (
+            f"(yon,eq,Giden)~and(agent,eq,Auto-reply Agent)"
+            f"~and{today_filter_clause('tarih')}"
+        )
+        result = client.list_records(messages_table, where=where, limit=1)
+        if isinstance(result, dict):
+            page = result.get("pageInfo") or {}
+            total = page.get("totalRows")
+            if isinstance(total, int):
+                return total
+            return len(result.get("list", []))
+        return 0
+    except Exception as exc:
+        log.warning("auto_reply: daily count query failed: %s", exc)
+        return 0
 
 
 log = logging.getLogger("auto_reply")
 
 _PAUSE_ERROR_SEC = 60
+_PAUSE_MANAGER_SEC = 300  # 5dk — Direktor pause sirasinda bayrak re-check
 _HISTORY_LIMIT = 10
+
+
+def _is_paused() -> bool:
+    """Sales Director tarafindan auto_reply_paused bayragi atildi mi?
+
+    Mirror'i: src/agents/outreach/runner.py _is_outreach_paused. NOCODB_SETTINGS_TABLE_ID
+    yoksa (Guardian/Direktor altyapisi yok) -> False. NocoDB hatasinda da False
+    (defansif: yanlis durdurma > yanlis devam etmek burada degisiklik gerektirir).
+    """
+    table_id = os.environ.get("NOCODB_SETTINGS_TABLE_ID")
+    if not table_id:
+        return False
+    try:
+        result = get_nocodb_client().list_records(table_id, limit=1)
+        rows = result.get("list") or []
+        if not rows:
+            return False
+        return bool(rows[0].get("auto_reply_paused"))
+    except Exception as exc:
+        log.warning("auto_reply: pause-flag check failed: %s — assuming active", exc)
+        return False
 
 _SENDABLE_INTENTS = {"olumlu", "soru", "itiraz"}
 
@@ -49,6 +91,7 @@ async def handle_one(
     leads_table: str,
     messages_table: str,
     dry_run: bool,
+    brand_prompt: str | None = None,
 ) -> dict[str, Any]:
     """End-to-end handling of a single inbound row."""
     row_id = inbound_row.get("Id")
@@ -79,7 +122,10 @@ async def handle_one(
             history = []
 
     decision: AutoReplyDecision = await decide_reply(
-        text, config=config, conversation_history=history
+        text,
+        config=config,
+        conversation_history=history,
+        brand_prompt=brand_prompt,
     )
     log.info(
         "auto_reply: classify row_id=%s intent=%s conf=%.2f obj=%s history=%d will_reply=%s",
@@ -102,6 +148,30 @@ async def handle_one(
         and decision.intent in _SENDABLE_INTENTS
         and decision.confidence >= 0.5
     )
+
+    if should_send and not dry_run and config.daily_cap > 0:
+        sent_today = _count_auto_replies_sent_today(nocodb, messages_table)
+        if sent_today >= config.daily_cap:
+            log.info(
+                "auto_reply: daily cap reached (%d/%d) - skipping send row_id=%s",
+                sent_today, config.daily_cap, row_id,
+            )
+            try:
+                nocodb.update_record(
+                    messages_table, int(row_id), {"auto_reply_processed": True}
+                )
+            except Exception as exc:
+                log.warning("auto_reply: cap-skip mark failed row_id=%s: %s", row_id, exc)
+            return {
+                "row_id": row_id,
+                "intent": decision.intent,
+                "confidence": decision.confidence,
+                "objection_type": decision.objection_type,
+                "reply_sent": False,
+                "skipped": "daily_cap",
+                "history_size": len(history),
+                "dry_run": dry_run,
+            }
 
     if should_send and not dry_run:
         zernio = get_zernio_client()
@@ -217,6 +287,26 @@ async def loop(
         log.error("NOCODB tables not configured — auto_reply cannot run")
         return
 
+    brand_prompt: str | None = None
+    if config.enable_brand_aware and config.business_id:
+        try:
+            from src.tools.brand import load_brand_identity
+            bi = load_brand_identity(config.business_id)
+            if bi is not None:
+                brand_prompt = bi.prompt_summary()
+                log.info(
+                    "auto_reply: brand_identity loaded business=%s chars=%d",
+                    config.business_id, len(brand_prompt or ""),
+                )
+            else:
+                log.info(
+                    "auto_reply: no brand_identity for business=%s (fallback to anchors)",
+                    config.business_id,
+                )
+        except Exception as exc:
+            log.warning("auto_reply: brand identity load failed: %s", exc)
+            brand_prompt = None
+
     log.info(
         "auto_reply starting: poll=%ds batch=%d delay=%d-%ds model=%s dry_run=%s history_limit=%d max_iter=%s",
         config.poll_interval_sec,
@@ -233,6 +323,12 @@ async def loop(
     while max_iterations is None or iteration < max_iterations:
         iteration += 1
         try:
+            if _is_paused():
+                log.info("auto_reply: paused by manager, skipping tick")
+                if max_iterations == 1:
+                    return
+                await asyncio.sleep(_PAUSE_MANAGER_SEC)
+                continue
             inbounds = find_pending_inbounds(
                 get_nocodb_client(),
                 messages_table,
@@ -254,6 +350,7 @@ async def loop(
                     leads_table=leads_table,
                     messages_table=messages_table,
                     dry_run=dry_run,
+                    brand_prompt=brand_prompt,
                 )
 
             if max_iterations == 1:
