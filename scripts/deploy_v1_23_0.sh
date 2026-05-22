@@ -69,6 +69,7 @@ gcloud run deploy "${SERVICE}" \
   --allow-unauthenticated \
   --env-vars-file="${ENV_FILE}" \
   --update-secrets="/secrets/firebase/key.json=firebase-credentials:latest,/secrets/gcp/key.json=gcp-credentials:latest" \
+  --port=8000 \
   --memory=2Gi \
   --cpu=2 \
   --timeout=300 \
