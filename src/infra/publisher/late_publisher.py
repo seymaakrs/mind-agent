@@ -36,6 +36,7 @@ def _from_late_dict(raw: dict[str, Any]) -> PublishResult:
         status=raw.get("status"),
         type=raw.get("type"),
         item_count=raw.get("item_count"),
+        published_at=raw.get("published_at"),
         raw=raw,
     )
 

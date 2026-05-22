@@ -150,6 +150,7 @@ def _from_zernio_response(
         platform_post_id=first.get("platformPostId"),
         platform_post_url=first.get("platformPostUrl"),
         status=first.get("status") or post.get("status"),
+        published_at=first.get("publishedAt") or post.get("publishedAt"),
         type=type_label,
         item_count=item_count,
         raw=raw,

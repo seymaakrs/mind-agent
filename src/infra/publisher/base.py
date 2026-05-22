@@ -33,6 +33,7 @@ class PublishResult:
     platform_post_url: str | None = None    # public URL on the platform
     status: str | None = None               # "published" | "scheduled" | "failed" | ...
     type: str | None = None                 # "image" | "video" | "story" | "carousel"
+    published_at: str | None = None         # ISO timestamp when the platform confirmed publish
     error: str | None = None
     status_code: int | None = None          # set when success=False
     item_count: int | None = None           # carousel size, when applicable
@@ -51,6 +52,8 @@ class PublishResult:
             out["type"] = self.type
         if self.item_count is not None:
             out["item_count"] = self.item_count
+        if self.published_at is not None:
+            out["published_at"] = self.published_at
         if not self.success:
             if self.error is not None:
                 out["error"] = self.error
