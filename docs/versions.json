@@ -5,14 +5,14 @@
     {
       "id": "2026-05-22-canli-test-konsolidasyon",
       "date": "2026-05-22",
-      "title": "Canlı test + iki devir notu konsolidasyonu",
+      "title": "Canlı test ZAFER: 133 sıcak lead döndü",
       "branch": "claude/zen-wozniak-LEuNW",
-      "head_commit": "26c9453",
+      "head_commit": "cf7c5eb",
       "tests": {
-        "passed": 0,
+        "passed": 1,
         "failed": 0,
-        "new_added": 0,
-        "note": "smoke test bekliyor (OpenAI key yenilendi, Cloud Run push pending)"
+        "new_added": 1,
+        "note": "E2E smoke OK: orchestrator → sales_manager → count_leads → NocoDB → '133 sicak lead'"
       },
       "agents": [
         {
@@ -21,19 +21,19 @@
           "repo": "seymaakrs/mind-agent",
           "branch": "claude/vibrant-brown-qENng (lokal, push edilmedi)",
           "commit": "2c95d95",
-          "status": "blocked",
-          "summary": "Cloud Run v1.23.0 deploy, OpenAI 401 blocker, key yenilendi 2026-05-22"
+          "status": "completed",
+          "summary": "Cloud Run v1.23.0 deploy + OpenAI yeni key + smoke OK"
         },
         {
           "code": "B",
           "name": "Durum / Versiyon Paneli",
           "repo": "seymaakrs/mind-id",
           "branch": "claude/fervent-knuth-t10qy",
-          "commit": "cecb54c",
+          "commit": "849680e",
           "files_changed": 2,
           "tests_added": 0,
           "status": "open",
-          "summary": "PR #15 draft, sidebar Durum paneli"
+          "summary": "PR #15 draft, URL fix + versions.json bootstrap"
         },
         {
           "code": "C",
@@ -41,28 +41,29 @@
           "repo": "seymaakrs/mind-agent",
           "branch": "—",
           "status": "blocked",
-          "summary": "Faz B1/B2/C/D yok, image build bekliyor"
+          "summary": "Ayrı sprint — Faz B1/B2/C/D bekliyor"
         },
         {
           "code": "D",
-          "name": "Konsolidasyon (bu session)",
-          "repo": "seymaakrs/mind-agent",
+          "name": "Konsolidasyon",
+          "repo": "seymaakrs/mind-id",
           "branch": "claude/zen-wozniak-LEuNW",
-          "status": "in_progress",
-          "summary": "İki HANDOFF birleştirildi, versions.json oluşturuldu"
+          "commit": "eb4e4b7",
+          "status": "completed",
+          "summary": "DEVIR-MASTER + versions.json + URL fix, PR #16 açık"
         }
       ]
     }
   ],
   "deploy_checklist": [
-    { "step": 1, "task": "OpenAI API key yenile + Cloud Run env update", "done": false },
-    { "step": 2, "task": "Secret Manager: ZERNIO_API_KEY, ZERNIO_WEBHOOK_SECRET, LANGFUSE_*", "done": false },
+    { "step": 1, "task": "OpenAI API key yenile + Cloud Run env update", "done": true },
+    { "step": 2, "task": "E2E smoke test (count_leads, NocoDB)", "done": true },
     { "step": 3, "task": "Firestore secrets/other.zernio_api_key", "done": true },
-    { "step": 4, "task": "Cloud Run env update + GUARDIAN_ALERT_WEBHOOK_URL", "done": false },
-    { "step": 5, "task": "Cloud Run job zernio-observer (DRY_RUN=true)", "done": false },
-    { "step": 6, "task": "Zernio panel webhook URL switch + HMAC", "done": false },
-    { "step": 7, "task": "Canary v1.23.0 %10 deploy", "done": false },
-    { "step": 8, "task": "Smoke test (/admin/zernio/status + lead/banner/video)", "done": false },
-    { "step": 9, "task": "%100 cutover + mind-id vercel --prod", "done": false }
+    { "step": 4, "task": "OpenAI key rotate + GCP Secret Manager'a taşı", "done": false },
+    { "step": 5, "task": "mind-id vercel --prod", "done": false },
+    { "step": 6, "task": "PR #15 ve PR #16 review + merge", "done": false },
+    { "step": 7, "task": "Zernio panel webhook URL + HMAC switch", "done": false },
+    { "step": 8, "task": "NocoDB token revoke + HTTPS + VPC connector", "done": false },
+    { "step": 9, "task": "v1.23.0 atomik plan (Faz B1/B2/C/D, ayrı sprint)", "done": false }
   ]
 }
