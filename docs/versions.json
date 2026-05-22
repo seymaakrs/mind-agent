@@ -5,14 +5,14 @@
     {
       "id": "2026-05-22-canli-test-konsolidasyon",
       "date": "2026-05-22",
-      "title": "Canlı test ZAFER: 133 sıcak lead döndü",
+      "title": "Canlı sistem tamamlandı: chat + paneli + admin + webhook",
       "branch": "claude/zen-wozniak-LEuNW",
-      "head_commit": "cf7c5eb",
+      "head_commit": "039d203",
       "tests": {
         "passed": 1,
         "failed": 0,
         "new_added": 1,
-        "note": "E2E smoke OK: orchestrator → sales_manager → count_leads → NocoDB → '133 sicak lead'"
+        "note": "Production OK: chat 133 lead, Durum paneli canlı, 2 admin claim set"
       },
       "agents": [
         {
@@ -28,12 +28,12 @@
           "code": "B",
           "name": "Durum / Versiyon Paneli",
           "repo": "seymaakrs/mind-id",
-          "branch": "claude/fervent-knuth-t10qy",
-          "commit": "849680e",
+          "branch": "main (merged #15)",
+          "commit": "920e2ff",
           "files_changed": 2,
           "tests_added": 0,
-          "status": "open",
-          "summary": "PR #15 draft, URL fix + versions.json bootstrap"
+          "status": "merged",
+          "summary": "Production'da canlı"
         },
         {
           "code": "C",
@@ -41,16 +41,16 @@
           "repo": "seymaakrs/mind-agent",
           "branch": "—",
           "status": "blocked",
-          "summary": "Ayrı sprint — Faz B1/B2/C/D bekliyor"
+          "summary": "İhtiyaç ortaya çıkınca tekrar bak — şu an gerek yok"
         },
         {
           "code": "D",
-          "name": "Konsolidasyon",
+          "name": "Konsolidasyon + Admin",
           "repo": "seymaakrs/mind-id",
-          "branch": "claude/zen-wozniak-LEuNW",
-          "commit": "eb4e4b7",
+          "branch": "main (merged #16)",
+          "commit": "6a25eb6",
           "status": "completed",
-          "summary": "DEVIR-MASTER + versions.json + URL fix, PR #16 açık"
+          "summary": "DEVIR-MASTER + 2 admin claim (Seyma, Beyza)"
         }
       ]
     }
@@ -59,11 +59,11 @@
     { "step": 1, "task": "OpenAI API key yenile + Cloud Run env update", "done": true },
     { "step": 2, "task": "E2E smoke test (count_leads, NocoDB)", "done": true },
     { "step": 3, "task": "Firestore secrets/other.zernio_api_key", "done": true },
-    { "step": 4, "task": "OpenAI key rotate + GCP Secret Manager'a taşı", "done": false },
-    { "step": 5, "task": "mind-id vercel --prod", "done": false },
-    { "step": 6, "task": "PR #15 ve PR #16 review + merge", "done": false },
-    { "step": 7, "task": "Zernio panel webhook URL + HMAC switch", "done": false },
-    { "step": 8, "task": "NocoDB token revoke + HTTPS + VPC connector", "done": false },
-    { "step": 9, "task": "v1.23.0 atomik plan (Faz B1/B2/C/D, ayrı sprint)", "done": false }
+    { "step": 4, "task": "PR #15 + PR #16 merge + production deploy", "done": true },
+    { "step": 5, "task": "Firestore settings/app_settings serverUrl doğrulama", "done": true },
+    { "step": 6, "task": "Zernio webhook (n8n → lead-toplama, 21 gün aktif)", "done": true },
+    { "step": 7, "task": "Admin custom claim (Seyma + Beyza)", "done": true },
+    { "step": 8, "task": "OpenAI key rotate + GCP Secret Manager (güvenlik)", "done": false },
+    { "step": 9, "task": "NocoDB token rotate + Secret Manager + HTTPS (güvenlik)", "done": false }
   ]
 }
