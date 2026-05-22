@@ -17,6 +17,12 @@ from typing import Any
 
 
 # Allowed contentTypes per OpenAPI enum on /v1/media/presign.
+# Server-side caps (kept in sync with OpenAPI). Validated client-side so
+# the caller fails fast instead of doing a doomed upload over the wire.
+PRESIGN_MAX_BYTES = 5 * 1024 * 1024 * 1024  # 5 GB
+DIRECT_UPLOAD_MAX_BYTES = 25 * 1024 * 1024  # 25 MB
+
+
 ALLOWED_CONTENT_TYPES = (
     "image/jpeg",
     "image/jpg",
@@ -53,6 +59,10 @@ class _MediaMixin:
                 f"unsupported content_type={content_type!r}; "
                 f"allowed: {', '.join(ALLOWED_CONTENT_TYPES)}"
             )
+        if size is not None and size > PRESIGN_MAX_BYTES:
+            raise ValueError(
+                f"size={size} exceeds Zernio presign cap of {PRESIGN_MAX_BYTES} bytes (5GB)"
+            )
         body: dict[str, Any] = {"filename": filename, "contentType": content_type}
         if size is not None:
             body["size"] = size
@@ -69,6 +79,11 @@ class _MediaMixin:
         Returns ``{url, filename, contentType, size}``; ``url`` is the
         public URL usable in posts / inbox attachments.
         """
+        if len(file_bytes) > DIRECT_UPLOAD_MAX_BYTES:
+            raise ValueError(
+                f"file_bytes ({len(file_bytes)} bytes) exceeds Zernio upload-direct "
+                f"cap of {DIRECT_UPLOAD_MAX_BYTES} bytes (25MB); use presign_media instead"
+            )
         files = {"file": (filename, file_bytes, content_type)}
         data = {"contentType": content_type}
         return await self._post_multipart("/media/upload-direct", files=files, data=data)

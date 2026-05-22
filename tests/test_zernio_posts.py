@@ -236,6 +236,16 @@ class TestPresignMedia:
             await client.presign_media("x.heic", "image/heic")
 
 
+class TestPresignSizeCap:
+    @pytest.mark.asyncio
+    async def test_presign_rejects_over_5gb(self):
+        from src.infra.zernio.media import PRESIGN_MAX_BYTES
+
+        client = _client()
+        with pytest.raises(ValueError, match="5GB"):
+            await client.presign_media("big.mp4", "video/mp4", size=PRESIGN_MAX_BYTES + 1)
+
+
 class TestUploadMediaDirect:
     @pytest.mark.asyncio
     async def test_upload_direct_uses_multipart(self):
@@ -272,3 +282,51 @@ class TestUploadMediaDirect:
         assert "Content-Type" not in headers
         url = mock_post.await_args.args[0]
         assert url.endswith("/media/upload-direct")
+
+    @pytest.mark.asyncio
+    async def test_upload_direct_rejects_over_25mb(self):
+        from src.infra.zernio.media import DIRECT_UPLOAD_MAX_BYTES
+
+        client = _client()
+        big = b"\x00" * (DIRECT_UPLOAD_MAX_BYTES + 1)
+        with pytest.raises(ValueError, match="25MB"):
+            await client.upload_media_direct(big, "x.jpg", "image/jpeg")
+
+
+# ---------------------------------------------------------------------------
+# Base layer — error handling + multipart plumbing
+# ---------------------------------------------------------------------------
+
+
+class TestBaseErrorHandling:
+    @pytest.mark.asyncio
+    async def test_4xx_on_create_post_raises_service_error(self):
+        from src.infra.errors import ServiceError
+
+        client = _client()
+        with _patch_async_client(
+            "post", _mock_response(400, text_body="bad platform")
+        ):
+            with pytest.raises(ServiceError) as exc:
+                await client.create_post(
+                    content="x",
+                    platforms=[{"platform": "twitter", "accountId": "a"}],
+                    publish_now=True,
+                )
+
+        assert exc.value.status_code == 400
+        assert exc.value.service == "zernio"
+
+    @pytest.mark.asyncio
+    async def test_5xx_on_get_post_raises_service_error(self):
+        from src.infra.errors import ServiceError
+
+        client = _client()
+        with _patch_async_client(
+            "get", _mock_response(503, text_body="upstream down")
+        ):
+            with pytest.raises(ServiceError) as exc:
+                await client.get_post("abc")
+
+        assert exc.value.status_code == 503
+
