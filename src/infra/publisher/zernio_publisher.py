@@ -415,6 +415,74 @@ class ZernioPublisher:
 
     # ----- YouTube -------------------------------------------------------
 
+    # ----- Analytics ----------------------------------------------------
+
+    async def get_analytics(
+        self,
+        *,
+        post_id: str | None = None,
+        profile_id: str | None = None,
+        platform: str = "instagram",
+        date_from: str | None = None,
+        date_to: str | None = None,
+        limit: int = 50,
+        page: int = 1,
+        sort_by: str = "date",
+        order: str = "desc",
+    ) -> dict[str, Any]:
+        """Delegate to ZernioClient.get_analytics and normalize the shape.
+
+        Zernio's response carries the post fields at the top level for
+        single-post mode (``{postId, latePostId, analytics, ...}``) and
+        under ``posts`` for list mode, with list items keyed by ``_id``
+        instead of ``postId``. We rewrap them into Late's historical
+        ``{success, post, ...}`` / ``{success, posts, pagination, ...}``
+        envelope so the tool layer can consume both backends with one
+        code path.
+        """
+        try:
+            raw = await self._client.get_analytics(
+                post_id=post_id,
+                profile_id=profile_id or self.account_id,
+                platform=platform,
+                date_from=date_from,
+                date_to=date_to,
+                limit=limit,
+                page=page,
+                sort_by=sort_by,
+                order=order,
+            )
+        except Exception as exc:  # noqa: BLE001
+            classified = classify_error(exc, "zernio")
+            return {
+                "success": False,
+                "error": classified.get("error") or str(exc),
+                "status_code": (
+                    exc.status_code if isinstance(exc, ServiceError)
+                    else classified.get("status_code")
+                ),
+            }
+
+        if post_id:
+            return {"success": True, "post": raw}
+
+        posts = list(raw.get("posts", []) or [])
+        for p in posts:
+            # Zernio list items expose `_id`; tool code reads `postId`.
+            if isinstance(p, dict) and "postId" not in p and "_id" in p:
+                p["postId"] = p["_id"]
+
+        out: dict[str, Any] = {
+            "success": True,
+            "posts": posts,
+            "pagination": raw.get("pagination", {}),
+        }
+        if "overview" in raw:
+            out["overview"] = raw["overview"]
+        if "accounts" in raw:
+            out["accounts"] = raw["accounts"]
+        return out
+
     async def youtube_video(
         self,
         video_url: str,

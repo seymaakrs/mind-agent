@@ -20,9 +20,17 @@ from .whatsapp import _WhatsAppMixin
 from .inbox import _InboxMixin
 from .posts import _PostsMixin
 from .media import _MediaMixin
+from .analytics import _AnalyticsMixin
 
 
-class ZernioClient(_WhatsAppMixin, _InboxMixin, _PostsMixin, _MediaMixin, _ZernioBase):
+class ZernioClient(
+    _WhatsAppMixin,
+    _InboxMixin,
+    _PostsMixin,
+    _MediaMixin,
+    _AnalyticsMixin,
+    _ZernioBase,
+):
     """Async HTTP client over the Zernio v1 API.
 
     Errors bubble up as ``ServiceError`` with status_code + service set, so

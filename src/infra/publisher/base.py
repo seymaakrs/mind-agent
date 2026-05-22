@@ -157,3 +157,21 @@ class PublisherClient(Protocol):
         first_comment: str | None = None,
         scheduled_for: str | None = None,
     ) -> PublishResult: ...
+
+    # ----- Analytics (Faz 5) --------------------------------------------
+    # Returns raw analytics dicts (NOT PublishResult) — the shapes are
+    # backend-stable and the tool layer already consumes them directly.
+
+    async def get_analytics(
+        self,
+        *,
+        post_id: str | None = None,
+        profile_id: str | None = None,
+        platform: str = "instagram",
+        date_from: str | None = None,
+        date_to: str | None = None,
+        limit: int = 50,
+        page: int = 1,
+        sort_by: str = "date",
+        order: str = "desc",
+    ) -> dict[str, Any]: ...

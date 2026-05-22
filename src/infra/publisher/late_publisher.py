@@ -207,6 +207,44 @@ class LatePublisher:
 
     # ----- YouTube -------------------------------------------------------
 
+    # ----- Analytics ----------------------------------------------------
+
+    async def get_analytics(
+        self,
+        *,
+        post_id: str | None = None,
+        profile_id: str | None = None,
+        platform: str = "instagram",
+        date_from: str | None = None,
+        date_to: str | None = None,
+        limit: int = 50,
+        page: int = 1,
+        sort_by: str = "date",
+        order: str = "desc",
+    ) -> dict[str, Any]:
+        """Delegate to LateClient.get_analytics.
+
+        Late analytics needs the raw profile ObjectId (NOT the acc_xxxxx
+        posting id). The caller passes that as ``profile_id``; we build
+        a Late client bound to it via ``strip_prefix=False``. When the
+        caller omits ``profile_id`` we fall back to ``self.account_id``
+        (handy when the LatePublisher was constructed with the analytics
+        id directly).
+        """
+        from src.infra.late import get_late_client
+
+        pid = profile_id or self.account_id
+        client = get_late_client(pid, strip_prefix=False)
+        return await client.get_analytics(
+            post_id=post_id,
+            date_from=date_from,
+            date_to=date_to,
+            limit=limit,
+            page=page,
+            sort_by=sort_by,  # type: ignore[arg-type]
+            order=order,  # type: ignore[arg-type]
+        )
+
     async def youtube_video(
         self,
         video_url: str,

@@ -381,6 +381,82 @@ class TestLatePublisherDelegates:
 # ---------------------------------------------------------------------------
 
 
+class TestZernioAnalytics:
+    @pytest.mark.asyncio
+    async def test_list_mode_normalizes_id_field_and_wraps_success(self):
+        pub = _zernio_publisher(account_id="prof_x")
+        raw = {
+            "overview": {"impressions": 100},
+            "posts": [
+                {"_id": "p_1", "analytics": {"likes": 5}},
+                {"postId": "p_2", "_id": "ignored", "analytics": {"likes": 3}},
+            ],
+            "pagination": {"total": 2, "page": 1, "limit": 50, "totalPages": 1},
+        }
+        with _patch_async_client("get", _mock_response(200, raw)) as mock_get:
+            r = await pub.get_analytics(profile_id="prof_x")
+
+        assert r["success"] is True
+        assert r["overview"] == {"impressions": 100}
+        assert r["posts"][0]["postId"] == "p_1"  # injected from _id
+        assert r["posts"][1]["postId"] == "p_2"  # preserved
+        params = mock_get.await_args.kwargs["params"]
+        assert params["profileId"] == "prof_x"
+        assert params["platform"] == "instagram"
+
+    @pytest.mark.asyncio
+    async def test_single_post_mode_wraps_in_post_envelope(self):
+        pub = _zernio_publisher(account_id="prof_x")
+        raw = {
+            "postId": "p_1",
+            "latePostId": None,
+            "status": "published",
+            "analytics": {"impressions": 1000, "engagementRate": 2.5},
+        }
+        with _patch_async_client("get", _mock_response(200, raw)) as mock_get:
+            r = await pub.get_analytics(profile_id="prof_x", post_id="p_1")
+
+        assert r["success"] is True
+        assert r["post"]["postId"] == "p_1"
+        assert r["post"]["analytics"]["engagementRate"] == 2.5
+        params = mock_get.await_args.kwargs["params"]
+        assert params["postId"] == "p_1"
+        # profile filter NOT sent when querying single post
+        assert "profileId" not in params
+
+    @pytest.mark.asyncio
+    async def test_error_returns_failed_envelope(self):
+        pub = _zernio_publisher(account_id="prof_x")
+        with _patch_async_client("get", _mock_response(403, text_body="forbidden")):
+            r = await pub.get_analytics(profile_id="prof_x")
+        assert r["success"] is False
+        assert r["status_code"] == 403
+
+
+class TestLatePublisherAnalytics:
+    @pytest.mark.asyncio
+    async def test_get_analytics_uses_strip_prefix_false(self):
+        """Analytics path must call get_late_client with strip_prefix=False."""
+        fake_client = MagicMock()
+        fake_client.get_analytics = AsyncMock(
+            return_value={"success": True, "posts": [], "pagination": {}}
+        )
+        with patch(
+            "src.infra.late.get_late_client", return_value=fake_client
+        ) as mock_factory:
+            from src.infra.publisher import LatePublisher
+
+            pub = LatePublisher(account_id="prof_raw")
+            await pub.get_analytics(profile_id="prof_raw_2")
+
+        # First call: __init__ with default strip_prefix=True
+        # Second call: get_analytics with strip_prefix=False AND override profile_id
+        analytics_calls = [c for c in mock_factory.call_args_list
+                           if c.kwargs.get("strip_prefix") is False]
+        assert len(analytics_calls) == 1
+        assert analytics_calls[0].args[0] == "prof_raw_2"
+
+
 class TestProtocolConformance:
     """Both adapters must satisfy the runtime_checkable PublisherClient."""
 

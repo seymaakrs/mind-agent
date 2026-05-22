@@ -111,6 +111,17 @@ class ShadowPublisher:
     async def youtube_video(self, **kw: Any) -> PublishResult:
         return await self._run("youtube_video", kw)
 
+    async def get_analytics(self, **kw: Any) -> dict[str, Any]:
+        """Analytics is read-only; only call the primary (no shadow noise).
+
+        Running both backends in parallel for analytics would double API
+        quota with zero ground-truth comparison value — analytics IDs and
+        rolled-up numbers between Late and Zernio can match exactly (same
+        upstream) or diverge for cache-staleness reasons. Diff signal is
+        too weak to justify the cost.
+        """
+        return await self._primary.get_analytics(**kw)
+
 
 # Helpers --------------------------------------------------------------------
 
