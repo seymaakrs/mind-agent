@@ -5,7 +5,7 @@ from typing import Any, Literal
 from agents import function_tool
 
 from src.infra.errors import classify_error, classify_late_response
-from src.infra.late_client import get_late_client
+from src.infra.publisher import get_publisher
 
 
 # --- Instagram aspect ratio constants ---
@@ -66,8 +66,8 @@ async def post_on_instagram(
         dict with success, post_id, and details.
     """
     try:
-        late = get_late_client(instagram_id)
-        result = await late.post_media(
+        publisher = get_publisher(instagram_id)
+        publish_result = await publisher.instagram_post(
             media_url=file_url,
             caption=caption,
             media_type=content_type,
@@ -75,9 +75,10 @@ async def post_on_instagram(
             first_comment=first_comment,
             is_story=is_story,
         )
+        result = publish_result.to_dict()
 
         if not result.get("success"):
-            classified = classify_late_response(result, "late")
+            classified = classify_late_response(result, publisher.backend)
             classified.update({"file_url": file_url, "content_type": content_type, "is_story": is_story})
             return classified
 
@@ -201,16 +202,17 @@ async def post_carousel_on_instagram(
         else:
             aspect_ratio_warning = "WARNING: No aspect_ratio specified for carousel items. All items must have the same aspect ratio for proper display. First item's ratio determines the carousel."
 
-        # Post carousel via Late API
-        late = get_late_client(instagram_id)
-        result = await late.post_carousel(
+        # Post carousel via publisher (Late or Zernio depending on env)
+        publisher = get_publisher(instagram_id)
+        publish_result = await publisher.instagram_carousel(
             media_items=media_items,
             caption=caption,
             first_comment=first_comment,
         )
+        result = publish_result.to_dict()
 
         if not result.get("success"):
-            classified = classify_late_response(result, "late")
+            classified = classify_late_response(result, publisher.backend)
             classified["item_count"] = len(media_items)
             return classified
 
