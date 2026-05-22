@@ -65,6 +65,20 @@ class _ZernioBase:
             self._raise_for_status(resp)
             return resp.json()
 
+    async def _put(self, path: str, json: dict[str, Any]) -> Any:
+        async with httpx.AsyncClient(timeout=self.TIMEOUT) as client:
+            resp = await client.put(self._url(path), headers=self._headers(), json=json)
+            self._raise_for_status(resp)
+            return resp.json()
+
+    async def _delete(self, path: str, json: dict[str, Any] | None = None) -> Any:
+        async with httpx.AsyncClient(timeout=self.TIMEOUT) as client:
+            resp = await client.request(
+                "DELETE", self._url(path), headers=self._headers(), json=json
+            )
+            self._raise_for_status(resp)
+            return resp.json()
+
     async def _post_multipart(
         self,
         path: str,
