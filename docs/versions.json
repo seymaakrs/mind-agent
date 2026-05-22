@@ -5,24 +5,24 @@
     {
       "id": "2026-05-22-canli-test-konsolidasyon",
       "date": "2026-05-22",
-      "title": "Canlı sistem tamamlandı: chat + paneli + admin + webhook",
+      "title": "Tam sprint: chat + panel + admin + rotate + HTTPS sertifika",
       "branch": "claude/zen-wozniak-LEuNW",
       "head_commit": "039d203",
       "tests": {
         "passed": 1,
         "failed": 0,
         "new_added": 1,
-        "note": "Production OK: chat 133 lead, Durum paneli canlı, 2 admin claim set"
+        "note": "Production OK: chat 133 lead (HTTPS NocoDB üzerinden), Durum paneli, 2 admin claim"
       },
       "agents": [
         {
           "code": "A",
-          "name": "Canlı Test Sprint",
+          "name": "Canlı Test + OpenAI",
           "repo": "seymaakrs/mind-agent",
-          "branch": "claude/vibrant-brown-qENng (lokal, push edilmedi)",
+          "branch": "main",
           "commit": "2c95d95",
           "status": "completed",
-          "summary": "Cloud Run v1.23.0 deploy + OpenAI yeni key + smoke OK"
+          "summary": "Cloud Run revision 00006-28b, OpenAI key v2 canlı, eski key chat'te kaldı (borç)"
         },
         {
           "code": "B",
@@ -37,33 +37,33 @@
         },
         {
           "code": "C",
-          "name": "v1.23.0 Atomik Plan",
-          "repo": "seymaakrs/mind-agent",
+          "name": "NocoDB HTTPS + Caddy",
+          "repo": "—",
           "branch": "—",
-          "status": "blocked",
-          "summary": "İhtiyaç ortaya çıkınca tekrar bak — şu an gerek yok"
+          "status": "completed",
+          "summary": "db.mindidai.com.tr SSL, Caddy IP whitelist (Seyma UI + API public), Cloud Run 00008-bnk"
         },
         {
           "code": "D",
-          "name": "Konsolidasyon + Admin",
+          "name": "Konsolidasyon + Admin + Token Rotate",
           "repo": "seymaakrs/mind-id",
           "branch": "main (merged #16)",
           "commit": "6a25eb6",
           "status": "completed",
-          "summary": "DEVIR-MASTER + 2 admin claim (Seyma, Beyza)"
+          "summary": "DEVIR-MASTER, 2 admin claim, NocoDB token v2 (eski 3 token NocoDB'de kaldı)"
         }
       ]
     }
   ],
   "deploy_checklist": [
-    { "step": 1, "task": "OpenAI API key yenile + Cloud Run env update", "done": true },
+    { "step": 1, "task": "OpenAI API key v2 + Cloud Run env update", "done": true },
     { "step": 2, "task": "E2E smoke test (count_leads, NocoDB)", "done": true },
     { "step": 3, "task": "Firestore secrets/other.zernio_api_key", "done": true },
     { "step": 4, "task": "PR #15 + PR #16 merge + production deploy", "done": true },
     { "step": 5, "task": "Firestore settings/app_settings serverUrl doğrulama", "done": true },
-    { "step": 6, "task": "Zernio webhook (n8n → lead-toplama, 21 gün aktif)", "done": true },
+    { "step": 6, "task": "Zernio webhook (n8n → lead-toplama)", "done": true },
     { "step": 7, "task": "Admin custom claim (Seyma + Beyza)", "done": true },
-    { "step": 8, "task": "OpenAI key rotate + GCP Secret Manager (güvenlik)", "done": false },
-    { "step": 9, "task": "NocoDB token rotate + Secret Manager + HTTPS (güvenlik)", "done": false }
+    { "step": 8, "task": "NocoDB token rotate v2 + HTTPS sertifika (db.mindidai.com.tr)", "done": true },
+    { "step": 9, "task": "Eski OpenAI key + NocoDB token nihai revoke (KABUL EDİLEN BORÇ)", "done": false }
   ]
 }
