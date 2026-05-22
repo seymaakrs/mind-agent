@@ -64,3 +64,17 @@ class _ZernioBase:
             resp = await client.patch(self._url(path), headers=self._headers(), json=json)
             self._raise_for_status(resp)
             return resp.json()
+
+    async def _post_multipart(
+        self,
+        path: str,
+        files: dict[str, tuple[str, bytes, str]],
+        data: dict[str, Any] | None = None,
+    ) -> Any:
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        async with httpx.AsyncClient(timeout=self.TIMEOUT) as client:
+            resp = await client.post(
+                self._url(path), headers=headers, files=files, data=data or {}
+            )
+            self._raise_for_status(resp)
+            return resp.json()

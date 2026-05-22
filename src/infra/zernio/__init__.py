@@ -18,9 +18,11 @@ from __future__ import annotations
 from .base import _ZernioBase
 from .whatsapp import _WhatsAppMixin
 from .inbox import _InboxMixin
+from .posts import _PostsMixin
+from .media import _MediaMixin
 
 
-class ZernioClient(_WhatsAppMixin, _InboxMixin, _ZernioBase):
+class ZernioClient(_WhatsAppMixin, _InboxMixin, _PostsMixin, _MediaMixin, _ZernioBase):
     """Async HTTP client over the Zernio v1 API.
 
     Errors bubble up as ``ServiceError`` with status_code + service set, so
