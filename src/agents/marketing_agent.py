@@ -9,6 +9,7 @@ from src.tools.instagram_tools import get_instagram_tools
 from src.tools.marketing_tools import get_marketing_tools
 from src.tools.analysis_tools import get_report_tools
 from src.tools.brand import fetch_brand_identity
+from src.tools.sales.knowledge_tools import get_knowledge_tools
 from src.tools.orchestrator_tools import (
     post_on_instagram,
     post_carousel_on_instagram,
@@ -28,7 +29,12 @@ def create_marketing_agent(
     video_agent_tool: Any | None = None,
 ) -> Agent[dict[str, Any]]:
     """
-    Marketing agent: Sosyal medya yönetimi - planlama, içerik üretimi, paylaşım, analiz.
+    Pazarlama Müdürü (Marketing Director): Sosyal medya yönetimi —
+    içerik takvimi, post planlama, görsel/video brief, yayın, analiz.
+
+    2026-05-22 yükseltmesi (Şeyma): Marketing'i "stagiyer"den "müdüre"
+    yükselttik. knowledge_tools ile ürün/hedef-kitle/ses/USP'yi okur,
+    Defne'ye (image) ve Toprak'a (video) brand-aware brief verir.
 
     Faz C: BRAND_AWARE_PREFIX talimatin basina prepend, fetch_brand_identity
     tool listesine eklenir. Marketing agent her uretim/yayim adimindan once
@@ -54,6 +60,10 @@ def create_marketing_agent(
         save_document,             # Firestore doc yazma (summary için)
         query_documents,           # Firestore query (önceki haftalar için)
         fetch_brand_identity,      # Faz C: brand_identity okuma
+        # 2026-05-22: Pazarlama Müdürü ürün/hedef-kitle/ses/USP'yi okur
+        # (Sales Director ile aynı knowledge layer). İçerik üretiminden
+        # önce get_sales_playbook ile tüm konteksti tek atışta çeker.
+        *get_knowledge_tools(),
     ]
 
     # Add sub-agent tools if provided
@@ -70,7 +80,12 @@ def create_marketing_agent(
 
     return Agent(
         name="marketing",
-        handoff_description="Sosyal medya yönetim agenti - planlama, içerik üretimi, paylaşım, analiz.",
+        handoff_description=(
+            "Pazarlama Müdürü (Marketing Director): içerik takvimi, "
+            "post planlama, Defne'ye görsel briefi, Toprak'a video briefi, "
+            "marka tonunda caption, yayın, analiz. Brand-aware: BrandIdentity "
+            "+ knowledge_tools ile ürün/kitle/ses verisini kullanır."
+        ),
         instructions=BRAND_AWARE_PREFIX + MARKETING_AGENT_INSTRUCTIONS,
         tools=tools,
         mcp_servers=mcp_servers,
