@@ -13,8 +13,11 @@ services:
       # Firebase
       FIREBASE_CREDENTIALS_FILE: /app/credentials/serviceAccount.json
       FIREBASE_STORAGE_BUCKET: ${FIREBASE_STORAGE_BUCKET}
-      # Late API (Instagram posting)
-      LATE_API_KEY: ${LATE_API_KEY}
+      # Zernio (posting + WhatsApp + Inbox)
+      ZERNIO_API_KEY: ${ZERNIO_API_KEY}
+      ZERNIO_BASE_URL: ${ZERNIO_BASE_URL:-https://api.zernio.com/v1}
+      ZERNIO_WA_ACCOUNT_ID: ${ZERNIO_WA_ACCOUNT_ID}
+      ZERNIO_WEBHOOK_SECRET: ${ZERNIO_WEBHOOK_SECRET}
       # fal.ai (MMAudio - video audio generation)
       FAL_KEY: ${FAL_KEY}
       # Serper.dev (Google SERP API)

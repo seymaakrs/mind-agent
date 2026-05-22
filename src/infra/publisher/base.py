@@ -1,14 +1,12 @@
 """Shared types for the Publisher adapter layer.
 
-The Publisher layer hides the choice between two backends — Late and
-Zernio — behind a single ``PublisherClient`` Protocol. Both backends
-ultimately POST to the same canonical payload shape (``/posts`` with
-``mediaItems`` + ``platforms``), so the adapters are thin: each method
-mirrors the corresponding ``LateClient`` signature and returns a
-``PublishResult`` so callers can treat both backends identically.
+The Publisher layer wraps the Zernio backend behind a single
+``PublisherClient`` Protocol. The adapter POSTs to the canonical
+``/posts`` payload (``mediaItems`` + ``platforms``) and returns a
+``PublishResult`` so callers get a stable, backend-agnostic shape.
 
-This module ships only the types. Concrete adapters live in
-``late_publisher.py`` and ``zernio_publisher.py``.
+This module ships only the types. The concrete adapter lives in
+``zernio_publisher.py``.
 """
 from __future__ import annotations
 
