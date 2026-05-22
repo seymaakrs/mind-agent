@@ -67,6 +67,7 @@ class _PostsMixin:
         title: str | None = None,
         tags: list[str] | None = None,
         hashtags: list[str] | None = None,
+        tiktok_settings: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Create a post and (optionally) publish it.
 
@@ -99,6 +100,8 @@ class _PostsMixin:
             body["tags"] = tags
         if hashtags is not None:
             body["hashtags"] = hashtags
+        if tiktok_settings is not None:
+            body["tiktokSettings"] = tiktok_settings
 
         return await self._post("/posts", json=body)
 
