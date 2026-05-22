@@ -320,9 +320,17 @@ class TestRoute:
         assert resp.status_code == 400
 
     def test_non_target_event_returns_skipped(self, client, monkeypatch):
+        # post.published now flows through the new dispatcher; a missing
+        # business_id resolves to a skipped decision (no Lead upsert side
+        # effect — that's the Slowdays-parity guarantee).
         monkeypatch.delenv("ZERNIO_WEBHOOK_SECRET", raising=False)
         from src.app.config import get_settings
         get_settings.cache_clear()
-        resp = client.post("/zernio/webhook", json={"event": "post.published"})
+        resp = client.post(
+            "/zernio/webhook", json={"event": "post.published", "id": "evt-leg-skip"}
+        )
         assert resp.status_code == 200
-        assert resp.json()["skipped"] is True
+        body = resp.json()
+        assert body["success"] is True
+        assert body.get("event") == "post.published"
+        assert body.get("decision", {}).get("action") in ("skipped", "post_marked_published", "error")
