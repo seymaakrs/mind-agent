@@ -1,7 +1,58 @@
 {
   "current_branch": "claude/zen-wozniak-LEuNW",
-  "latest_session": "2026-05-22-canli-test-konsolidasyon",
+  "latest_session": "2026-05-22-v1.23.0-deploy",
   "sessions": [
+    {
+      "id": "2026-05-22-v1.23.0-deploy",
+      "date": "2026-05-22",
+      "title": "v1.23.0 deploy: Faz A + Pazarlama Müdürü + Sales Director + Defne + Reklam Uzmanı",
+      "branch": "main",
+      "head_commit": "26c9453",
+      "tests": {
+        "passed": 4,
+        "failed": 0,
+        "new_added": 0,
+        "note": "Production OK: revision 00011-gex (v1.23.0), 3/3 traffic test + final smoke OK"
+      },
+      "agents": [
+        {
+          "code": "A",
+          "name": "Faz A Brand Identity",
+          "repo": "seymaakrs/mind-agent",
+          "branch": "main",
+          "commit": "2c76c8e",
+          "status": "deployed",
+          "summary": "Pydantic schema + Firestore tools (additive, agentlar henüz okumuyor)"
+        },
+        {
+          "code": "B",
+          "name": "Pazarlama Müdürü v1",
+          "repo": "seymaakrs/mind-agent",
+          "branch": "main",
+          "commit": "d55e572",
+          "status": "deployed",
+          "summary": "Marketing Agent yükseltmesi"
+        },
+        {
+          "code": "C",
+          "name": "Sales Director + Defne",
+          "repo": "seymaakrs/mind-agent",
+          "branch": "main",
+          "commit": "fbe98d7 + 7bc50b9",
+          "status": "deployed",
+          "summary": "Sales knowledge_tools + Defne brand-aware prompt builder"
+        },
+        {
+          "code": "D",
+          "name": "Reklam Uzmanı + peer bridge",
+          "repo": "seymaakrs/mind-agent",
+          "branch": "main",
+          "commit": "0ae1fff + ef87b4d",
+          "status": "deployed",
+          "summary": "Meta Agent rename + Sales→Reklam Uzmanı peer tool"
+        }
+      ]
+    },
     {
       "id": "2026-05-22-canli-test-konsolidasyon",
       "date": "2026-05-22",
@@ -12,7 +63,7 @@
         "passed": 1,
         "failed": 0,
         "new_added": 1,
-        "note": "Production OK: chat 133 lead (HTTPS NocoDB üzerinden), Durum paneli, 2 admin claim"
+        "note": "Production OK: 133 lead, Durum paneli, 2 admin claim"
       },
       "agents": [
         {
@@ -22,18 +73,16 @@
           "branch": "main",
           "commit": "2c95d95",
           "status": "completed",
-          "summary": "Cloud Run revision 00006-28b, OpenAI key v2 canlı, eski key chat'te kaldı (borç)"
+          "summary": "Revision 00006-28b → 00008-bnk"
         },
         {
           "code": "B",
-          "name": "Durum / Versiyon Paneli",
+          "name": "Durum Paneli",
           "repo": "seymaakrs/mind-id",
-          "branch": "main (merged #15)",
+          "branch": "main",
           "commit": "920e2ff",
-          "files_changed": 2,
-          "tests_added": 0,
           "status": "merged",
-          "summary": "Production'da canlı"
+          "summary": "Production canlı"
         },
         {
           "code": "C",
@@ -41,16 +90,16 @@
           "repo": "—",
           "branch": "—",
           "status": "completed",
-          "summary": "db.mindidai.com.tr SSL, Caddy IP whitelist (Seyma UI + API public), Cloud Run 00008-bnk"
+          "summary": "db.mindidai.com.tr + Caddy whitelist"
         },
         {
           "code": "D",
-          "name": "Konsolidasyon + Admin + Token Rotate",
+          "name": "Admin + Token Rotate",
           "repo": "seymaakrs/mind-id",
-          "branch": "main (merged #16)",
+          "branch": "main",
           "commit": "6a25eb6",
           "status": "completed",
-          "summary": "DEVIR-MASTER, 2 admin claim, NocoDB token v2 (eski 3 token NocoDB'de kaldı)"
+          "summary": "2 admin claim + NocoDB token v2"
         }
       ]
     }
@@ -61,9 +110,9 @@
     { "step": 3, "task": "Firestore secrets/other.zernio_api_key", "done": true },
     { "step": 4, "task": "PR #15 + PR #16 merge + production deploy", "done": true },
     { "step": 5, "task": "Firestore settings/app_settings serverUrl doğrulama", "done": true },
-    { "step": 6, "task": "Zernio webhook (n8n → lead-toplama)", "done": true },
+    { "step": 6, "task": "Zernio webhook + Signing Secret", "done": true },
     { "step": 7, "task": "Admin custom claim (Seyma + Beyza)", "done": true },
-    { "step": 8, "task": "NocoDB token rotate v2 + HTTPS sertifika (db.mindidai.com.tr)", "done": true },
-    { "step": 9, "task": "Eski OpenAI key + NocoDB token nihai revoke (KABUL EDİLEN BORÇ)", "done": false }
+    { "step": 8, "task": "NocoDB token rotate v2 + HTTPS sertifika", "done": true },
+    { "step": 9, "task": "v1.23.0 deploy (Faz A + Pazarlama Müdürü + Sales Director + Defne)", "done": true }
   ]
 }
