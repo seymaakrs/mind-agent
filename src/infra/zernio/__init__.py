@@ -22,6 +22,7 @@ from .posts import _PostsMixin
 from .media import _MediaMixin
 from .analytics import _AnalyticsMixin
 from .ads import _AdsMixin
+from .logs import _LogsMixin
 
 
 class ZernioClient(
@@ -31,6 +32,7 @@ class ZernioClient(
     _MediaMixin,
     _AnalyticsMixin,
     _AdsMixin,
+    _LogsMixin,
     _ZernioBase,
 ):
     """Async HTTP client over the Zernio v1 API.
