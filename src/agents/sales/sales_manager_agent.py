@@ -19,6 +19,7 @@ from typing import Any
 from agents import Agent
 
 from src.agents.instructions.sales import SALES_DIRECTOR_INSTRUCTIONS
+from src.tools.sales.knowledge_tools import get_knowledge_tools
 from src.tools.sales.management_tools import get_management_tools
 from src.tools.sales.reporting_tools import get_reporting_tools
 
@@ -62,11 +63,17 @@ def create_sales_manager_agent(
 ) -> Agent[dict[str, Any]]:
     """Sales Director agent factory.
 
-    Tool seti (yaklasik 22): 10 read (reporting_tools) + 11 yonetim
+    Tool seti (yaklasik 27): 10 read (reporting_tools) + 11 yonetim
     (management_tools — outreach + auto_reply pause/resume, lead writes,
-    sales memory get/update, pipeline_forecast, weekly_kpi).
+    sales memory get/update, pipeline_forecast, weekly_kpi) + 5 knowledge
+    (knowledge_tools — product/audience/voice/UVP/playbook, BrandIdentity
+    okuma, urun hakimiyeti icin 2026-05-22'de eklendi).
     """
-    tools = list(get_reporting_tools()) + list(get_management_tools())
+    tools = (
+        list(get_reporting_tools())
+        + list(get_management_tools())
+        + list(get_knowledge_tools())
+    )
 
     from src.infra.zernio.mcp_server import get_active_mcp_servers
     mcp_servers = get_active_mcp_servers()

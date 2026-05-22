@@ -45,6 +45,23 @@ class TestSalesManagerFactory:
         missing = required - tool_names
         assert not missing, f"Missing read tools: {missing}"
 
+    def test_agent_has_knowledge_tools(self):
+        """2026-05-22 — Sales Director urun/hedef-kitle hakimiyeti icin
+        knowledge_tools eklendi."""
+        from src.agents.sales.sales_manager_agent import create_sales_manager_agent
+
+        agent = create_sales_manager_agent()
+        tool_names = {t.name for t in agent.tools}
+        knowledge = {
+            "get_product_catalog",
+            "get_target_audience",
+            "get_brand_voice",
+            "get_unique_value_proposition",
+            "get_sales_playbook",
+        }
+        missing = knowledge - tool_names
+        assert not missing, f"Missing knowledge tools: {missing}"
+
     def test_agent_has_limited_write_tools(self):
         """Yazma yetkisi SINIRLI: yalniz outreach_pause/outreach_resume."""
         from src.agents.sales.sales_manager_agent import create_sales_manager_agent
