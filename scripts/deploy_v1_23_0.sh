@@ -44,9 +44,9 @@ with open(".env") as f:
             continue
         out[k] = v
 # Credential paths (secret mount'tan):
-out["FIREBASE_CREDENTIALS_FILE"] = "/secrets/firebase.json"
-out["GOOGLE_APPLICATION_CREDENTIALS"] = "/secrets/gcp.json"
-out["GOOGLE_SERVICE_ACCOUNT_FILE"] = "/secrets/gcp.json"
+out["FIREBASE_CREDENTIALS_FILE"] = "/secrets/firebase/key.json"
+out["GOOGLE_APPLICATION_CREDENTIALS"] = "/secrets/gcp/key.json"
+out["GOOGLE_SERVICE_ACCOUNT_FILE"] = "/secrets/gcp/key.json"
 out["DRY_RUN"] = "false"
 with open("${ENV_FILE}", "w") as f:
     yaml.safe_dump(out, f, default_style='"')
@@ -68,7 +68,7 @@ gcloud run deploy "${SERVICE}" \
   --platform=managed \
   --allow-unauthenticated \
   --env-vars-file="${ENV_FILE}" \
-  --update-secrets="/secrets/firebase.json=firebase-credentials:latest,/secrets/gcp.json=gcp-credentials:latest" \
+  --update-secrets="/secrets/firebase/key.json=firebase-credentials:latest,/secrets/gcp/key.json=gcp-credentials:latest" \
   --memory=2Gi \
   --cpu=2 \
   --timeout=300 \
