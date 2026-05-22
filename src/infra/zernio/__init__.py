@@ -9,9 +9,9 @@ Slowdays cold-outreach playbook needs (Adim 2 of the Sales roadmap):
 - ``inbox/conversations/{id}/messages`` — send a free-form reply
 - ``contacts/{id}`` — patch tags (CRM segmentation)
 
-Mixin composition mirrors ``src/infra/late/`` so future Zernio surfaces
-(comment-to-DM, social posting fallback) can be added without bloating one
-file.
+Mixin composition keeps each concern (WhatsApp, Inbox, Posts, Media,
+Analytics) in its own file so additional surfaces (e.g. comment-to-DM,
+sequences) can be added without bloating one module.
 """
 from __future__ import annotations
 

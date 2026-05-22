@@ -1,14 +1,15 @@
-"""Tests for the PublisherClient adapter layer (Faz 2).
+"""Tests for the PublisherClient adapter layer (Faz 2 + Faz 6).
 
-Three coverage axes:
+Coverage axes:
 
 1. PublishResult dataclass — shape + serialization.
-2. LatePublisher — delegates to LateClient and normalizes the dict.
-3. ZernioPublisher — builds the canonical /v1/posts payload and
+2. ZernioPublisher — builds the canonical /v1/posts payload and
    normalizes the response.
-4. Factory — env var + explicit-arg precedence.
+3. ZernioPublisher.get_analytics — Zernio→Late shape normalization.
+4. Protocol conformance for ZernioPublisher.
+5. Factory — env var resolution and Late-rejection error.
 
-The tool layer is not exercised here. It will be in Faz 3.
+The LatePublisher tests were removed in Faz 6 (Late client deleted).
 """
 from __future__ import annotations
 
@@ -310,77 +311,6 @@ class TestZernioErrorPath:
         assert r.status_code == 400
 
 
-# ---------------------------------------------------------------------------
-# LatePublisher (delegates to LateClient)
-# ---------------------------------------------------------------------------
-
-
-def _late_client_stub(method_name: str, return_value: dict):
-    """Patch the relevant method on LateClient instances created via get_late_client."""
-    # We patch get_late_client to return a MagicMock whose method returns the dict.
-    fake_client = MagicMock()
-    setattr(fake_client, method_name, AsyncMock(return_value=return_value))
-    return patch("src.infra.late.get_late_client", return_value=fake_client), fake_client
-
-
-class TestLatePublisherDelegates:
-    @pytest.mark.asyncio
-    async def test_instagram_post_delegates_to_post_media(self):
-        ctx, fake = _late_client_stub("post_media", {
-            "success": True,
-            "post_id": "p1",
-            "platform_post_id": "ig1",
-            "platform_post_url": "https://ig/p/1",
-            "status": "published",
-            "type": "image",
-        })
-        with ctx:
-            # Need to re-import so the patched factory is used at construction.
-            from src.infra.publisher import LatePublisher
-
-            pub = LatePublisher(account_id="acc_ig")
-            r = await pub.instagram_post(
-                media_url="u", caption="c", media_type="image"
-            )
-
-        assert r.success is True
-        assert r.post_id == "p1"
-        assert r.platform_post_id == "ig1"
-        assert r.type == "image"
-        fake.post_media.assert_awaited_once_with(
-            media_url="u",
-            caption="c",
-            media_type="image",
-            thumbnail_url=None,
-            first_comment=None,
-            is_story=False,
-        )
-
-    @pytest.mark.asyncio
-    async def test_late_failure_dict_becomes_failed_publish_result(self):
-        ctx, _ = _late_client_stub("post_media", {
-            "success": False,
-            "error": "boom",
-            "status_code": 502,
-        })
-        with ctx:
-            from src.infra.publisher import LatePublisher
-
-            pub = LatePublisher(account_id="acc_ig")
-            r = await pub.instagram_post(
-                media_url="u", caption="c", media_type="image"
-            )
-
-        assert r.success is False
-        assert r.error == "boom"
-        assert r.status_code == 502
-
-
-# ---------------------------------------------------------------------------
-# Factory
-# ---------------------------------------------------------------------------
-
-
 class TestZernioAnalytics:
     @pytest.mark.asyncio
     async def test_list_mode_normalizes_id_field_and_wraps_success(self):
@@ -433,39 +363,8 @@ class TestZernioAnalytics:
         assert r["status_code"] == 403
 
 
-class TestLatePublisherAnalytics:
-    @pytest.mark.asyncio
-    async def test_get_analytics_uses_strip_prefix_false(self):
-        """Analytics path must call get_late_client with strip_prefix=False."""
-        fake_client = MagicMock()
-        fake_client.get_analytics = AsyncMock(
-            return_value={"success": True, "posts": [], "pagination": {}}
-        )
-        with patch(
-            "src.infra.late.get_late_client", return_value=fake_client
-        ) as mock_factory:
-            from src.infra.publisher import LatePublisher
-
-            pub = LatePublisher(account_id="prof_raw")
-            await pub.get_analytics(profile_id="prof_raw_2")
-
-        # First call: __init__ with default strip_prefix=True
-        # Second call: get_analytics with strip_prefix=False AND override profile_id
-        analytics_calls = [c for c in mock_factory.call_args_list
-                           if c.kwargs.get("strip_prefix") is False]
-        assert len(analytics_calls) == 1
-        assert analytics_calls[0].args[0] == "prof_raw_2"
-
-
 class TestProtocolConformance:
-    """Both adapters must satisfy the runtime_checkable PublisherClient."""
-
-    def test_late_publisher_is_publisher_client(self):
-        from src.infra.publisher import LatePublisher, PublisherClient
-
-        with patch("src.infra.late.get_late_client", return_value=MagicMock()):
-            pub = LatePublisher(account_id="acc_x")
-        assert isinstance(pub, PublisherClient)
+    """ZernioPublisher must satisfy the runtime_checkable PublisherClient."""
 
     def test_zernio_publisher_is_publisher_client(self, monkeypatch):
         monkeypatch.setenv("ZERNIO_API_KEY", "sk_test")
@@ -474,14 +373,11 @@ class TestProtocolConformance:
         pub = ZernioPublisher(account_id="acc_x")
         assert isinstance(pub, PublisherClient)
 
-    def test_both_publishers_expose_same_method_set(self, monkeypatch):
+    def test_zernio_publisher_exposes_required_method_set(self, monkeypatch):
         monkeypatch.setenv("ZERNIO_API_KEY", "sk_test")
-        from src.infra.publisher import LatePublisher, ZernioPublisher
+        from src.infra.publisher import ZernioPublisher
 
-        with patch("src.infra.late.get_late_client", return_value=MagicMock()):
-            late_methods = {m for m in dir(LatePublisher) if not m.startswith("_")}
         zernio_methods = {m for m in dir(ZernioPublisher) if not m.startswith("_")}
-        # The intersection must contain every publish-surface method.
         required = {
             "instagram_post",
             "instagram_carousel",
@@ -490,43 +386,49 @@ class TestProtocolConformance:
             "tiktok_video",
             "tiktok_carousel",
             "youtube_video",
+            "get_analytics",
             "backend",
         }
-        assert required.issubset(late_methods)
         assert required.issubset(zernio_methods)
 
 
 class TestFactory:
-    def test_default_backend_is_late(self, monkeypatch):
-        from src.infra.publisher import LatePublisher, get_publisher
-
+    def test_default_backend_is_zernio(self, monkeypatch):
         monkeypatch.delenv("PUBLISHER_BACKEND", raising=False)
-        with patch("src.infra.late.get_late_client", return_value=MagicMock()):
-            pub = get_publisher("acc_x")
-        assert isinstance(pub, LatePublisher)
-        assert pub.backend == "late"
-
-    def test_env_var_selects_zernio(self, monkeypatch):
+        monkeypatch.setenv("ZERNIO_API_KEY", "sk_test")
         from src.infra.publisher import ZernioPublisher, get_publisher
 
-        monkeypatch.setenv("PUBLISHER_BACKEND", "zernio")
-        monkeypatch.setenv("ZERNIO_API_KEY", "sk_test")
         pub = get_publisher("acc_x")
         assert isinstance(pub, ZernioPublisher)
         assert pub.backend == "zernio"
 
-    def test_explicit_arg_overrides_env(self, monkeypatch):
-        from src.infra.publisher import LatePublisher, get_publisher
-
+    def test_env_zernio_value_works(self, monkeypatch):
         monkeypatch.setenv("PUBLISHER_BACKEND", "zernio")
-        with patch("src.infra.late.get_late_client", return_value=MagicMock()):
-            pub = get_publisher("acc_x", backend="late")
-        assert isinstance(pub, LatePublisher)
+        monkeypatch.setenv("ZERNIO_API_KEY", "sk_test")
+        from src.infra.publisher import ZernioPublisher, get_publisher
 
-    def test_unknown_env_falls_back_to_default(self, monkeypatch):
-        from src.infra.publisher import LatePublisher, get_publisher
+        pub = get_publisher("acc_x")
+        assert isinstance(pub, ZernioPublisher)
 
+    def test_late_backend_request_raises_helpful_error(self, monkeypatch):
+        monkeypatch.setenv("ZERNIO_API_KEY", "sk_test")
+        from src.infra.publisher import get_publisher
+
+        with pytest.raises(ValueError, match="PUBLISHER_BACKEND=late"):
+            get_publisher("acc_x", backend="late")
+
+    def test_late_env_var_raises_helpful_error(self, monkeypatch):
+        monkeypatch.setenv("PUBLISHER_BACKEND", "late")
+        monkeypatch.setenv("ZERNIO_API_KEY", "sk_test")
+        from src.infra.publisher import get_publisher
+
+        with pytest.raises(ValueError, match="no longer supported"):
+            get_publisher("acc_x")
+
+    def test_unknown_env_falls_back_to_zernio(self, monkeypatch):
         monkeypatch.setenv("PUBLISHER_BACKEND", "rabid_squirrel")
-        with patch("src.infra.late.get_late_client", return_value=MagicMock()):
-            pub = get_publisher("acc_x")
-        assert isinstance(pub, LatePublisher)
+        monkeypatch.setenv("ZERNIO_API_KEY", "sk_test")
+        from src.infra.publisher import ZernioPublisher, get_publisher
+
+        pub = get_publisher("acc_x")
+        assert isinstance(pub, ZernioPublisher)

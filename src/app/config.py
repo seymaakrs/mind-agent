@@ -34,9 +34,6 @@ class Settings(BaseModel):
         default=None, alias="FIREBASE_STORAGE_BUCKET"
     )
 
-    # Late API (Instagram posting via Late)
-    late_api_key: str | None = Field(default=None, alias="LATE_API_KEY")
-
     # fal.ai (MMAudio - video audio generation)
     fal_key: str | None = Field(default=None, alias="FAL_KEY")
 
@@ -91,7 +88,6 @@ class Settings(BaseModel):
                 "gcp_location": os.getenv("GCP_LOCATION"),
                 "firebase_credentials_file": os.getenv("FIREBASE_CREDENTIALS_FILE"),
                 "firebase_storage_bucket": os.getenv("FIREBASE_STORAGE_BUCKET"),
-                "late_api_key": os.getenv("LATE_API_KEY"),
                 "fal_key": os.getenv("FAL_KEY"),
                 "serper_api_key": os.getenv("SERPER_API_KEY"),
                 "dry_run": os.getenv("DRY_RUN", "").lower() in ("true", "1", "yes"),

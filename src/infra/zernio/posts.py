@@ -1,12 +1,8 @@
 """Posts endpoints on Zernio.
 
 Wraps ``/v1/posts`` — multi-channel publish, list, get, retry, unpublish.
-Zernio collapses what Late exposes as four separate platform clients into
-one create-post call where the target list is part of the payload.
-
-Faz 1 of the Late→Zernio migration (TODO Konfor #1). These methods are
-additive — nothing in ``src/infra/late/`` or the tool layer is touched yet.
-The PublisherClient abstraction in Faz 2 will sit on top of these.
+Zernio takes one create-post call where the target list is part of the
+payload (no per-platform method needed at this layer).
 """
 from __future__ import annotations
 
