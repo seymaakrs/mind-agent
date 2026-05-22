@@ -62,6 +62,15 @@ class TestSalesManagerFactory:
         missing = knowledge - tool_names
         assert not missing, f"Missing knowledge tools: {missing}"
 
+    def test_agent_has_peer_bridge_tool(self):
+        """2026-05-22 — Sales Director Reklam Uzmanı'na senkron sorgu için
+        ask_reklam_uzmani peer bridge tool'una sahip."""
+        from src.agents.sales.sales_manager_agent import create_sales_manager_agent
+
+        agent = create_sales_manager_agent()
+        tool_names = {t.name for t in agent.tools}
+        assert "ask_reklam_uzmani" in tool_names
+
     def test_agent_has_limited_write_tools(self):
         """Yazma yetkisi SINIRLI: yalniz outreach_pause/outreach_resume."""
         from src.agents.sales.sales_manager_agent import create_sales_manager_agent
