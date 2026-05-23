@@ -207,13 +207,15 @@ class TestSalesManagerMemoryGoalsTriage:
         assert "triage_stale_hot_leads" in names
         assert "triage_report" in names
 
-    def test_total_tool_count_is_31(self):
-        """10 read + 6 write + 3 memory + 3 goal + 2 triage + 5 knowledge
-        + 1 peer_bridge + 1 brand = 31 (main merge: knowledge + peer_bridge eklendi)"""
+    def test_total_tool_count_is_37(self):
+        """10 read + 6 PR write + 6 main-additive write/analytics
+        + 3 memory + 3 goal + 2 triage + 5 knowledge + 1 peer_bridge + 1 brand = 37
+        (main merge: auto_reply pause/resume + update_lead_stage + add_lead_note
+        + pipeline_forecast + weekly_kpi restored on top of PR's manager_actions)"""
         from src.agents.sales.sales_manager_agent import create_sales_manager_agent
         agent = create_sales_manager_agent()
-        assert len(agent.tools) == 31, (
-            f"Beklenen 31 tool, gelen {len(agent.tools)}: "
+        assert len(agent.tools) == 37, (
+            f"Beklenen 37 tool, gelen {len(agent.tools)}: "
             f"{sorted(t.name for t in agent.tools)}"
         )
 

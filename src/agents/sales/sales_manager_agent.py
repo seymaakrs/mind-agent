@@ -4,7 +4,7 @@ Eski adlari: Sales Analyst (read-only rapor) -> Sales Manager (read + outreach
 pause/resume) -> **Sales Director** (yazma + hafiza + brand + pipeline + KPI).
 
 Faz 2 (alt mudurler — Avci Muduru, DM Muduru, Reklam Muduru) sonraki PR'da.
-Su an Direktor TEK figur, ~31 tool eline veriliyor.
+Su an Direktor TEK figur, ~37 tool eline veriliyor.
 
 NOT: Agent.name STRING'i 'sales_manager' olarak KALIYOR — orchestrator routing
 'sales_manager_tool' uzerinden gidiyor. handoff_description 'Satis Direktoru'
@@ -70,20 +70,40 @@ def create_sales_manager_agent(
 ) -> Agent[dict[str, Any]]:
     """Sales Director agent factory.
 
-    Tool seti: 10 read (reporting_tools) + 6 yazma (manager_actions) +
-    3 structured memory (memory_tools) + 3 goals + 2 triage + 5 knowledge
-    (main merge) + 1 peer-bridge (main merge) + 1 brand = 31 tool.
+    Tool seti: 10 read + 6 PR write (manager_actions, SoT) + 6 main additive
+    write/analytics (management_tools, non-overlap) + 3 memory + 3 goals
+    + 2 triage + 5 knowledge + 1 peer-bridge + 1 brand = 37 tool.
     """
+    # main's management_tools — non-overlapping subset
+    # (outreach_pause/resume already in manager_actions; skip those + the dup
+    #  assign_lead which is PR's lead_reassign by another name)
+    from src.tools.sales.management_tools import (
+        add_lead_note,
+        auto_reply_pause,
+        auto_reply_resume,
+        pipeline_forecast,
+        update_lead_stage,
+        weekly_kpi,
+    )
+
     tools = (
         list(get_reporting_tools())          # 10 okuma
-        + list(get_manager_action_tools())   # 6 yazma (TODO A)
+        + list(get_manager_action_tools())   # 6 yazma (PR TODO A — SoT)
+        + [                                  # 6 yazma/analytics (main, additive)
+            auto_reply_pause,
+            auto_reply_resume,
+            update_lead_stage,
+            add_lead_note,
+            pipeline_forecast,
+            weekly_kpi,
+        ]
         + list(get_sales_memory_tools())     # 3 memory (A2 — structured)
         + list(get_goal_tools())             # 3 aylık hedef + KPI (B1)
         + list(get_triage_tools())           # 2 sıcak lead triage (C1)
         + list(get_knowledge_tools())        # 5 knowledge (main, additive)
         + list(get_peer_bridge_tools())      # 1 peer bridge (main, additive)
         + [fetch_brand_identity]             # 1 brand
-    )  # toplam 31 tool
+    )  # toplam 37 tool
 
     from src.infra.zernio.mcp_server import get_active_mcp_servers
     mcp_servers = get_active_mcp_servers()
