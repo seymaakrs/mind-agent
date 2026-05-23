@@ -2,7 +2,7 @@
 
 Orchestrator is a DISPATCHER, not a CEO. Its job is to read the user's
 request and route to the right department manager (sub-agent tool).
-Department managers (marketing, video, image, analysis, sales_analyst,
+Department managers (marketing, video, image, analysis, sales_manager,
 meta) own their domain decisions and have their own LLM. The orchestrator
 keeps only routing logic + cross-cutting guardrails.
 
@@ -114,14 +114,19 @@ def build_orchestrator_instructions(today_date: str) -> str:
         "CRM yazma'.\n"
         "   Params: business_id, prompt (the lead payload / instruction).\n\n"
 
-        "6) sales_analyst_tool — Sales / CRM READ-ONLY reports.\n"
+        "6) sales_manager_tool — Satış Müdürü: CRM rapor + danışmanlık + "
+        "alt birim (Avcı/DM Yanıtlayıcı) durum izleme + Reklam Uzmanı'na "
+        "handoff önerisi.\n"
         "   Intent: 'kac sicak lead', 'kac ilik', 'kac kazanildi', 'lead "
         "listele', 'en yuksek skorlu', 'hangi kanal', 'kanal dagilimi', "
         "'funnel', 'asama dagilimi', 'X gunden takili', 'stale lead', "
         "'son N etkilesim', 'X kisi timeline', 'gunluk rapor', 'bu hafta "
-        "lead', 'sales rapor'.\n"
+        "lead', 'sales rapor', 'outreach durumu', 'kampanya nasil', "
+        "'Bekci ne diyor', 'auto-reply durumu', 'Müdür ne öneriyor'.\n"
         "   Params: business_id, prompt (user's Turkish question as-is).\n"
-        "   No fetch_business needed.\n\n"
+        "   No fetch_business needed.\n"
+        "   NOT: Çıktıda '[Reklam Uzmanı'na yönlendir]' bloğu görürsen, "
+        "ardından meta_agent_tool'u o soruyla tetikle (peer handoff).\n\n"
 
         "7) n8n bridge — list/call/health for n8n automations.\n"
         "   list_n8n_workflows (no args) → 'n8n'de neler var', 'hangi "
@@ -130,10 +135,10 @@ def build_orchestrator_instructions(today_date: str) -> str:
         "   n8n_workflow_health(name) → status of a specific workflow.\n\n"
 
         "CRITICAL DISTINCTIONS:\n"
-        "- reklam_uzmani_tool = WRITE (new lead recorded). sales_analyst_tool "
-        "= READ-ONLY (counts/lists/funnels). "
-        "'kac/listele/goster/funnel/rapor' → sales_analyst. 'yeni lead "
-        "geldi/lead form' → meta.\n"
+        "- meta_agent_tool = WRITE (new lead recorded). sales_manager_tool "
+        "= READ-ONLY rapor + danışmanlık (counts/lists/funnels/outreach "
+        "durumu). 'kac/listele/goster/funnel/rapor/Müdür' → sales_manager. "
+        "'yeni lead geldi/lead form' → meta.\n"
         "- ANY Instagram publishing (single image, single video, carousel, "
         "reels, story, plan-driven) → marketing_agent_tool. NEVER post "
         "directly. The marketing manager owns posting end-to-end.\n"
@@ -184,8 +189,9 @@ def build_orchestrator_instructions(today_date: str) -> str:
         "📊 ANALİZ & ARAŞTIRMA — analysis_agent_tool ile SWOT, SEO (v2 + "
         "GEO), rakip analizi, web araştırması, özel rapor.\n\n"
 
-        "📈 SATIŞ & CRM RAPORLARI — sales_analyst_tool ile sıcak lead sayımı, "
-        "funnel, kanal dağılımı, takılı leadler, günlük rapor.\n\n"
+        "📈 SATIŞ MÜDÜRÜ — sales_manager_tool ile sıcak lead sayımı, "
+        "funnel, kanal dağılımı, takılı leadler, günlük rapor, outreach/"
+        "auto-reply durumu ve Müdür önerisi.\n\n"
 
         "🔔 META LEAD ADS — reklam_uzmani_tool ile yeni gelen lead formlarını "
         "NocoDB'ye kaydederim.\n\n"

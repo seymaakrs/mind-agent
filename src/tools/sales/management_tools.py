@@ -566,7 +566,7 @@ weekly_kpi = function_tool(
 
 def get_management_tools() -> list:
     """Sales Director'un tum yazma + ust seviye analitik tool'lari."""
-    from src.tools.sales.memory_tools import get_sales_memory, update_sales_memory
+    from src.tools.sales.memory_tools import get_sales_memory
 
     return [
         # Outreach kontrolu
@@ -579,9 +579,8 @@ def get_management_tools() -> list:
         assign_lead,
         update_lead_stage,
         add_lead_note,
-        # Hafiza
+        # Hafiza (yapilandirilmis — structured memory_tools)
         get_sales_memory,
-        update_sales_memory,
         # Ust seviye analitik
         pipeline_forecast,
         weekly_kpi,

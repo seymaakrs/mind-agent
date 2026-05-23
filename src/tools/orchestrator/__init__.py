@@ -13,7 +13,12 @@ from src.tools.n8n_bridge_tools import get_n8n_bridge_tools
 
 
 def get_orchestrator_tools() -> list[FunctionTool]:
-    """Return the list of tools for the orchestrator agent."""
+    """Return the list of tools for the orchestrator agent.
+
+    Posting tool'lar (post_on_instagram vb.) BILEREK HARIC tutuldu —
+    Şef post atmaz, marketing/video agent'lara delege eder. Defense-in-depth:
+    instructions yasaklasa bile dosya erişimi de olmasın.
+    """
     return [
         upload_file,
         list_files,
@@ -21,13 +26,6 @@ def get_orchestrator_tools() -> list[FunctionTool]:
         get_document,
         save_document,
         query_documents,
-        post_on_instagram,
-        post_carousel_on_instagram,
-        post_on_youtube,
-        post_carousel_on_tiktok,
-        post_on_tiktok,
-        post_on_linkedin,
-        post_carousel_on_linkedin,
         report_error,
         *get_n8n_bridge_tools(),  # Adim 9: n8n köprüsü (list/call/health)
     ]
