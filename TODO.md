@@ -33,17 +33,19 @@ Her madde:
 
 Önceki "Sales Analyst" agent'ı **Sales Manager (Satış Müdürü)** olarak yeniden konumlandı. Şu anki versiyon iskelet: persona güncel, mevcut read tool'lar koruldu, orchestrator yeni wrapper'a bağlandı. Aşağıdaki yetenekler **bilinçli olarak** sonraki PR'lara bırakıldı.
 
-### A. Yazma yetkileri (manager aksiyonları)
-- **outreach_pause / outreach_resume** — Bekçi otomatik pause yapıyor; Müdür manuel override edebilmeli (ve gerekçe NocoDB system_settings'e yazılmalı).
-- **lead_reassign(lead_id, new_owner)** — Bir lead'i Şeyma'dan başka birine devret.
-- **lead_priority_set(lead_id, priority)** — Önceliğe göre sıralama.
-- **auto_reply_template_update** — Auto-reply Yanıtlayıcı template'ını güncelleme.
-- **outreach_daily_limit_set** — günlük outreach kapasitesini ayarla (ban riskine göre).
+### A. Yazma yetkileri (manager aksiyonları) ✅ (2026-05-20)
+- ✅ **outreach_pause / outreach_resume** — kampanya manuel override
+- ✅ **lead_reassign(lead_id, new_owner, reason)** — atama değiştir
+- ✅ **lead_priority_set(lead_id, priority, reason)** — öncelik (acil/yuksek/normal/dusuk)
+- ✅ **auto_reply_template_update(intent, new_text, reason)** — DM template güncelle
+- ✅ **outreach_daily_limit_set(new_limit, reason)** — günlük kapasite (0-2000)
+- Her aksiyon `manager_actions` tablosuna audit log yazar (best-effort, tablo yoksa logging.info'ya düşer).
+- `NOCODB_MANAGER_ACTIONS_TABLE_ID` env eklenirse persistent log. Kurma migration scripti TODO.
+- Her aksiyon en az 5 karakterlik gerekçe ister (sebep audit'e geçer).
 
-### B. Yatay iletişim — Meta (Reklam Uzmanı) ile
-- Sales Manager'a `meta_agent_tool` (mevcut) doğrudan emrinde olsun (şu an Şef paralel çağırıyor).
-- "Reklam Uzmanı'na sor: Meta'da en çok dönüş alan reklam grubu hangisi" → tek prompt'ta koordine.
-- Lead kalite geri bildirimi: Müdür "şu kaynak düşük dönüştü" derse Meta agent bütçeyi öbür gruba kaydırsın.
+### B. Yatay iletişim — Meta (Reklam Uzmanı) ile ⏳ (2026-05-20 kısmi)
+- ✅ **Peer handoff onerisi** instructions'ta: Müdür çıktısında "[Reklam Uzmanı'na yönlendir]" bloğu üretir → Şef `meta_agent_tool`'u tetikler. Tasarım kararı: meta_agent_tool Şef'te kalsın (peer via Şef).
+- 🔜 Lead kalite geri bildirimi: Müdür "şu kaynak düşük dönüştü" derse Meta agent bütçeyi öbür gruba kaydırsın (otomasyon).
 
 ### C. Alt birim kontrolü (Avcı + DM Yanıtlayıcı)
 - Otonom runner'lar şu an cron ile çalışıyor. Müdür **olay bazlı tetikleme** yapabilmeli:
@@ -51,18 +53,36 @@ Her madde:
   - `trigger_auto_reply_for_message(message_id)` — beklemiş mesaja hemen yanıt.
 - Bu tool'lar runner'ların `_handle_single` fonksiyonlarını sarmalı.
 
-### D. Hafıza
-- `get_sales_memory(business_id)` / `update_sales_memory` — kullanıcı tercihlerini, geçmiş kararları hatırla.
-- "Beyza her pazartesi sıcak lead listesi ister" → öneri olarak sun.
+### D. Hafıza ✅ (2026-05-20 — A2)
+- ✅ `save_sales_memory(business_id, category, key, value, reason)` — Firestore'a yaz
+- ✅ `get_sales_memory(business_id, category=None)` — kategori bazlı oku
+- ✅ `delete_sales_memory(business_id, category, key, reason)` — sil
+- Kategoriler: decisions | preferences | learnings | contacts
+- Firestore path: `businesses/{id}/sales_memory/{category}/notes/{key}`
+- 13 test geçti.
 
-### E. Marka kimliği
-- BRAND_AWARE_PREFIX bu agent'a da ekle (Faz C tamamlama). Rapor sonu marka tonuna uygun.
+### F. Aylık hedef + KPI takibi ✅ (2026-05-20 — B1)
+- ✅ `set_monthly_goal(business_id, year, month, metric, target, reason)`
+- ✅ `get_monthly_progress(business_id)` — hedef vs gerçekleşen, on_track, daily_rate_needed
+- ✅ `list_goals(business_id, limit=12)` — geçmiş hedefler + sonuç
+- Firestore path: `businesses/{id}/sales_goals/{YYYY-MM}`
+- 13 test geçti.
+
+### G. Sıcak lead acil aksiyon (triage) ✅ (2026-05-20 — C1)
+- ✅ `triage_report(business_id, days_threshold=3)` — onizleme
+- ✅ `triage_stale_hot_leads(...)` — 3+ gün takılı sıcak'a otomatik müdahale
+  (priority=acil + atanan_kisi=Beyza)
+- Müdür her sabah ilk önce triage_report çağırır
+- 8 test geçti.
+
+### E. Marka kimliği ✅ (2026-05-20)
+- ~~BRAND_AWARE_PREFIX bu agent'a da ekle.~~ Çözüldü: Sales Manager artık `fetch_brand_identity` tool'una sahip + BRAND_AWARE_PREFIX instructions'a prepend edildi. Raporlar marka tonuna göre yorumlanabilir.
 
 ### F. Trend / karşılaştırma
 - `compare_periods(metric, from1, to1, from2, to2)` — bu hafta vs geçen hafta otomatik karşılaştırma.
 
-### G. `outreach_health` ↔ `get_guardian_status` çakışmasını çöz
-- Bekçi pause durumunu iki ayrı tool döndürüyor (`outreach_health` Sales Manager'da, `get_guardian_status` Şef'te). Tutarsızlık riski. Tek kaynak olsun (önerim: `get_guardian_status` kalsın, `outreach_health` deprecate).
+### G. `outreach_health` ↔ `get_guardian_status` çakışmasını çöz ✅ (2026-05-20)
+- ~~Bekçi pause durumunu iki ayrı tool döndürüyor.~~ Çözüldü: `outreach_health` artık `get_guardian_status` sonucunu sarmalıyor (tek SoT). Geri uyumlu API (paused/active/reason) korundu.
 
 ### H. Sales Analyst tamamen kaldır
 - Eski `sales_analyst` registry kaydı + factory + wrapper hâlâ duruyor (deprecate ama silinmedi). REST API + portal hazır olduğunda tamamen kaldırılır.
@@ -140,10 +160,8 @@ Image / Video / Marketing artık brand_identity okuyor.
 - **Niye:** Tutarlılık + retry azaltma.
 - **Ne zaman:** Faz C tamamlandı; tekrar değerlendir — brand_identity zaten doğrudan okunduğu için belki gereksiz.
 
-### `post_on_instagram` tool'unu Şef listesinden çıkar
-- **Ne:** Şu an Şef bu tool'a teknik olarak erişebiliyor (talimatla yasak ama dosyada erişim var). `orchestrator_tools`'tan tamamen kaldır.
-- **Niye:** Güvenlik temizliği.
-- **Ne zaman:** İlk uygun fırsatta küçük PR.
+### `post_on_instagram` tool'unu Şef listesinden çıkar ✅ (2026-05-20)
+- ~~Şef bu tool'a teknik olarak erişebiliyor.~~ Çözüldü: tüm `post_on_*` tool'ları (instagram/tiktok/youtube/linkedin + carousel'ler) Şef'in `get_orchestrator_tools()` return listesinden çıkarıldı. Marketing/Video agent'lar üzerinden delege edilir. Defense-in-depth: instruction yasağı + dosya erişimi yok.
 
 ---
 

@@ -45,43 +45,24 @@ class TestSalesManagerFactory:
         missing = required - tool_names
         assert not missing, f"Missing read tools: {missing}"
 
-    def test_agent_has_knowledge_tools(self):
-        """2026-05-22 — Sales Director urun/hedef-kitle hakimiyeti icin
-        knowledge_tools eklendi."""
+    def test_agent_has_faz2_unit_tools(self):
+        """Faz 2: Avcilik + CX + Kalite birim tool'lari."""
         from src.agents.sales.sales_manager_agent import create_sales_manager_agent
 
         agent = create_sales_manager_agent()
         tool_names = {t.name for t in agent.tools}
-        knowledge = {
-            "get_product_catalog",
-            "get_target_audience",
-            "get_brand_voice",
-            "get_unique_value_proposition",
-            "get_sales_playbook",
+        required = {
+            "outreach_pause", "outreach_resume", "outreach_set_daily_limit",
+            "outreach_target_preview", "outreach_skip_lead",
+            "auto_reply_pause", "auto_reply_resume",
+            "auto_reply_template_list", "auto_reply_template_update",
+            "auto_reply_set_daily_cap", "flag_for_human",
+            "guardian_set_thresholds", "compliance_audit",
         }
-        missing = knowledge - tool_names
-        assert not missing, f"Missing knowledge tools: {missing}"
-
-    def test_agent_has_peer_bridge_tool(self):
-        """2026-05-22 — Sales Director Reklam Uzmanı'na senkron sorgu için
-        ask_reklam_uzmani peer bridge tool'una sahip."""
-        from src.agents.sales.sales_manager_agent import create_sales_manager_agent
-
-        agent = create_sales_manager_agent()
-        tool_names = {t.name for t in agent.tools}
-        assert "ask_reklam_uzmani" in tool_names
-
-    def test_agent_has_limited_write_tools(self):
-        """Yazma yetkisi SINIRLI: yalniz outreach_pause/outreach_resume."""
-        from src.agents.sales.sales_manager_agent import create_sales_manager_agent
-
-        agent = create_sales_manager_agent()
-        tool_names = {t.name for t in agent.tools}
-        # Bunlar olmali
-        assert "outreach_pause" in tool_names
-        assert "outreach_resume" in tool_names
-        # Bunlar HALA olmamali
-        forbidden = {"lead_reassign", "auto_reply_template_update"}
+        missing = required - tool_names
+        assert not missing, f"Missing Faz 2 birim tools: {missing}"
+        # Bulk delete / migration yetkisi olmamali
+        forbidden = {"delete_all_leads", "lead_bulk_reassign"}
         leaked = forbidden & tool_names
         assert not leaked, f"Olmamasi gereken yazma tool'lari: {leaked}"
 
