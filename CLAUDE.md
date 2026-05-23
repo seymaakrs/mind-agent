@@ -12,7 +12,42 @@ bütçesi öncelik sırası:
 Yeni özellik / refactor önerisinde önce şu soru: *"Bu Sales veya Marketing'in
 para kazandırma gücünü artırır mı?"* Hayırsa, sıraya en altta gider.
 
-## ⚡ YENI SESSION? ÖNCE BURAYI OKU — DURUM (2026-05-12)
+## ⚡ YENI SESSION? ÖNCE BURAYI OKU — DURUM (2026-05-22)
+
+**Branch (3 repo):** `claude/vibrant-brahmagupta-m8eqI`
+**HEAD (mind-agent):** `f6995ee` | **HEAD (mind-id):** `2c5f271`
+
+### Bu Session'da (2026-05-22) Yapılan: Zernio 4 Paralel Ajan
+
+| Kod | Ajan | Repo | Branch | Merge Commit | Test | Durum |
+|---|---|---|---|---|---|---|
+| **A** | Zernio Ads / Reklam Uzmanı | mind-agent | `claude/zernio-ads-agent` | `199ed9e` | +27 | ✅ merged |
+| **B** | DM + 7 Webhook events | mind-agent | `claude/zernio-dm-webhooks` | `0b5ebf6` | +34 | ✅ merged |
+| **C** | Connections UI (7 platform) | mind-id | `claude/zernio-connections-ui` | `2c5f271` | UI | ✅ merged |
+| **D** | Logs Observability + Observer | mind-agent | `claude/zernio-logs-obs` | `bd8ad32` | +20 | ✅ merged |
+
+**Test deltası:** 664 → 743 passing (+79 net), 44 → 46 failing (+2 flaky firebase_admin sandbox). **Mevcut agent yapısı bozulmadı, sadece genişledi.**
+
+**Merge sırasında çözülen bug:** `src/infra/zernio/__init__.py` — `_AdsMixin` + `_LogsMixin` birleştirme; stash pop sonrası base.py'ı HEAD'den restore etmek gerekti.
+
+**Veri kaynağı (yeni):** `docs/versions.json` — tüm session/agent/PR meta verileri burada. **mind-id `/durum` sayfası buradan okuyacak.**
+
+**Tam sistem haritası:** `docs/zernio-system-map.md` (ASCII + 3 repo akış + deploy checklist).
+
+**Deploy pending:** `docs/versions.json#/deploy_checklist` — 9 adım, henüz başlanmadı.
+
+### Bekleyen Kararlar (Şeyma)
+- **Multi-tenant (Zernio Users API)** — şimdi mi yoksa white-label hazır olunca mı?
+- **Production deploy zamanı** — checklist hazır, kullanıcı tetiği bekliyor
+
+### Sonraki Session İçin Hazır Prompt
+mind-id mevcut ana sayfasına "Durum" bölümü eklemek için yeni session aç ve şunu söyle:
+
+> "mind-id mevcut ana sayfasındaki düzene 'Durum/Versiyon' bölümü ekle. Veri kaynağı: mind-agent repo'sundaki `docs/versions.json` (raw.githubusercontent.com'dan fetch + Firestore'da cache). UI: mevcut shadcn Card pattern'ı kullan, son session + agent listesi (kim ne yapıyor) + deploy checklist + PR linkleri. Detaylar: mind-agent `CLAUDE.md` üst bölümü + `docs/versions.json` oku. **Token tasarrufu için sadece bu iki dosya + mind-id mevcut ana sayfa component'ı yeterli — eski session'lara dalma.**"
+
+---
+
+## ⚡ ESKI DURUM (2026-05-12)
 
 **Branch (3 repo):** `claude/add-hot-leads-count-LJNi7`
 

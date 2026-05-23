@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from src.app import zernio_webhook
+from src.app import zernio_webhook, zernio_webhook_dispatcher
 from src.app.capabilities import CAPABILITIES
 from src.app.config import get_settings
 from src.app.sales_api import router as sales_router
@@ -248,13 +248,87 @@ async def zernio_inbox_webhook(
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="payload must be an object")
 
-    return zernio_webhook.handle(payload)
+    event = payload.get("event")
+    if event == "message.received":
+        # Slowdays parity — legacy handler shape preserved.
+        return zernio_webhook.handle(payload)
+    return zernio_webhook_dispatcher.dispatch(payload)
 
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
     return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# Admin: Zernio observability surface
+# ---------------------------------------------------------------------------
+import os as _os
+import time as _time
+
+
+def _check_admin(x_admin_token: str | None) -> None:
+    """Lightweight admin guard. Compares ``X-Admin-Token`` header against
+    ``ADMIN_API_TOKEN`` env. Unset = open (dev), matches mind-agent pattern
+    for ZERNIO_WEBHOOK_SECRET soft mode."""
+    expected = _os.environ.get("ADMIN_API_TOKEN")
+    if not expected:
+        return
+    if x_admin_token != expected:
+        raise HTTPException(status_code=401, detail="invalid admin token")
+
+
+def _window_stats(now_ts: float, window_sec: int) -> dict[str, Any]:
+    from src.infra.zernio.base import REQUEST_LOG
+
+    cutoff = now_ts - window_sec
+    rows = [r for r in REQUEST_LOG if r.get("timestamp", 0) >= cutoff]
+    n = len(rows)
+    n_5xx = sum(1 for r in rows if r.get("status_class") == "5xx")
+    n_429 = sum(1 for r in rows if int(r.get("status") or 0) == 429)
+    lats = sorted(float(r.get("latency_ms") or 0.0) for r in rows)
+    p95 = lats[max(0, min(len(lats) - 1, int(round(0.95 * (len(lats) - 1)))))] if lats else 0.0
+    return {
+        "calls": n,
+        "5xx_rate": round((n_5xx / n) if n else 0.0, 4),
+        "429_count": n_429,
+        "p95_latency_ms": round(p95, 2),
+    }
+
+
+_LAST_ALERT_STATE: dict[str, Any] = {
+    "current_alert_level": "GREEN",
+    "last_alert_at": None,
+    "last_alert_reason": None,
+}
+
+
+@app.get("/admin/zernio/status")
+async def zernio_admin_status(x_admin_token: str | None = Header(default=None)):
+    """Operator status — windowed stats + current alert level."""
+    _check_admin(x_admin_token)
+    now = _time.time()
+    return {
+        "last_5min": _window_stats(now, 300),
+        "last_1hr": _window_stats(now, 3600),
+        "last_24hr": _window_stats(now, 86400),
+        **_LAST_ALERT_STATE,
+    }
+
+
+@app.get("/admin/zernio/recent-calls")
+async def zernio_admin_recent_calls(
+    limit: int = 100,
+    x_admin_token: str | None = Header(default=None),
+):
+    """Returns the most recent ring-buffer entries (newest last)."""
+    _check_admin(x_admin_token)
+    from src.infra.zernio.base import REQUEST_LOG
+
+    limit = max(1, min(limit, 1000))
+    rows = list(REQUEST_LOG)[-limit:]
+    return {"count": len(rows), "calls": rows}
 
 
 __all__ = ["app"]

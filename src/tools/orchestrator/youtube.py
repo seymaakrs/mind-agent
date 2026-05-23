@@ -7,7 +7,7 @@ from agents import function_tool
 
 from src.infra.errors import classify_error, classify_late_response
 from src.infra.firebase_client import get_document_client
-from src.infra.late_client import get_late_client
+from src.infra.publisher import get_publisher
 
 
 @function_tool(
@@ -93,8 +93,8 @@ async def post_on_youtube(
                 "error": f"First comment exceeds 10000 characters ({len(first_comment)} chars)",
             }
 
-        late = get_late_client(youtube_id)
-        result = await late.post_youtube_video(
+        publisher = get_publisher(youtube_id)
+        publish_result = await publisher.youtube_video(
             video_url=video_url,
             title=title,
             description=description,
@@ -105,9 +105,10 @@ async def post_on_youtube(
             first_comment=first_comment,
             scheduled_for=scheduled_for,
         )
+        result = publish_result.to_dict()
 
         if not result.get("success"):
-            classified = classify_late_response(result, "late")
+            classified = classify_late_response(result, publisher.backend)
             classified.update({"video_url": video_url})
             return classified
 

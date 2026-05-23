@@ -17,6 +17,11 @@ Her madde:
 - **Yöntem:** `@observe` decorator (manuel sarma) veya `OTEL_PYTHON_DISABLED_INSTRUMENTATIONS=httpx` env var ile httpx auto-instrumentation'ı kapatma.
 - **Ne zaman:** Sıradaki teknik adım.
 
+### Zernio credentials (env'e ekle) — kısmen yapıldı
+- **Ne:** `ZERNIO_API_KEY`, `ZERNIO_BASE_URL`, `ZERNIO_WA_ACCOUNT_ID`, `ZERNIO_WEBHOOK_SECRET` blok halinde `.env.sales.example` dosyasına eklendi (PR: claude/vibrant-brahmagupta-m8eqI). Lokal `.env`'e de blok yazıldı; `ZERNIO_WEBHOOK_SECRET` `openssl rand -hex 32` ile üretildi (64 char hex). ✅
+- **Açık kalan:** `ZERNIO_API_KEY` Zernio dashboard'undan alınıp lokal `.env` + Secret Manager'a girilecek (Şeyma). Üretimde aynı `ZERNIO_WEBHOOK_SECRET` Zernio panelindeki webhook ayarına da girilmeli.
+- **Ne zaman?** API key alınır alınmaz; sonra `OPERATIONS.md` "Late/Zernio key" rotasyon tablosuna son rotasyon tarihi yazılmalı.
+
 ### LiteLLM entegrasyonu (Langfuse'den sonra)
 - **Ne:** 100+ LLM sağlayıcısını tek OpenAI formatında kullanılır kılar. Basit görevleri Groq/Gemini Flash'a yıkayıp Claude'u sadece kritik işlere bırakmak.
 - **Niye:** Fatura %50-80 düşebilir. Ama önce Langfuse ile baseline alınmadan denenmemeli.

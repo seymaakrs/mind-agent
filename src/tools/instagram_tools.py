@@ -6,7 +6,7 @@ from typing import Any
 
 from agents import function_tool
 
-from src.infra.late_client import get_late_client
+from src.infra.publisher import get_publisher
 
 
 @function_tool
@@ -44,14 +44,16 @@ async def get_instagram_insights(
         - summary: aggregated statistics (totals, averages, top performers)
     """
     try:
-        # Analytics uses late_profile_id (raw ObjectId), not instagram_id (acc_xxxxx)
-        late = get_late_client(late_profile_id, strip_prefix=False)
+        # Analytics uses late_profile_id (raw ObjectId), not instagram_id (acc_xxxxx).
+        # Publisher's get_analytics normalizes Late and Zernio to the same shape.
+        publisher = get_publisher(late_profile_id)
 
         # Validate sort_by parameter
         valid_sort_by = sort_by if sort_by in ("date", "engagement") else "date"
         valid_order = order if order in ("asc", "desc") else "desc"
 
-        result = await late.get_analytics(
+        result = await publisher.get_analytics(
+            profile_id=late_profile_id,
             date_from=date_from,
             date_to=date_to,
             limit=limit,
@@ -216,9 +218,11 @@ async def get_post_analytics(
         - platform_analytics: Per-platform breakdown (for cross-posted content)
     """
     try:
-        # Analytics uses late_profile_id (raw ObjectId), not instagram_id (acc_xxxxx)
-        late = get_late_client(late_profile_id, strip_prefix=False)
-        result = await late.get_analytics(post_id=post_id)
+        # Analytics uses late_profile_id (raw ObjectId), not instagram_id (acc_xxxxx).
+        publisher = get_publisher(late_profile_id)
+        result = await publisher.get_analytics(
+            profile_id=late_profile_id, post_id=post_id
+        )
 
         if not result.get("success"):
             return {

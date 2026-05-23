@@ -145,3 +145,49 @@ print('imageGenerationModel:', data.get('imageGenerationModel'))
 ---
 
 **Son güncelleme:** 2026-05-21
+
+## Zernio Observer Job
+
+Long-running Cloud Run job that polls the Zernio Logs API, writes log
+entries + 5-minute rollups to Firestore, and emits anomaly alerts.
+
+| Field | Value |
+|---|---|
+| Cloud Run job name | `zernio-observer` |
+| Entry point | `python -m src.agents.zernio_observer.runner` |
+| Poll interval | 5 minutes (`POLL_INTERVAL_SEC`) |
+| Firestore path | `zernio_logs/{YYYY-MM-DD}/entries/{logId}` and `.../rollups/{HHMM}` |
+| Cursor | `zernio_logs/_meta/cursor` (resumable, ISO-8601 UTC) |
+
+### Required env vars
+
+- `FIREBASE_CREDENTIALS_FILE` / `FIREBASE_STORAGE_BUCKET` — Firestore writes
+- `ZERNIO_API_KEY`, `ZERNIO_BASE_URL` (optional), `ZERNIO_WA_ACCOUNT_ID`
+- `GUARDIAN_ALERT_WEBHOOK_URL` — RED-level alerts POSTed here (Bekçi Robot
+  webhook on n8n). Unset = log only.
+- `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` (optional) — client-side
+  request spans. Unset = soft-skip.
+
+### Anomaly thresholds (constants in `runner.py`)
+
+| Constant | Default | Trigger | Action |
+|---|---|---|---|
+| `THRESHOLD_5XX_RATE` | 0.05 | >5% 5xx over last 15min | RED → POST `GUARDIAN_ALERT_WEBHOOK_URL` |
+| `THRESHOLD_429_COUNT` | 50 | >50 HTTP 429 in 5min | YELLOW → `notify_seyma` |
+| `THRESHOLD_LATENCY_SPIKE` | 10.0 | per-endpoint p95 ≥ 10× baseline | YELLOW → log + notify |
+
+### DRY_RUN behavior
+
+`DRY_RUN=true` (or unset env) → Firestore writes are skipped. The poller
+still fetches Zernio logs and runs anomaly detection (logs only). Use for
+staging shadow runs before flipping production traffic.
+
+### Operator endpoints (mind-agent API)
+
+- `GET /admin/zernio/status` — last 5min / 1h / 24h call counts, 5xx_rate,
+  429_count, p95 latency, current alert level.
+- `GET /admin/zernio/recent-calls?limit=100` — most recent ring buffer
+  entries (in-process, 1000 cap).
+
+Both require `X-Admin-Token` header matching `ADMIN_API_TOKEN` env (unset
+= open in dev, matches existing ZERNIO_WEBHOOK_SECRET soft-mode pattern).

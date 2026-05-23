@@ -6,7 +6,7 @@ from agents import function_tool
 
 from src.infra.errors import classify_error, classify_late_response
 from src.infra.firebase_client import get_document_client
-from src.infra.late_client import get_late_client
+from src.infra.publisher import get_publisher
 
 
 @function_tool(
@@ -100,9 +100,9 @@ async def post_on_linkedin(
                 "error": f"No linkedin_account_id found for business {business_id}. Please add it to the business profile.",
             }
 
-        # --- Post via Late API ---
-        late = get_late_client(linkedin_account_id)
-        result = await late.post_linkedin(
+        # --- Post via publisher (Late or Zernio per PUBLISHER_BACKEND) ---
+        publisher = get_publisher(linkedin_account_id)
+        publish_result = await publisher.linkedin_post(
             content=content,
             media_url=media_url,
             media_type=media_type,
@@ -111,9 +111,10 @@ async def post_on_linkedin(
             organization_urn=organization_urn,
             scheduled_for=scheduled_for,
         )
+        result = publish_result.to_dict()
 
         if not result.get("success"):
-            classified = classify_late_response(result, "late")
+            classified = classify_late_response(result, publisher.backend)
             return classified
 
         content_type = media_type or "text"
@@ -227,9 +228,9 @@ async def post_carousel_on_linkedin(
                 "error": f"No linkedin_account_id found for business {business_id}. Please add it to the business profile.",
             }
 
-        # --- Post via Late API ---
-        late = get_late_client(linkedin_account_id)
-        result = await late.post_linkedin_carousel(
+        # --- Post via publisher (Late or Zernio per PUBLISHER_BACKEND) ---
+        publisher = get_publisher(linkedin_account_id)
+        publish_result = await publisher.linkedin_carousel(
             media_items=media_items,
             content=content,
             first_comment=first_comment,
@@ -237,9 +238,10 @@ async def post_carousel_on_linkedin(
             organization_urn=organization_urn,
             scheduled_for=scheduled_for,
         )
+        result = publish_result.to_dict()
 
         if not result.get("success"):
-            classified = classify_late_response(result, "late")
+            classified = classify_late_response(result, publisher.backend)
             classified["item_count"] = len(media_items)
             return classified
 

@@ -6,7 +6,7 @@ from agents import function_tool
 
 from src.infra.errors import classify_error, classify_late_response
 from src.infra.firebase_client import get_document_client
-from src.infra.late_client import get_late_client
+from src.infra.publisher import get_publisher
 
 
 @function_tool(
@@ -134,9 +134,9 @@ async def post_carousel_on_tiktok(
                 "error": f"No tiktok_account_id found for business {business_id}. Please add it to the business profile.",
             }
 
-        # --- Post via Late API ---
-        late = get_late_client(tiktok_account_id)
-        result = await late.post_tiktok_carousel(
+        # --- Post via publisher (Late or Zernio per PUBLISHER_BACKEND) ---
+        publisher = get_publisher(tiktok_account_id)
+        publish_result = await publisher.tiktok_carousel(
             media_items=media_items,
             content=content,
             privacy_level=privacy_level,
@@ -148,9 +148,10 @@ async def post_carousel_on_tiktok(
             draft=draft,
             commercial_content_type=commercial_content_type,
         )
+        result = publish_result.to_dict()
 
         if not result.get("success"):
-            classified = classify_late_response(result, "late")
+            classified = classify_late_response(result, publisher.backend)
             classified["item_count"] = len(media_items)
             return classified
 
@@ -254,9 +255,9 @@ async def post_on_tiktok(
                 "error": f"No tiktok_account_id found for business {business_id}. Please add it to the business profile.",
             }
 
-        # --- Post via Late API ---
-        late = get_late_client(tiktok_account_id)
-        result = await late.post_tiktok_video(
+        # --- Post via publisher (Late or Zernio per PUBLISHER_BACKEND) ---
+        publisher = get_publisher(tiktok_account_id)
+        publish_result = await publisher.tiktok_video(
             video_url=video_url,
             content=content,
             privacy_level=privacy_level,
@@ -268,9 +269,10 @@ async def post_on_tiktok(
             draft=draft,
             commercial_content_type=commercial_content_type,
         )
+        result = publish_result.to_dict()
 
         if not result.get("success"):
-            classified = classify_late_response(result, "late")
+            classified = classify_late_response(result, publisher.backend)
             classified.update({"video_url": video_url})
             return classified
 

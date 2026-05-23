@@ -371,6 +371,50 @@ def create_analysis_agent_wrapper_tool(
     return analysis_agent_wrapper
 
 
+def create_ads_expert_wrapper_tool(
+    ads_expert_agent: Agent,
+    hooks: Any = None,
+) -> FunctionTool:
+    """Wrapper for the Zernio Ads Expert agent (paid ads management).
+
+    Distinct from ``reklam_uzmani_tool`` (which handles Meta Lead Ads form
+    inbound flow into NocoDB). The Ads Expert wrapper routes campaign
+    creation, post boosts, budget tweaks, daily reports, and audience
+    management to the Zernio Ads agent.
+    """
+
+    @function_tool(
+        name_override="ads_expert_tool",
+        description_override=(
+            "Zernio Ads Expert (paid ads management). Use when the user asks to: "
+            "boost an organic post ('su posta 100 TL boost at'), create/pause/resume a "
+            "paid campaign, change a budget, get daily spend/CTR/CPL report, manage custom "
+            "audiences, or evaluate ad performance. REQUIRED PARAMETERS: "
+            "- business_id: The exact business ID from context. "
+            "- prompt: Natural-language ads request in Turkish or English. "
+            "Keywords: reklam, boost, kampanya, butce, CTR, CPL, ROAS, hedef kitle, "
+            "custom audience, lookalike, gunluk reklam raporu, post boost, paid ads, "
+            "Meta Ads, TikTok Ads, LinkedIn Ads. NOT for incoming Lead Ads forms — "
+            "those use reklam_uzmani_tool."
+        ),
+        strict_mode=False,
+    )
+    async def ads_expert_wrapper(business_id: str, prompt: str) -> str:
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        effective_prompt = (
+            f"[TODAY: {today}]\n[Business ID: {business_id}]\n\n{prompt}"
+        )
+        result = await Runner.run(
+            starting_agent=ads_expert_agent,
+            input=effective_prompt,
+            max_turns=12,
+            hooks=hooks,
+        )
+        return result.final_output
+
+    return ads_expert_wrapper
+
+
 __all__ = [
     "create_image_agent_wrapper_tool",
     "create_video_agent_wrapper_tool",
@@ -380,4 +424,5 @@ __all__ = [
     "create_meta_agent_wrapper_tool",  # deprecated alias
     "create_sales_analyst_wrapper_tool",  # deprecated
     "create_sales_manager_wrapper_tool",
+    "create_ads_expert_wrapper_tool",
 ]

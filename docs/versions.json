@@ -1,0 +1,88 @@
+{
+  "$schema": "./versions.schema.json",
+  "current_branch": "claude/vibrant-brahmagupta-m8eqI",
+  "latest_session": "2026-05-22",
+  "sessions": [
+    {
+      "id": "2026-05-22",
+      "date": "2026-05-22",
+      "title": "Zernio entegrasyon — 4 paralel ajan",
+      "branch": "claude/vibrant-brahmagupta-m8eqI",
+      "head_commit": "f6995ee",
+      "tests": { "passed": 743, "failed": 46, "new_added": 81, "note": "46 fail pre-existing sandbox issues (firebase_admin, MCP)" },
+      "agents": [
+        {
+          "code": "A",
+          "name": "Zernio Ads / Reklam Uzmanı",
+          "repo": "mind-agent",
+          "branch": "claude/zernio-ads-agent",
+          "commit": "899cca1",
+          "merge_commit": "199ed9e",
+          "files_changed": 5,
+          "tests_added": 27,
+          "status": "merged",
+          "summary": "_AdsMixin (14 endpoint), ads_expert_agent, zernio_ads_tools.py"
+        },
+        {
+          "code": "B",
+          "name": "DM + 7 Webhook events",
+          "repo": "mind-agent",
+          "branch": "claude/zernio-dm-webhooks",
+          "commit": "884cd1a",
+          "merge_commit": "0b5ebf6",
+          "files_changed": 10,
+          "tests_added": 34,
+          "status": "merged",
+          "summary": "zernio_webhook_dispatcher, comment_to_dm agent, replay-attack guard"
+        },
+        {
+          "code": "C",
+          "name": "Connections UI",
+          "repo": "mind-id",
+          "branch": "claude/zernio-connections-ui",
+          "commit": "c3c4b45",
+          "merge_commit": "2c5f271",
+          "files_changed": 4,
+          "tests_added": 0,
+          "status": "merged",
+          "summary": "Bağlantılar sayfası (7 platform), real-time status, /api/connections/status"
+        },
+        {
+          "code": "D",
+          "name": "Logs Observability",
+          "repo": "mind-agent",
+          "branch": "claude/zernio-logs-obs",
+          "commit": "b8bc27a",
+          "merge_commit": "bd8ad32",
+          "files_changed": 8,
+          "tests_added": 20,
+          "status": "merged",
+          "summary": "_request chokepoint + telemetry, _LogsMixin, zernio_observer Cloud Run job"
+        }
+      ],
+      "pull_requests": [],
+      "conflicts_resolved": [
+        "src/infra/zernio/__init__.py — _AdsMixin + _LogsMixin sırası (el ile birleştirildi)",
+        "Stash pop sonrası base.py geri eski haline döndü — HEAD'den restore edildi"
+      ],
+      "deploy_pending": [
+        "Cloud Run env: ZERNIO_API_KEY, ZERNIO_WEBHOOK_SECRET Secret Manager'a",
+        "Yeni Cloud Run job: zernio-observer (DRY_RUN=true)",
+        "Firestore secrets/other.zernio_api_key (mind-id Cloud Functions için)",
+        "Zernio panel webhook URL → /zernio/webhook"
+      ]
+    }
+  ],
+  "active_sessions": [],
+  "deploy_checklist": [
+    { "step": 1, "task": "Secret Manager: ZERNIO_API_KEY, ZERNIO_WEBHOOK_SECRET, LANGFUSE_*", "done": false },
+    { "step": 2, "task": "Firestore secrets/other.zernio_api_key", "done": false },
+    { "step": 3, "task": "Cloud Run env update + GUARDIAN_ALERT_WEBHOOK_URL", "done": false },
+    { "step": 4, "task": "Yeni Cloud Run job: zernio-observer (DRY_RUN=true)", "done": false },
+    { "step": 5, "task": "Zernio panel webhook URL switch + HMAC secret", "done": false },
+    { "step": 6, "task": "Canary deploy mind-agent v1.23.0 (%10 trafik)", "done": false },
+    { "step": 7, "task": "Smoke test: /admin/zernio/status, post oluştur, webhook event", "done": false },
+    { "step": 8, "task": "%100 trafik cutover", "done": false },
+    { "step": 9, "task": "mind-id Vercel deploy (otomatik push'tan)", "done": false }
+  ]
+}
