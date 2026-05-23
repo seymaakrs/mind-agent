@@ -3,7 +3,7 @@ from agents import FunctionTool, function_tool
 from src.app.config import get_settings, AgentInstructionConfig
 from src.infra.errors import classify_error
 from src.infra.firebase_client import get_storage_client, save_media_record, save_dry_run_log
-from src.infra.google_ai_client import get_image_generation_client
+from src.infra.image_backend import get_image_client
 from src.models.prompts import ImagePrompt, build_image_prompt_model
 
 
@@ -112,8 +112,9 @@ def _make_generate_image_tool(prompt_model: type[ImagePrompt]) -> FunctionTool:
                 "token_count": token_count,
             }
 
-        # NORMAL MODE: Call Google API
-        image_client = get_image_generation_client()
+        # NORMAL MODE: route to active image backend (OpenAI gpt-image-2 by
+        # default; Gemini fallback if model name starts with "gemini").
+        image_client = get_image_client()
         storage_client = get_storage_client()
 
         try:
@@ -172,7 +173,12 @@ def _make_generate_image_tool(prompt_model: type[ImagePrompt]) -> FunctionTool:
             }
 
         except Exception as exc:
-            return classify_error(exc, "google_ai")
+            # service tag image_client backend'ine gore otomatik secilemiyor;
+            # error mesaji prefix'i ("OpenAI" / "API Error") classify_error
+            # icinde yeterli context veriyor. Default "openai" cunku yeni
+            # default backend gpt-image-2.
+            backend = "openai" if "OpenAI" in str(exc) else "google_ai"
+            return classify_error(exc, backend)
 
     return generate_image
 
