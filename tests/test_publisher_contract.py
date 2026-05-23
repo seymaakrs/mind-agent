@@ -10,6 +10,8 @@ in the same PR — the failure mode is the test, not production.
 """
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from src.infra.publisher.base import PublishResult
@@ -131,7 +133,7 @@ ORCHESTRATOR_INSTAGRAM_SUCCESS_KEYS = frozenset(
 
 @pytest.mark.asyncio
 async def test_orchestrator_instagram_post_success_shape(monkeypatch):
-    """Freeze the success-path dict shape returned by post_to_instagram."""
+    """Freeze the success-path dict shape returned by post_on_instagram."""
     pytest.importorskip("agents", reason="OpenAI Agents SDK required (production deps)")
     from src.tools.orchestrator import instagram as ig_mod
 
@@ -150,12 +152,21 @@ async def test_orchestrator_instagram_post_success_shape(monkeypatch):
 
     monkeypatch.setattr(ig_mod, "get_publisher", lambda _: _StubPublisher())
 
-    result = await ig_mod.post_to_instagram(
-        file_url="https://cdn.example/image.jpg",
-        caption="test",
-        content_type="image",
-        instagram_id="acc_test",
+    from agents import RunContextWrapper
+
+    ctx = RunContextWrapper(context=None)
+    raw = await ig_mod.post_on_instagram.on_invoke_tool(
+        ctx,
+        json.dumps(
+            {
+                "file_url": "https://cdn.example/image.jpg",
+                "caption": "test",
+                "content_type": "image",
+                "instagram_id": "acc_test",
+            }
+        ),
     )
+    result = json.loads(raw) if isinstance(raw, str) else raw
 
     assert set(result.keys()) == ORCHESTRATOR_INSTAGRAM_SUCCESS_KEYS, (
         f"Tool return shape drifted. Got: {sorted(result.keys())}. "
