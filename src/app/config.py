@@ -136,7 +136,14 @@ class ModelSettings(BaseModel):
     marketing_agent_model: str = "gpt-4o"
     web_agent_model: str = "gpt-4o"
     analysis_agent_model: str = "gpt-4o"
-    image_generation_model: str = "gemini-2.5-flash-image"
+    # Image generation: OpenAI gpt-image-2 is the 2026 flagship (replaced
+    # Gemini 2.5 Flash Image). Quality default "high" — Seyma'nin Marketing
+    # Agent karari (yuksek kalite icerik, premium feed icin). Cost ~$0.165-0.211
+    # per image at 1024x1024-1536. Firestore override:
+    #   settings/app_settings.imageGenerationModel:   "gpt-image-2"
+    #   settings/app_settings.imageGenerationQuality: "high" | "medium" | "low"
+    image_generation_model: str = "gpt-image-2"
+    image_generation_quality: str = "high"
     video_generation_model: str = "veo-3.1-generate-preview"
     vertex_video_model: str = "veo-2.0-generate-001"
     kling_video_model: str = "kling-v3"
@@ -184,7 +191,8 @@ def get_model_settings() -> ModelSettings:
             marketing_agent_model=doc.get("marketingModel", "gpt-4o"),  # Firebase uses "marketingModel"
             web_agent_model=doc.get("webAgentModel", "gpt-4o"),
             analysis_agent_model=doc.get("analysisAgent", "gpt-4o"),
-            image_generation_model=doc.get("imageGenerationModel", "gemini-2.5-flash-image"),
+            image_generation_model=doc.get("imageGenerationModel", "gpt-image-2"),
+            image_generation_quality=doc.get("imageGenerationQuality", "high"),
             video_generation_model=doc.get("videoGenerationModel", "veo-3.1-generate-preview"),
             vertex_video_model=doc.get("vertexVideoModel", "veo-2.0-generate-001"),
             kling_video_model=doc.get("klingVideoModel", "kling-v3"),
