@@ -654,6 +654,66 @@ async def _outreach_health_impl() -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Management tools (WRITE — Sales Manager outreach kontrolu)
+# ---------------------------------------------------------------------------
+
+
+async def _outreach_pause_impl(reason: str) -> dict[str, Any]:
+    """Flip system_settings.outreach_paused=True with a reason."""
+    tbl = _settings_table()
+    if not tbl:
+        return _missing_table_error("settings")
+    try:
+        now_iso = _now_utc().isoformat()
+        client = get_nocodb_client()
+        client.update_record(
+            tbl,
+            1,
+            {
+                "outreach_paused": True,
+                "pause_reason": reason,
+                "paused_at": now_iso,
+            },
+        )
+        return {
+            "success": True,
+            "paused": True,
+            "reason": reason,
+            "paused_at": now_iso,
+            "summary_tr": f"Outreach durduruldu. Sebep: {reason}",
+        }
+    except Exception as exc:
+        return classify_error(exc, "nocodb")
+
+
+async def _outreach_resume_impl() -> dict[str, Any]:
+    """Flip system_settings.outreach_paused=False — outreach kampanyasi devam."""
+    tbl = _settings_table()
+    if not tbl:
+        return _missing_table_error("settings")
+    try:
+        now_iso = _now_utc().isoformat()
+        client = get_nocodb_client()
+        client.update_record(
+            tbl,
+            1,
+            {
+                "outreach_paused": False,
+                "pause_reason": "",
+                "resumed_at": now_iso,
+            },
+        )
+        return {
+            "success": True,
+            "paused": False,
+            "resumed_at": now_iso,
+            "summary_tr": "Outreach yeniden baslatildi. Kampanya devam ediyor.",
+        }
+    except Exception as exc:
+        return classify_error(exc, "nocodb")
+
+
+# ---------------------------------------------------------------------------
 # Tool registrations (function_tool wrappers — exposed to the SDK)
 # ---------------------------------------------------------------------------
 
@@ -784,6 +844,33 @@ outreach_health = function_tool(
 )(_outreach_health_impl)
 
 
+outreach_pause = function_tool(
+    name_override="outreach_pause",
+    description_override=(
+        "Outreach Robotu'nu DURDUR. system_settings.outreach_paused=True yapar; "
+        "Outreach worker bir sonraki tick'te durur. REQUIRED: reason (kisa Turkce "
+        "aciklama, ornek 'Reply rate %2.1 - esik alti'). Yazma yetkisi — sadece "
+        "Sales Manager kullanir."
+    ),
+    strict_mode=False,
+)(_outreach_pause_impl)
+
+
+outreach_resume = function_tool(
+    name_override="outreach_resume",
+    description_override=(
+        "Outreach Robotu'nu YENIDEN BASLAT. system_settings.outreach_paused=False "
+        "yapar; worker bir sonraki tick'te mesaj atmaya devam eder. Argumansiz."
+    ),
+    strict_mode=False,
+)(_outreach_resume_impl)
+
+
+def get_management_tools() -> list:
+    """Sales Manager'in yazma yetkileri (sinirli: outreach pause/resume)."""
+    return [outreach_pause, outreach_resume]
+
+
 def get_reporting_tools() -> list:
     """All read-only sales reporting tools for the Sales Analyst agent."""
     return [
@@ -801,6 +888,11 @@ def get_reporting_tools() -> list:
 
 
 __all__ = [
+    "outreach_pause",
+    "outreach_resume",
+    "get_management_tools",
+    "_outreach_pause_impl",
+    "_outreach_resume_impl",
     "count_leads",
     "list_leads",
     "lead_funnel",

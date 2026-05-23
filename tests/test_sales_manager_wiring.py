@@ -21,7 +21,8 @@ class TestSalesManagerFactory:
         agent = create_sales_manager_agent()
         assert agent.name == "sales_manager"
         assert agent.handoff_description
-        assert "satis muduru" in agent.handoff_description.lower()
+        # Faz 1: Sales Manager -> Sales Director rename
+        assert "direktor" in agent.handoff_description.lower()
 
     def test_agent_has_all_read_tools(self):
         """Sales Manager mevcut 10 read tool'u korumalı."""
@@ -61,6 +62,32 @@ class TestSalesManagerFactory:
         missing = required_writes - tool_names
         assert not missing, f"Eksik yazma tool'lari: {missing}"
 
+    def test_agent_has_knowledge_tools(self):
+        """2026-05-22 — Sales Director urun/hedef-kitle hakimiyeti icin
+        knowledge_tools eklendi."""
+        from src.agents.sales.sales_manager_agent import create_sales_manager_agent
+
+        agent = create_sales_manager_agent()
+        tool_names = {t.name for t in agent.tools}
+        knowledge = {
+            "get_product_catalog",
+            "get_target_audience",
+            "get_brand_voice",
+            "get_unique_value_proposition",
+            "get_sales_playbook",
+        }
+        missing = knowledge - tool_names
+        assert not missing, f"Missing knowledge tools: {missing}"
+
+    def test_agent_has_peer_bridge_tool(self):
+        """2026-05-22 — Sales Director Reklam Uzmanı'na senkron sorgu için
+        ask_reklam_uzmani peer bridge tool'una sahip."""
+        from src.agents.sales.sales_manager_agent import create_sales_manager_agent
+
+        agent = create_sales_manager_agent()
+        tool_names = {t.name for t in agent.tools}
+        assert "ask_reklam_uzmani" in tool_names
+
 
 class TestSalesManagerInstructions:
     def test_instructions_constant_exported(self):
@@ -74,7 +101,8 @@ class TestSalesManagerInstructions:
         from src.agents.instructions import SALES_MANAGER_INSTRUCTIONS
 
         text = SALES_MANAGER_INSTRUCTIONS.lower()
-        assert "satis muduru" in text or "sales manager" in text
+        # Faz 1: rename to Sales Director
+        assert "satis direktoru" in text or "sales director" in text
         # Alt birimler ve yan birim referansi
         assert "avci" in text
         assert "dm yanitlayici" in text or "auto-reply" in text
@@ -179,12 +207,13 @@ class TestSalesManagerMemoryGoalsTriage:
         assert "triage_stale_hot_leads" in names
         assert "triage_report" in names
 
-    def test_total_tool_count_is_25(self):
-        """10 read + 6 write + 3 memory + 3 goal + 2 triage + 1 brand = 25"""
+    def test_total_tool_count_is_31(self):
+        """10 read + 6 write + 3 memory + 3 goal + 2 triage + 5 knowledge
+        + 1 peer_bridge + 1 brand = 31 (main merge: knowledge + peer_bridge eklendi)"""
         from src.agents.sales.sales_manager_agent import create_sales_manager_agent
         agent = create_sales_manager_agent()
-        assert len(agent.tools) == 25, (
-            f"Beklenen 25 tool, gelen {len(agent.tools)}: "
+        assert len(agent.tools) == 31, (
+            f"Beklenen 31 tool, gelen {len(agent.tools)}: "
             f"{sorted(t.name for t in agent.tools)}"
         )
 

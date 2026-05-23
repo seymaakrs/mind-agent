@@ -1,4 +1,4 @@
-"""Tests for Meta Reklam agent and NocoDB tools wiring."""
+"""Tests for Reklam Uzmani (eski: Meta) agent and NocoDB tools wiring."""
 from __future__ import annotations
 
 import os
@@ -9,13 +9,13 @@ import pytest
 os.environ.setdefault("OPENAI_API_KEY", "test")
 
 
-class TestMetaAgentWiring:
-    def test_meta_agent_has_six_nocodb_tools(self):
-        from src.agents.sales.meta_agent import create_meta_agent
+class TestReklamUzmaniAgentWiring:
+    def test_agent_has_six_nocodb_tools(self):
+        from src.agents.sales.reklam_uzmani_agent import create_reklam_uzmani_agent
 
-        agent = create_meta_agent()
+        agent = create_reklam_uzmani_agent()
         tool_names = [t.name for t in agent.tools]
-        assert agent.name == "meta"
+        assert agent.name == "reklam_uzmani"
         assert set(tool_names) == {
             "upsert_lead",
             "update_lead",
@@ -25,26 +25,36 @@ class TestMetaAgentWiring:
             "notify_seyma",
         }
 
-    def test_registry_exposes_meta(self):
+    def test_registry_exposes_reklam_uzmani(self):
         from src.agents.registry import get_agent_registry
 
         registry = get_agent_registry()
+        # Yeni canonical isim
+        assert "reklam_uzmani" in registry
+        agent = registry["reklam_uzmani"]()
+        assert agent.name == "reklam_uzmani"
+
+    def test_registry_keeps_meta_alias_for_back_compat(self):
+        from src.agents.registry import get_agent_registry
+
+        registry = get_agent_registry()
+        # Geriye donuk uyum
         assert "meta" in registry
         agent = registry["meta"]()
-        assert agent.name == "meta"
+        assert agent.name == "reklam_uzmani"  # alias ayni agent'a baglanir
 
-    def test_orchestrator_includes_meta_tool(self):
+    def test_orchestrator_includes_reklam_uzmani_tool(self):
         from src.agents.orchestrator_agent import create_orchestrator_agent
 
         orchestrator = create_orchestrator_agent()
         tool_names = [t.name for t in orchestrator.tools]
-        assert "meta_agent_tool" in tool_names
+        assert "reklam_uzmani_tool" in tool_names
 
-    def test_orchestrator_instructions_mention_meta(self):
+    def test_orchestrator_instructions_mention_reklam_uzmani(self):
         from src.agents.instructions import build_orchestrator_instructions
 
         text = build_orchestrator_instructions("2026-04-28")
-        assert "meta_agent_tool" in text
+        assert "reklam_uzmani_tool" in text
         assert "META LEAD" in text or "meta lead" in text.lower()
 
 
@@ -56,15 +66,6 @@ class TestNocoDBToolsConfigGuard:
         config.get_settings.cache_clear()
         monkeypatch.delenv("NOCODB_LEADS_TABLE_ID", raising=False)
 
-        # Re-import to pick up the env clear via fresh settings
-        from src.tools.sales.nocodb_tools import create_lead
-
-        # function_tool wraps coroutine; access underlying func via .on_invoke_tool
-        # Easiest: call the inner async fn through the tool's `.func` if exposed,
-        # otherwise inspect the structured contract through a direct unwrap.
-        # The OpenAI Agents SDK function_tool exposes `_function` or similar;
-        # to keep tests stable we just verify the missing-table helper exists
-        # and the resolver returns None.
         from src.tools.sales.nocodb_tools import (
             _resolve_leads_table,
             _missing_table_error,

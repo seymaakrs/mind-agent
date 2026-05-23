@@ -171,39 +171,47 @@ def create_marketing_agent_wrapper_tool(
     return marketing_agent_wrapper
 
 
-def create_meta_agent_wrapper_tool(
-    meta_agent: Agent,
+def create_reklam_uzmani_wrapper_tool(
+    reklam_uzmani_agent: Agent | None = None,
     hooks: Any = None,
+    *,
+    meta_agent: Agent | None = None,  # deprecated kwarg adi
 ) -> FunctionTool:
     """
-    Wrapper tool for the Meta Reklam Agent.
+    Wrapper tool for the Reklam Uzmani (eski: Meta Agent).
 
-    Meta agent gelen Facebook Lead Ads verisini NocoDB'ye yazar, skor hesaplar,
+    Reklam Uzmani gelen Facebook/Meta Lead Ads verisini NocoDB'ye yazar, skor hesaplar,
     sicak leadleri Seyma'ya bildirir.
+
+    NOT: `meta_agent` kwarg'i geri uyum icin tutuluyor; yeni cagrilar
+    `reklam_uzmani_agent` kullanmali.
     """
+    agent = reklam_uzmani_agent or meta_agent
+    if agent is None:
+        raise TypeError("create_reklam_uzmani_wrapper_tool requires `reklam_uzmani_agent`")
 
     @function_tool(
-        name_override="meta_agent_tool",
+        name_override="reklam_uzmani_tool",
         description_override=(
-            "Meta (Facebook/Instagram) Lead Ads agent. Use when: "
+            "Reklam Uzmani (Facebook/Meta Lead Ads) agent. Use when: "
             "(a) a new lead form submission arrives via n8n webhook (extras.lead_data), "
-            "(b) the user asks for a Meta lead report or summary. "
+            "(b) the user asks for a Meta/Facebook lead report or summary. "
             "REQUIRED PARAMETERS: "
             "- business_id: The exact business ID from context. "
             "- prompt: Either the raw lead data (dict serialized) OR a query like 'bugunku meta leadleri'. "
-            "Keywords: meta lead, facebook lead, instagram lead, lead form, lead ads, sicak lead bildirim, lead skor"
+            "Keywords: meta lead, facebook lead, instagram lead, lead form, lead ads, sicak lead bildirim, lead skor, reklam"
         ),
         strict_mode=False,
     )
-    async def meta_agent_wrapper(
+    async def reklam_uzmani_agent_wrapper(
         business_id: str,
         prompt: str,
     ) -> str:
-        """Run Meta agent with explicit business_id."""
+        """Run Reklam Uzmani agent with explicit business_id."""
         effective_prompt = f"[Business ID: {business_id}]\n\n{prompt}"
 
         result = await Runner.run(
-            starting_agent=meta_agent,
+            starting_agent=agent,
             input=effective_prompt,
             max_turns=8,
             hooks=hooks,
@@ -211,7 +219,11 @@ def create_meta_agent_wrapper_tool(
 
         return result.final_output
 
-    return meta_agent_wrapper
+    return reklam_uzmani_agent_wrapper
+
+
+# Geriye donuk uyum alias'i — eski kodlar create_meta_agent_wrapper_tool kullaniyorsa kirilmasin.
+create_meta_agent_wrapper_tool = create_reklam_uzmani_wrapper_tool
 
 
 def create_sales_analyst_wrapper_tool(
@@ -364,7 +376,8 @@ __all__ = [
     "create_video_agent_wrapper_tool",
     "create_marketing_agent_wrapper_tool",
     "create_analysis_agent_wrapper_tool",
-    "create_meta_agent_wrapper_tool",
+    "create_reklam_uzmani_wrapper_tool",
+    "create_meta_agent_wrapper_tool",  # deprecated alias
     "create_sales_analyst_wrapper_tool",  # deprecated
     "create_sales_manager_wrapper_tool",
 ]

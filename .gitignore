@@ -2,8 +2,15 @@ logs/
 *.json
 .claude/
 .env
+.env.*
 /.claude
 .claude/settings.local.json
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# Explicit secret files (never commit)
+serviceAccount.json
+gcp-service-account.json
+*-service-account.json
+*credentials*.json

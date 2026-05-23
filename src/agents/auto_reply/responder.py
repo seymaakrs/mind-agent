@@ -168,10 +168,20 @@ def _pick_base_template(
     return rng.choice(pool) if pool else None
 
 
-def _create_agent(model: str) -> Agent:
+def _create_agent(model: str, brand_prompt: str | None = None) -> Agent:
+    instructions = _INSTRUCTIONS
+    if brand_prompt and brand_prompt.strip():
+        instructions = (
+            "## BRAND CONTEXT (Faz C — brand_identity)\n\n"
+            f"{brand_prompt.strip()}\n\n"
+            "Yukaridaki marka tonu/sesi yanitlarinin BASINDA olsun. "
+            "Slowdays anchor template'leri (Bodrum/kahve/Booking) sadece "
+            "Slowdays markasi icin gecerlidir; baska markada BRAND CONTEXT "
+            "oncelikli, anchor'lardaki yer/jargon kullanilmaz.\n\n---\n\n"
+        ) + _INSTRUCTIONS
     return Agent(
         name="auto_reply_responder",
-        instructions=_INSTRUCTIONS,
+        instructions=instructions,
         output_type=AutoReplyDecision,
         model=model,
     )
@@ -185,6 +195,7 @@ async def decide_reply(
     templates: dict[str, list[str]] | None = None,
     rng: random.Random | None = None,
     conversation_history: list[dict[str, Any]] | None = None,
+    brand_prompt: str | None = None,
 ) -> AutoReplyDecision:
     """Classify + draft a reply. Pure function over (message, templates, history)."""
     config = config or AutoReplyConfig.from_env()
@@ -197,7 +208,7 @@ async def decide_reply(
         playbook=ITIRAZ_PLAYBOOK,
         history=conversation_history,
     )
-    agent = _create_agent(config.model)
+    agent = _create_agent(config.model, brand_prompt=brand_prompt)
     result = await Runner.run(starting_agent=agent, input=prompt)
     return result.final_output
 

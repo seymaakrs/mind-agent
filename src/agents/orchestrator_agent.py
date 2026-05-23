@@ -10,7 +10,7 @@ from src.app.config import get_settings, get_model_settings
 from src.app.logging_hooks import CliLoggingHooks
 from src.agents.marketing_agent import create_marketing_agent
 from src.agents.analysis_agent import create_analysis_agent
-from src.agents.sales.meta_agent import create_meta_agent
+from src.agents.sales.reklam_uzmani_agent import create_reklam_uzmani_agent
 from src.agents.sales.sales_manager_agent import create_sales_manager_agent
 from src.tools.orchestrator_tools import fetch_business, get_orchestrator_tools
 from src.tools.guardian_tools import get_guardian_status
@@ -19,7 +19,7 @@ from src.tools.agent_wrapper_tools import (
     create_video_agent_wrapper_tool,
     create_marketing_agent_wrapper_tool,
     create_analysis_agent_wrapper_tool,
-    create_meta_agent_wrapper_tool,
+    create_reklam_uzmani_wrapper_tool,
     create_sales_manager_wrapper_tool,
 )
 from src.agents.instructions import build_orchestrator_instructions
@@ -70,10 +70,10 @@ def create_orchestrator_agent(
         hooks=hooks,
     )
 
-    # Meta (Facebook Lead Ads) agent - sales acquisition
-    meta_agent = create_meta_agent()
-    meta_tool = create_meta_agent_wrapper_tool(
-        meta_agent=meta_agent,
+    # Reklam Uzmani (Facebook/Meta Lead Ads) - sales acquisition
+    reklam_uzmani_agent = create_reklam_uzmani_agent()
+    reklam_uzmani_tool_instance = create_reklam_uzmani_wrapper_tool(
+        reklam_uzmani_agent=reklam_uzmani_agent,
         hooks=hooks,
     )
 
@@ -107,7 +107,7 @@ def create_orchestrator_agent(
             video_tool,
             marketing_tool,
             analysis_tool,
-            meta_tool,
+            reklam_uzmani_tool_instance,
             sales_manager_tool,           # Satis Muduru (eski sales_analyst)
             fetch_business,
             get_guardian_status,          # Sef Bekci durumunu okuyabilsin
