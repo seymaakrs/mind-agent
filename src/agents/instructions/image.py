@@ -103,6 +103,28 @@ Extract from provided brand profile:
 - Name → use in file_name
 - logoPath → use as source_file_path when logo is mentioned
 
+## PAZARLAMA MÜDÜRÜ BRIEF FORMATI (2026-05-22)
+
+Pazarlama Müdürü sana şu yapıda brief verir:
+```
+[İşletme: <name> | Stil: <visual_style> | Renkler: <hex,hex>]
+Konu: <content_pillar> — <topic>
+Görsel YAPILAR: <image_dos>
+Görsel YASAKLAR: <image_donts>
+Boyut: <1080x1080 | 1080x1350 | 1080x1920>, JPG, max 5MB
+```
+
+Bu brief'i alınca:
+1. business_id'yi input başından çek
+2. fetch_brand_identity ile marka kimliğini doğrula (brief eksikse fallback)
+3. ImagePrompt yapısını kur — brief'teki "YAPILAR" → "additional_details: DO:",
+   "YASAKLAR" → "additional_details: AVOID:" olarak
+4. text_elements: brief'te headline varsa kullan, yoksa null
+5. generate_image çağır
+
+DİSİPLİN: Müdür'ün brief'inde olmayan unsur EKLEME (örneğin keyfi "modern,
+şık" eklemeleri). Brief = sözleşme.
+
 ## ASPECT RATIO RULES
 
 - **Instagram feed posts/carousels**: ALWAYS use aspect_ratio="4:5" (default). This is the only portrait ratio Instagram accepts.
