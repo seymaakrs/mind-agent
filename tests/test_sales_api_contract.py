@@ -24,10 +24,14 @@ from fastapi.testclient import TestClient
 
 # Endpoint required-key contracts. Update these together with the route +
 # any portal consumer (mind-id /api/sales/[...path]/route.ts) in a single PR.
+#
+# These names match the actual return shape of reporting_tools._*_impl
+# (cross-verified against mind-id components/businesses/tabs/sales-tab.tsx
+# during ADIM 3 hardening — both sides agree on the names below).
 LEADS_COUNT_REQUIRED = {"success", "count"}
-LEADS_FUNNEL_REQUIRED = {"success", "stages"}
-OUTREACH_STATUS_REQUIRED = {"success", "sent_today", "remaining_capacity"}
-OUTREACH_HEALTH_REQUIRED = {"success", "paused"}
+LEADS_FUNNEL_REQUIRED = {"success", "data"}  # portal reads .data, not .stages
+OUTREACH_STATUS_REQUIRED = {"success", "sent_today", "daily_limit", "remaining"}
+OUTREACH_HEALTH_REQUIRED = {"success", "paused", "active"}
 
 
 @pytest.fixture
@@ -43,7 +47,9 @@ def app_client(monkeypatch):
     async def _stub_funnel(**_):
         return {
             "success": True,
-            "stages": [
+            "type": "funnel",
+            "schema": "funnel",
+            "data": [
                 {"asama": "Yeni", "count": 12},
                 {"asama": "Sicak", "count": 5},
             ],
@@ -54,16 +60,19 @@ def app_client(monkeypatch):
         return {
             "success": True,
             "sent_today": 18,
-            "remaining_capacity": 222,
-            "last_sent_at": "2026-05-23T11:30:00Z",
+            "daily_limit": 240,
+            "remaining": 222,
+            "percent_used": 7.5,
+            "sent_last_hour": 3,
         }
 
     async def _stub_outreach_health():
         return {
             "success": True,
+            "configured": True,
+            "active": True,
             "paused": False,
             "reason": None,
-            "last_decision_level": "GREEN",
         }
 
     monkeypatch.setattr(sales_api, "_count_leads_impl", _stub_count)
@@ -96,8 +105,8 @@ def test_leads_funnel_returns_required_keys_and_stage_shape(app_client):
     assert r.status_code == 200
     body = r.json()
     assert LEADS_FUNNEL_REQUIRED <= set(body.keys())
-    assert isinstance(body["stages"], list) and body["stages"], "stages must be a non-empty list"
-    for stage in body["stages"]:
+    assert isinstance(body["data"], list) and body["data"], "data must be a non-empty list"
+    for stage in body["data"]:
         assert {"asama", "count"} <= set(stage.keys()), (
             f"funnel stage missing keys. Got: {sorted(stage.keys())}"
         )
