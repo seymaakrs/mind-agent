@@ -10,6 +10,7 @@ from src.app.config import get_settings, get_model_settings
 from src.app.logging_hooks import CliLoggingHooks
 from src.agents.marketing_agent import create_marketing_agent
 from src.agents.analysis_agent import create_analysis_agent
+from src.agents.brand_synthesis_agent import create_brand_synthesis_agent
 from src.agents.sales.reklam_uzmani_agent import create_reklam_uzmani_agent
 from src.agents.sales.sales_manager_agent import create_sales_manager_agent
 from src.tools.orchestrator_tools import fetch_business, get_orchestrator_tools
@@ -21,6 +22,7 @@ from src.tools.agent_wrapper_tools import (
     create_analysis_agent_wrapper_tool,
     create_reklam_uzmani_wrapper_tool,
     create_sales_manager_wrapper_tool,
+    create_brand_synthesis_wrapper_tool,
 )
 from src.agents.instructions import build_orchestrator_instructions
 
@@ -85,6 +87,14 @@ def create_orchestrator_agent(
         hooks=hooks,
     )
 
+    # Brand Synthesis (Faz B1) — website scrape + Firestore brand_identity yaz.
+    # mind-id "Isletme Ekle (URL ile)" akisinin backend kosesi.
+    brand_synthesis_agent = create_brand_synthesis_agent()
+    brand_synthesis_tool = create_brand_synthesis_wrapper_tool(
+        brand_synthesis_agent=brand_synthesis_agent,
+        hooks=hooks,
+    )
+
     # Orchestrator tools (Firebase storage/firestore/instagram)
     orchestrator_tools = get_orchestrator_tools()
 
@@ -109,6 +119,7 @@ def create_orchestrator_agent(
             analysis_tool,
             reklam_uzmani_tool_instance,
             sales_manager_tool,           # Satis Muduru (eski sales_analyst)
+            brand_synthesis_tool,         # Faz B1: website -> brand_identity
             fetch_business,
             get_guardian_status,          # Sef Bekci durumunu okuyabilsin
             *orchestrator_tools,

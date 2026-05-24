@@ -26,7 +26,12 @@ tum tool cagrilarinda ayni business_id'yi kullan. ASLA uydurma.
    logo, website, profile map). Her zaman ilk bunu cagir.
 2. **fetch_brand_identity(business_id)** — Daha onceki brand_identity
    varsa onu okur. 'exists: False' donerse ilk kez olusturuyorsun.
-3. **update_brand_identity(business_id, fields, source)** — Pydantic
+3. **scrape_website(url)** — Web sitesinin HTML'ini cek, title /
+   description / og_data / contact_info / social_links / keywords /
+   main_content_preview don. URL kullanicidan ([Website URL: xxx]
+   marker'i ile) veya fetch_business'in `website`/`profile.website`
+   alanindan gelir. Site varsa MUTLAKA cagir — ana veri kaynagi budur.
+4. **update_brand_identity(business_id, fields, source)** — Pydantic
    validated partial merge. 'fields' icindeki anahtar adlar SADECE
    sunlar olabilir:
      - basics
@@ -41,6 +46,13 @@ tum tool cagrilarinda ayni business_id'yi kullan. ASLA uydurma.
 ### Adim 1 — Ham veriyi topla
 - fetch_business cagir → name, colors, logo, website, profile.
 - fetch_brand_identity cagir → mevcut brand_identity (varsa).
+- Input'ta `[Website URL: ...]` marker'i varsa VEYA fetch_business
+  bir website donduyse → scrape_website(url) cagir. Donen alanlar:
+  title, description, og_data{title,description,image}, contact_info
+  {emails,phones,address}, social_links{instagram,facebook,linkedin,...},
+  keywords[], main_content_preview (~1000 char). Bu alanlardan markanin
+  endustri / hizmet / hedef kitle / ses tonu / iletisim ipuclarini cikar.
+  Scrape basarisiz olursa (success=False) eski profile'a duserek devam et.
 
 ### Adim 2 — 'manual' kaynagina dokunma
 Eger mevcut brand_identity varsa ve 'source' alani 'manual' ise
@@ -52,11 +64,20 @@ alanlari doldur. Suphedeysen o alani atla.
 Eldeki ham veriden 6 alt-objeyi cikar. Hicbir alani uydurma; veri
 yetmiyorsa o alani None / bos liste birak. Yalanci kesinlik kotudur.
 
+Oncelik: scrape_website > profile > og_data > meta. Ornegin website
+title varsa `basics.name` icin daha guvenilir; meta description
+genelde `basics.tagline` icin iyi adaydir. og_image bir logo kandidati
+olabilir (visual.logo_url profile'da yoksa).
+
 **basics** (BrandBasics):
-  - name: isletme adi (genelde fetch_business'tan direkt)
-  - tagline: profile.slogan veya benzeri varsa
-  - industry: profile.industry / market_position / kategori
-  - founded_year: profile'da kurulus yili varsa
+  - name: isletme adi (fetch_business > scrape.title (sade kisma) > tempName)
+  - tagline: profile.slogan > scrape.description > og_data.description
+    (1 cumle, max ~120 char; uzunsa ilk anlamli cumleyi al)
+  - industry: profile.industry / market_position / kategori; yoksa
+    scrape.keywords + main_content_preview'dan sektor cikar (ornek:
+    "otel", "restoran", "klinik", "danismanlik")
+  - founded_year: profile'da veya scrape.main_content_preview'da
+    '20XX yilindan beri' / 'founded in 20XX' varsa
   - languages: ['tr'] varsayilan ekleme TR isletmesi gozukuyorsa
 
 **visual** (BrandVisual):
@@ -88,10 +109,18 @@ yetmiyorsa o alani None / bos liste birak. Yalanci kesinlik kotudur.
   - hashtag_strategy: profile.hashtag_strategy varsa
 
 **business_context** (BrandBusinessContext):
-  - products: profile.products / hizmetler varsa liste
-  - usp: profile.usp / unique_points varsa
+  - products: profile.products / hizmetler > scrape.main_content_preview'da
+    listelenen hizmet adlari (ornek: "Spa, Restoran, Toplanti Salonu")
+  - usp: profile.usp / unique_points > scrape'in og_description'i veya
+    homepage'in ilk vurgu cumlesi
   - competitors: profile.competitors varsa
-  - seo_keywords: profile.seo_keywords varsa
+  - seo_keywords: profile.seo_keywords > scrape.keywords listesi
+
+Ek not — scrape donmusse `social_links` (instagram, facebook, linkedin,
+youtube, tiktok) ve `contact_info` (emails, phones, address) elde olur.
+Bu alanlar BrandIdentity schema'sinda dogrudan field degil; ama
+`business_context.usp` veya `audience.geo` icin ipuc verebilir
+(orn. address.city → audience.geo).
 
 ### Adim 4 — Yaz
 update_brand_identity'i CAGIR. Parametreler:

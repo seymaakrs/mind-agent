@@ -20,6 +20,7 @@ from agents import Agent
 from src.app.config import get_settings, get_model_settings
 from src.tools.brand import fetch_brand_identity, update_brand_identity
 from src.tools.orchestrator_tools import fetch_business
+from src.tools.web_tools import scrape_website
 from src.agents.instructions import BRAND_SYNTHESIS_AGENT_INSTRUCTIONS
 
 
@@ -44,6 +45,7 @@ def create_brand_synthesis_agent(
     tools = [
         fetch_business,
         fetch_brand_identity,
+        scrape_website,
         update_brand_identity,
     ]
 

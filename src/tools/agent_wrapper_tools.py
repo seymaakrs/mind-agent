@@ -371,6 +371,57 @@ def create_analysis_agent_wrapper_tool(
     return analysis_agent_wrapper
 
 
+def create_brand_synthesis_wrapper_tool(
+    brand_synthesis_agent: Agent,
+    hooks: Any = None,
+) -> FunctionTool:
+    """Wrapper tool for the brand synthesis agent.
+
+    Orchestrator calls this when the user asks to analyze a website /
+    synthesize brand identity. Forwards business_id + optional website_url
+    to the agent in the prompt so it can scrape and write brand_identity.
+    """
+
+    @function_tool(
+        name_override="brand_synthesis_tool",
+        description_override=(
+            "Marka kimligi sentezleme ajani. Bir isletmenin web sitesini "
+            "scrape eder + Firestore'daki ham veriyi okur + kanonik "
+            "BrandIdentity dokumanini Firestore'a yazar. "
+            "REQUIRED: business_id. OPTIONAL: website_url (eger kullanici "
+            "URL verdiyse). "
+            "Kullanim: kullanici 'web sitemi analiz et', 'isletme bilgilerini "
+            "doldur', 'marka kimligini cikar', 'isletme ekle (URL ile)' "
+            "dediginde. Sonuc: brand_identity Firestore'a yazilir, "
+            "kullaniciya ozet rapor doner."
+        ),
+        strict_mode=False,
+    )
+    async def brand_synthesis_wrapper(
+        business_id: str,
+        website_url: str | None = None,
+    ) -> str:
+        marker = f"[Business ID: {business_id}]"
+        if website_url:
+            marker += f"\n[Website URL: {website_url}]"
+        prompt = (
+            f"{marker}\n\n"
+            "Bu isletmenin marka kimligini sentezle. Adimlar: "
+            "fetch_business + fetch_brand_identity ile mevcut veriyi oku, "
+            "website varsa scrape_website ile cek, ardindan "
+            "update_brand_identity ile (source='ai_synthesis') yaz."
+        )
+        result = await Runner.run(
+            starting_agent=brand_synthesis_agent,
+            input=prompt,
+            max_turns=8,
+            hooks=hooks,
+        )
+        return result.final_output
+
+    return brand_synthesis_wrapper
+
+
 __all__ = [
     "create_image_agent_wrapper_tool",
     "create_video_agent_wrapper_tool",
@@ -380,4 +431,5 @@ __all__ = [
     "create_meta_agent_wrapper_tool",  # deprecated alias
     "create_sales_analyst_wrapper_tool",  # deprecated
     "create_sales_manager_wrapper_tool",
+    "create_brand_synthesis_wrapper_tool",
 ]
