@@ -14,6 +14,12 @@ function_tool wrapper + get_*_tools factory).
 
 Disiplin kuralı: business_id boş gelirse tool çağrıyı reddeder (kullanıcıya
 net hata). LLM yanlışlıkla business_id atlamasın diye zorunlu argüman.
+
+İş bağlamı kapısı (2026-05-24): BrandBusinessContext.enabled=False iken
+get_product_catalog / get_unique_value_proposition tool'ları "henüz aktif
+edilmedi" döner ve LLM uydurmaya kalkmaz. get_sales_playbook ise business
+context bölümünü gizler ama diğer alanları (audience/voice) döndürmeye
+devam eder.
 """
 from __future__ import annotations
 
@@ -62,6 +68,31 @@ def _brand_missing_response(business_id: str, tool_name: str) -> dict[str, Any]:
     }
 
 
+def _business_context_disabled_response(
+    business_id: str, tool_name: str
+) -> dict[str, Any]:
+    """İş Bağlamı bölümü kullanıcı tarafından aktif edilmediyse döner.
+
+    LLM'in bu cevabı görünce ürün/USP/rakip bilgisi UYDURMAMASI gerekiyor.
+    Kullanıcıya 'mind-id portal > Marka Kimliği > İş Bağlamı bölümünü
+    aktif edin' yönlendirmesi yap.
+    """
+    return {
+        "success": True,
+        "business_id": business_id,
+        "exists": True,
+        "business_context_enabled": False,
+        "tool": tool_name,
+        "summary_tr": (
+            "İş Bağlamı bölümü bu işletme için henüz aktif edilmedi. "
+            "Ürün/hizmet, USP, rakip ve SEO bilgileri ajan tarafından "
+            "okunmuyor. Aktif etmek için: mind-id portal > Marka Kimliği "
+            "> İş Bağlamı > 'Ajanlar için aç' toggle'ı. Bu cevap geldiğinde "
+            "ÜRÜN/USP/RAKİP HAKKINDA TAHMİN YÜRÜTME — kullanıcıyı yönlendir."
+        ),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Tool implementations
 # ---------------------------------------------------------------------------
@@ -76,6 +107,9 @@ async def _get_product_catalog_impl(business_id: str) -> dict[str, Any]:
     bi = load_brand_identity(bid)
     if bi is None:
         return _brand_missing_response(bid, "get_product_catalog")
+
+    if not bi.business_context.enabled:
+        return _business_context_disabled_response(bid, "get_product_catalog")
 
     products = bi.business_context.products or []
     usp = bi.business_context.usp
@@ -250,6 +284,11 @@ async def _get_unique_value_proposition_impl(business_id: str) -> dict[str, Any]
     if bi is None:
         return _brand_missing_response(bid, "get_unique_value_proposition")
 
+    if not bi.business_context.enabled:
+        return _business_context_disabled_response(
+            bid, "get_unique_value_proposition"
+        )
+
     usp = bi.business_context.usp
     tagline = bi.basics.tagline
     competitors = list(bi.business_context.competitors)
@@ -297,6 +336,10 @@ async def _get_sales_playbook_impl(business_id: str) -> dict[str, Any]:
 
     LLM'in 4 ayrı tool çağırması yerine başında bunu çağırması daha ucuz
     (1 Firestore read, 1 LLM round). Detaya inmek isterse diğer 4 tool var.
+
+    İş Bağlamı kapalıyken: products/usp/competitors boş döner, response'a
+    business_context_enabled: False eklenir; completeness skoru bu alanlar
+    olmadan hesaplanır.
     """
     err = _require_business_id(business_id)
     if err:
@@ -310,25 +353,37 @@ async def _get_sales_playbook_impl(business_id: str) -> dict[str, Any]:
     aud = bi.audience
     primary = aud.primary
 
+    bc_enabled = bc.enabled
+    products = list(bc.products) if bc_enabled else []
+    usp = bc.usp if bc_enabled else None
+    competitors = list(bc.competitors) if bc_enabled else []
+
     completeness = {
-        "has_products": bool(bc.products),
-        "has_usp": bool(bc.usp),
+        "has_products": bool(products),
+        "has_usp": bool(usp),
         "has_audience": bool(primary and (primary.role or primary.pain_points)),
         "has_voice": bool(bi.voice.tone),
         "has_pillars": bool(bi.content_strategy.pillars),
     }
     completeness_score = sum(1 for v in completeness.values() if v)
 
+    bc_note = (
+        ""
+        if bc_enabled
+        else " | NOT: İş Bağlamı kapalı (ürün/USP/rakip okunmadı)."
+    )
+
     return {
         "success": True,
         "business_id": bid,
         "exists": True,
+        "business_context_enabled": bc_enabled,
         "brand_name": bi.basics.name,
         "industry": bi.basics.industry,
         "tagline": bi.basics.tagline,
-        "products": list(bc.products),
-        "usp": bc.usp,
-        "competitors": list(bc.competitors),
+        "products": products,
+        "usp": usp,
+        "competitors": competitors,
         "audience": {
             "role": primary.role if primary else None,
             "age_range": primary.age_range if primary else None,
@@ -355,6 +410,7 @@ async def _get_sales_playbook_impl(business_id: str) -> dict[str, Any]:
                 if completeness_score >= 3
                 else "Outreach için eksik bilgi var — BrandIdentity'i tamamla."
             )
+            + bc_note
         ),
     }
 
@@ -369,9 +425,9 @@ get_product_catalog = function_tool(
     description_override=(
         "Returns the business product/service catalog, industry, tagline, USP, "
         "and competitors from BrandIdentity (Firestore). Use this BEFORE making "
-        "any product claim. If `exists: false` or `has_product_data: false`, "
-        "DO NOT invent product info — tell the user the data is missing. "
-        "Required: business_id."
+        "any product claim. If `exists: false` or `has_product_data: false` or "
+        "`business_context_enabled: false`, DO NOT invent product info — tell "
+        "the user the data is missing or not yet activated. Required: business_id."
     ),
 )(_get_product_catalog_impl)
 
@@ -402,7 +458,8 @@ get_unique_value_proposition = function_tool(
     description_override=(
         "Returns USP, tagline, competitors, and content pillars. Use this when "
         "the user asks 'what makes us different' or when preparing a sales "
-        "pitch. Required: business_id."
+        "pitch. If `business_context_enabled: false`, DO NOT invent — direct "
+        "the user to activate the section in mind-id portal. Required: business_id."
     ),
 )(_get_unique_value_proposition_impl)
 
@@ -413,7 +470,8 @@ get_sales_playbook = function_tool(
         "Returns the full sales playbook in ONE call: products, USP, audience, "
         "voice, pillars, and a completeness score (0-5). Prefer this over "
         "calling the individual knowledge tools when you need overall context. "
-        "Required: business_id."
+        "If `business_context_enabled: false`, products/usp/competitors fields "
+        "will be empty — surface this to the user. Required: business_id."
     ),
 )(_get_sales_playbook_impl)
 
