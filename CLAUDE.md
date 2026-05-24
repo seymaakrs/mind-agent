@@ -701,3 +701,20 @@ start-dev.bat  # Docker
 - Error reporting: `report_error(business_id, agent, task, error_message, error_type, severity)`
 - YouTube: <=3dk = Shorts (thumbnail yok), >3dk = Normal (thumbnail desteklenir)
 
+
+
+---
+
+## 🧹 Açık İş Bırakma Kuralı (Kalıcı — 2026-05-24)
+
+**Kural:** Yeni bir göreve başlamadan ÖNCE Claude tüm repolarda (`mind-id`, `mind-agent`, `customer_agent`) açık PR ve unutulmuş branch olup olmadığını **mutlaka kontrol eder**. Açık iş varsa önce onları temizler (merge / kapat / arşivle), sonra yeni göreve başlar.
+
+**Sebep:** Açık PR + yarım branch birikince Claude'un kafası karışıyor — hangi kod aktif, hangi değişiklik nerede belirsizleşiyor. Temiz başlangıç = doğru karar.
+
+**Session başında zorunlu kontrol:**
+1. Her 3 repoda açık PR listesi (MCP `list_pull_requests` veya `gh pr list --state open`)
+2. Her 3 repoda PR'sız stale branch listesi
+3. Açık iş varsa kullanıcıya rapor et + temizlik planı sun
+4. Temizlik bitmeden yeni iş başlatma
+
+Bu kural CLAUDE.md'lerin sonuna her 3 repoda da yazıldı; biri silinirse diğerlerinden geri yüklenir.
