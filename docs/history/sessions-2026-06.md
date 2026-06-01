@@ -19,7 +19,16 @@ gerçek Facebook reklam leadleri için. (Şu an reklam yoksa mail gelmez.)
 Kalan otomatik mail kaynakları (bilinçli aktif): Meta Lead Ads, Haftalik Rapor,
 Gunluk Rapor, Upsell, Referans, İtiraz, Bekci Alert.
 
-### Adım 2 — NocoDB şema güncelle (migration) ⏳ SIRADA
+### Adım 2 — NocoDB şema güncelle (migration) ✅ KOD HAZIR / ⏳ APPLY BEKLİYOR (2026-06-01)
+
+`scripts/migrate_qualifier_schema.py` yazıldı (idempotent, default DRY-RUN, `--apply` ile gerçek).
+Eklenenler: Leadler → qualified(Checkbox), source(SingleSelect 8 option:
+gmaps/ig/linkedin/meta_lead_ads/mindid_form/itiraz/wa_inbound/manual),
+qualification_reason(LongText), qualified_by(SingleLineText), qualified_at(DateTime);
+asama enum'una 'Arsiv' option.
+Test: `tests/test_migrate_qualifier_schema.py` 15/15 yeşil.
+**BLOKAJ:** CLAUDE.md'deki NocoDB token (MNhF4r...) artık 403 Forbidden dönüyor
+(rotate edilmiş). Geçerli token + base_url gelince dry-run sonra --apply koşulacak.
 ### Adım 3 — NocoDB temizlik (tek seferlik hard-delete) ⏳
 ### Adım 4 — mind-agent legacy kod taşı (_legacy_slowdays/) ⏳
 ### Adım 5 — sales_analyst_agent kaldır ⏳
