@@ -7,7 +7,7 @@ from typing import Any
 from agents import Agent
 
 from src.tools.sales.reporting_tools import get_reporting_tools
-from src.agents.instructions.sales import SALES_ANALYST_INSTRUCTIONS
+from src.agents.instructions.sales._legacy.analyst import SALES_ANALYST_INSTRUCTIONS
 
 
 def create_sales_analyst_agent(

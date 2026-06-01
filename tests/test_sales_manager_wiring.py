@@ -106,13 +106,17 @@ class TestRegistry:
         agent = registry["sales_manager"]()
         assert agent.name == "sales_manager"
 
-    def test_registry_keeps_sales_analyst_for_backcompat(self):
-        """Eski sales_analyst alias kaldigi surece backwards-compat."""
+    def test_registry_no_longer_has_sales_analyst(self):
+        """Karar (2026-06-01): sales_analyst kaldirildi (_legacy'e tasindi).
+
+        Aktif registry'de artik sales_analyst alias'i YOK; sadece
+        sales_manager + reklam_uzmani (+ meta alias) kaldi.
+        """
         from src.agents.registry import get_agent_registry
 
         registry = get_agent_registry()
-        # Deprecated ama hala calismali
-        assert "sales_analyst" in registry
+        assert "sales_analyst" not in registry
+        assert "sales_manager" in registry
 
 
 class TestOrchestratorWiring:

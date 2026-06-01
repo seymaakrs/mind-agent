@@ -226,47 +226,6 @@ def create_reklam_uzmani_wrapper_tool(
 create_meta_agent_wrapper_tool = create_reklam_uzmani_wrapper_tool
 
 
-def create_sales_analyst_wrapper_tool(
-    sales_analyst_agent: Agent,
-    hooks: Any = None,
-) -> FunctionTool:
-    """
-    DEPRECATED — use create_sales_manager_wrapper_tool instead.
-
-    Kept temporarily for backwards compatibility; new orchestrator wires
-    Sales Manager. Old Sales Analyst factory will be removed once portal
-    direct REST API is in place.
-    """
-
-    @function_tool(
-        name_override="sales_analyst_tool",
-        description_override=(
-            "[DEPRECATED — use sales_manager_tool]. Read-only NocoDB CRM "
-            "reporting. Aynı tool seti, eski persona."
-        ),
-        strict_mode=False,
-    )
-    async def sales_analyst_wrapper(
-        business_id: str,
-        prompt: str,
-    ) -> str:
-        today = datetime.utcnow().strftime("%Y-%m-%d")
-        effective_prompt = (
-            f"[TODAY: {today}]\n[Business ID: {business_id}]\n\n{prompt}"
-        )
-
-        result = await Runner.run(
-            starting_agent=sales_analyst_agent,
-            input=effective_prompt,
-            max_turns=8,
-            hooks=hooks,
-        )
-
-        return result.final_output
-
-    return sales_analyst_wrapper
-
-
 def create_sales_manager_wrapper_tool(
     sales_manager_agent: Agent,
     hooks: Any = None,
@@ -429,7 +388,6 @@ __all__ = [
     "create_analysis_agent_wrapper_tool",
     "create_reklam_uzmani_wrapper_tool",
     "create_meta_agent_wrapper_tool",  # deprecated alias
-    "create_sales_analyst_wrapper_tool",  # deprecated
     "create_sales_manager_wrapper_tool",
     "create_brand_synthesis_wrapper_tool",
 ]

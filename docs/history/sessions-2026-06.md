@@ -42,4 +42,19 @@ Aktif kod bu paketleri import ETMİYOR (grep ile doğrulandı). Collection temiz
 (1019 test toplandı, import hatası yok), taşınan testlerde 144 geçti; 6 'loop'
 testi sandbox ağ kısıtı (NocoDB host allowlist) yüzünden düştü, taşımayla
 ilgisiz.
-### Adım 5 — sales_analyst_agent kaldır ⏳
+### Adım 5 — sales_analyst_agent kaldır ✅ DONE (2026-06-01)
+
+Karar: sales_analyst YOK; sales_manager + reklam_uzmani (+ meta alias) kaldi.
+Hicbir aktif kod sales_analyst'i CAGIRMIYORDU (sadece deprecated tanim/alias).
+Taşınanlar (_legacy):
+- src/agents/sales/sales_analyst_agent.py → src/agents/sales/_legacy/
+- src/agents/instructions/sales/analyst.py → src/agents/instructions/sales/_legacy/
+- tests/test_sales_analyst_agent.py → tests/_legacy/
+Temizlenen aktif referanslar: registry.py (import+factory+alias+__all__),
+sales/__init__.py, instructions/sales/__init__.py, agent_wrapper_tools.py
+(deprecated create_sales_analyst_wrapper_tool kaldirildi), orchestrator yorumu.
+ÖNEMLİ: **reporting_tools.py TAŞINMADI** — artik aktif sales_manager'in okuma
+katmani (get_reporting_tools) + sales_api/goals/triage/management/manager_actions
+kullaniyor. Tasinsaydi Mudur cokerdi. Beyza onayiyla yerinde birakildi.
+test_sales_manager_wiring: backcompat testi guncellendi (artik 'sales_analyst
+registry'de YOK' assert'i).
