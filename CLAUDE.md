@@ -257,10 +257,10 @@ Hepsi ilk DRY_RUN=true ile baslat, paralel izle, atomic switch'te DRY_RUN=false.
 
 ### TASARIM KARARLARI (DEGISTIRME)
 - Outreach long-running worker (cron degil) — jitter + batch break Meta spam filtresine karsi
-- Auto-reply intent classifier + LLM rephrase HIBRIT — Seyma'nin 3 gercek mesaji ANCHOR olarak templates.py'da, LLM bunu KORUMAKLA yukumlu (Bodrum/Marmaris/Fethiye, "30 dakikalik kahve", "Booking komisyonu")
+- Auto-reply intent classifier + LLM rephrase HIBRIT (sektor/sehir varsayimi YOK — brand_identity ve qualified prospect verisinden dinamik beslenir)
 - Bekci Robot otomatik yeniden baslatma YAPMAZ — RED kararla pause, insan onayli resume
-- n8n workflow'lari (Itiraz/Upsell/Referans/Lead Toplama) AYNEN KALIR, mind-agent'a porte EDILMEZ — koprü tool ile MindBot bunlari tetikler
-- Slowdays leadleri vs Mindid B2B leadleri ayni NocoDB Leadler tablosunda, ayirt edici field `source_workflow_id` (Slowdays = `outreach_agent_v1`)
+- n8n workflow'lari (Itiraz/Upsell/Referans) AYNEN KALIR, mind-agent'a porte EDILMEZ — koprü tool ile MindBot bunlari tetikler. "Lead Toplama Agent" ve eski "Takip Agent" duplicate mail kaynagi → arsivlenecek.
+- Tum lead'ler ayni NocoDB Leadler tablosunda; ayirt edici alanlar: `source` (gmaps/ig/linkedin/wa_inbound/manual), `qualified` (Checkbox), `source_workflow_id`.
 
 ### YAPILMAYAN — SONRAYA
 - Adim 7 (Guardrail) ZATEN Adim 8 olarak yapildi — yok artik
@@ -332,7 +332,8 @@ NOCODB_NOTIFICATIONS_TABLE_ID  # seyma_notifications tablosu id
 ZERNIO_API_KEY            # Zernio (WhatsApp Business + Inbox + Social) API key
 ZERNIO_BASE_URL           # default: https://api.zernio.com/v1
 ZERNIO_WA_ACCOUNT_ID      # default: 69ecc2273a63baf2053dfc21 (Slowdays WA hatti)
-ZERNIO_WEBHOOK_SECRET     # /zernio/webhook HMAC dogrulama secret'i. Bos ise dogrulama atlanir (dev mode).
+ZERNIO_WEBHOOK_SECRET     # /zernio/webhook HMAC dogrulama secret'i. ZORUNLU — bos ise webhook 401 doner.
+ZERNIO_WEBHOOK_CREATE_LEAD # default false. true ise webhook inbound mesajdan da Lead satiri yazar (qualifier yerine).
 DRY_RUN=false             # true: API cagirmadan prompt logla
 ```
 
@@ -365,11 +366,10 @@ DRY_RUN=false             # true: API cagirmadan prompt logla
 - `send_message` SADECE free-form (24h CS window). Cold outreach template'i `/whatsapp/bulk` Adim 4'te eklenecek.
 - Error mapping: `src/infra/errors.py` `_ZERNIO_MAP` (HTTP status -> ErrorCode)
 
-**Zernio Inbox Webhook (Adim 5):** `POST /zernio/webhook` (FastAPI route)
-- Modul: `src/app/zernio_webhook.py` — `verify_signature` (HMAC-SHA256, soft mode), `map_to_lead_fields`, `map_to_message_fields`, `derive_external_id` (BSUID > phone > sender.id), `handle`
-- Akis: Zernio `message.received` -> imza dogrula -> map -> `upsert_record(Leadler, external_id, ...)` -> `upsert_record(Etkilesimler, external_message_id, ...)`
-- Idempotency: ayni kullanici 2 mesaj atarsa 1 lead (external_id ayni); ayni mesaj 2 kez gelirse 1 Etkilesimler satiri (platformMessageId ayni)
-- Sicaklik: `direction=incoming` -> `Sicak`, `outgoing` -> `Yeni`. Diger event'ler 200 ack ile no-op.
+**Zernio Inbox Webhook:** `POST /zernio/webhook` (FastAPI route)
+- Modul: `src/app/zernio_webhook.py` — `verify_signature` (HMAC-SHA256 ZORUNLU), `map_to_lead_fields`, `map_to_message_fields`, `derive_external_id` (BSUID > phone > sender.id), `handle`
+- **Yeni davranis (FAZ 0):** inbound mesaj **lead degildir**. Default sadece `Etkilesimler` log'una yazar; `ZERNIO_WEBHOOK_CREATE_LEAD=true` ile opt-in lead yazimi. Hicbir mesaj asla `asama=Sicak` olarak yazilmaz — gelen `asama=Yeni`, `qualified=false`. Sektor/sirket varsayimi yapilmaz. Lead promotion + sicaklik insan/qualifier agent karari.
+- HMAC zorunlu: `ZERNIO_WEBHOOK_SECRET` set degilse 401 doner (soft mode kaldirildi).
 
 ## Kritik Akislar
 

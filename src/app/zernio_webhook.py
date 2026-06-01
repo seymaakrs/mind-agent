@@ -25,6 +25,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any
 
@@ -50,12 +51,12 @@ def _expected_signature(secret: str, raw_body: bytes) -> str:
 def verify_signature(raw_body: bytes, signature_header: str | None) -> tuple[bool, str]:
     """Return ``(ok, reason)``.
 
-    Soft mode: when ``ZERNIO_WEBHOOK_SECRET`` is unset, returns ``(True, "skipped")``
-    so dev/test environments can drive the webhook without configuring HMAC.
+    HMAC zorunlu. ``ZERNIO_WEBHOOK_SECRET`` set degilse webhook reddedilir —
+    public endpoint'in spam/saldiri yuzeyi kapatilir. Dev'de env'i set et.
     """
     secret = get_settings().zernio_webhook_secret
     if not secret:
-        return True, "skipped (no ZERNIO_WEBHOOK_SECRET)"
+        return False, "ZERNIO_WEBHOOK_SECRET not configured"
     if not signature_header:
         return False, "missing X-Zernio-Signature header"
     expected = _expected_signature(secret, raw_body)
@@ -118,9 +119,9 @@ def _normalize_phone(sender: dict[str, Any]) -> str | None:
 def map_to_lead_fields(payload: dict[str, Any]) -> dict[str, Any]:
     """Translate a Zernio ``message.received`` envelope to upsert_lead fields.
 
-    Returns a dict compatible with NocoDB Leadler columns. Caller decides
-    whether to write — non-incoming or non-target events should be filtered
-    upstream.
+    Inbound mesaj != qualified lead. Bu fonksiyon sadece minimum iletisim
+    kaydi olusturur; qualified=false, asama='Yeni'. Sektor/sirket varsayimi
+    yapilmaz — qualifier agent insan/LLM onayindan sonra doldurur.
     """
     message = payload.get("message") or {}
     sender = message.get("sender") or {}
@@ -131,49 +132,35 @@ def map_to_lead_fields(payload: dict[str, Any]) -> dict[str, Any]:
     phone = _normalize_phone(sender)
     text = (message.get("text") or "").strip()
     kaynak = _KAYNAK_MAP.get(platform, "Manuel")
-    sektor_default = "Otelcilik" if platform == "whatsapp" else None
-    asama = "Sicak" if message.get("direction") == "incoming" else "Yeni"
 
     fields: dict[str, Any] = {
         "external_id": derive_external_id(message),
         "ad_soyad": name,
-        "sirket_adi": name,  # Slowdays WA: gönderen adı = otel adı
         "kaynak": kaynak,
         "source_workflow_id": "mind_agent_zernio_webhook",
-        "asama": asama,
-        "lead_skoru": _score(platform, sektor_default, asama),
+        "asama": "Yeni",
+        "qualified": False,
+        "lead_skoru": _score(platform),
     }
     if phone:
         fields["telefon"] = phone
-    if sektor_default:
-        fields["sektor"] = sektor_default
     if text:
         fields["notlar"] = text
         fields["ihtiyac_notu"] = f"Zernio {platform}: {text[:200]}"
     return fields
 
 
-def _score(platform: str, sektor: str | None, asama: str) -> int:
-    """Match the n8n Calculate Lead Score formula (Adim 3 jsCode)."""
-    skor = 0
-    if sektor in {"Otelcilik", "Yeme-Icme", "Turizm", "Spa-Wellness"}:
-        skor += 20
-    elif sektor and sektor != "Diger":
-        skor += 10
-    # konum unknown from Zernio payload — skip
+def _score(platform: str) -> int:
+    """Inbound conversation skoru — yalniz iletisim sinyali, asla 'sicak' esigi.
+
+    Gercek lead skoru qualifier agent tarafindan (LLM + ICP fit) hesaplanir.
+    Bu fonksiyon sadece kanal guvenilirligi icin kucuk bir taban verir.
+    """
     if platform == "whatsapp":
-        skor += 20  # 'WhatsApp' kaynagi
-    elif platform in {"instagram", "facebook"}:
-        skor += 10
-    else:
-        skor += 5
-    if asama == "Sicak":
-        skor += 30
-    elif asama == "Ilik":
-        skor += 20
-    elif asama == "Yeni":
-        skor += 5
-    return skor
+        return 15
+    if platform in {"instagram", "facebook"}:
+        return 10
+    return 5
 
 
 def map_to_message_fields(payload: dict[str, Any], lead_name: str) -> dict[str, Any]:
@@ -225,30 +212,31 @@ def handle(payload: dict[str, Any]) -> dict[str, Any]:
     settings = get_settings()
     leads_tbl = settings.nocodb_leads_table_id
     msgs_tbl = settings.nocodb_messages_table_id
-    if not leads_tbl:
-        return {
-            "success": False,
-            "error": "NOCODB_LEADS_TABLE_ID is not configured",
-            "error_code": "INVALID_INPUT",
-        }
+
+    # Inbound mesaj != qualified lead. Default: lead satiri yazma, sadece
+    # Etkilesimler'e log dus. Lead promotion'u qualifier agent yapar.
+    create_lead = os.getenv("ZERNIO_WEBHOOK_CREATE_LEAD", "false").lower() == "true"
 
     lead_fields = map_to_lead_fields(payload)
-    try:
-        client = get_nocodb_client()
-        lead_result = client.upsert_record(leads_tbl, "external_id", lead_fields)
-        lead_record = lead_result["record"]
-        result: dict[str, Any] = {
-            "success": True,
-            "created": lead_result["created"],
-            "lead_id": lead_record.get("Id"),
-            "external_id": lead_fields["external_id"],
-        }
-    except Exception as exc:
-        return classify_error(exc, "nocodb")
+    client = get_nocodb_client()
+    result: dict[str, Any] = {
+        "success": True,
+        "external_id": lead_fields["external_id"],
+        "lead_created": False,
+    }
+    lead_record: dict[str, Any] = {}
 
-    # Best-effort message log; failure does not roll back the lead upsert.
+    if create_lead and leads_tbl:
+        try:
+            lead_result = client.upsert_record(leads_tbl, "external_id", lead_fields)
+            lead_record = lead_result["record"]
+            result["lead_created"] = lead_result["created"]
+            result["lead_id"] = lead_record.get("Id")
+        except Exception as exc:
+            return classify_error(exc, "nocodb")
+
     if msgs_tbl:
-        msg_fields = map_to_message_fields(payload, lead_record.get("ad_soyad") or lead_fields["ad_soyad"])
+        msg_fields = map_to_message_fields(payload, (lead_record.get("ad_soyad") if lead_record else None) or lead_fields["ad_soyad"])
         try:
             ext_msg_id = msg_fields.get("external_message_id")
             if ext_msg_id:
