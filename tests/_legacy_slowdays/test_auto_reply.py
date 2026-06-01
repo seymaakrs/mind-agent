@@ -11,15 +11,15 @@ import pytest
 
 os.environ.setdefault("OPENAI_API_KEY", "test")
 
-from src.agents.auto_reply.policy import AutoReplyConfig  # noqa: E402
-from src.agents.auto_reply.targeting import _build_where, find_pending_inbounds  # noqa: E402
-from src.agents.auto_reply.templates import FALLBACK_TEMPLATES, has_active_templates  # noqa: E402
-from src.agents.auto_reply.responder import (  # noqa: E402
+from src.agents._legacy_slowdays.auto_reply.policy import AutoReplyConfig  # noqa: E402
+from src.agents._legacy_slowdays.auto_reply.targeting import _build_where, find_pending_inbounds  # noqa: E402
+from src.agents._legacy_slowdays.auto_reply.templates import FALLBACK_TEMPLATES, has_active_templates  # noqa: E402
+from src.agents._legacy_slowdays.auto_reply.responder import (  # noqa: E402
     AutoReplyDecision,
     _build_user_prompt,
     _pick_base_template,
 )
-from src.agents.auto_reply import runner  # noqa: E402
+from src.agents._legacy_slowdays.auto_reply import runner  # noqa: E402
 
 
 class TestAutoReplyConfig:

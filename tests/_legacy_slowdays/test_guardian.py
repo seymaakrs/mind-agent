@@ -9,10 +9,10 @@ import pytest
 
 os.environ.setdefault("OPENAI_API_KEY", "test")
 
-from src.agents.guardian.decisions import Decision, DecisionLevel, decide  # noqa: E402
-from src.agents.guardian.metrics import GuardianMetrics, compute_metrics  # noqa: E402
-from src.agents.guardian.policy import GuardianConfig  # noqa: E402
-from src.agents.guardian import runner  # noqa: E402
+from src.agents._legacy_slowdays.guardian.decisions import Decision, DecisionLevel, decide  # noqa: E402
+from src.agents._legacy_slowdays.guardian.metrics import GuardianMetrics, compute_metrics  # noqa: E402
+from src.agents._legacy_slowdays.guardian.policy import GuardianConfig  # noqa: E402
+from src.agents._legacy_slowdays.guardian import runner  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -242,12 +242,12 @@ class TestRunnerTick:
 class TestOutreachPauseCheck:
     def test_returns_false_when_settings_table_not_configured(self, monkeypatch):
         monkeypatch.delenv("NOCODB_SETTINGS_TABLE_ID", raising=False)
-        from src.agents.outreach import runner as outreach_runner
+        from src.agents._legacy_slowdays.outreach import runner as outreach_runner
         assert outreach_runner._is_outreach_paused() is False
 
     def test_returns_true_when_paused_flag_set(self, monkeypatch):
         monkeypatch.setenv("NOCODB_SETTINGS_TABLE_ID", "settings_tbl")
-        from src.agents.outreach import runner as outreach_runner
+        from src.agents._legacy_slowdays.outreach import runner as outreach_runner
 
         nocodb = MagicMock()
         nocodb.list_records.return_value = {"list": [{"outreach_paused": True}]}
@@ -257,7 +257,7 @@ class TestOutreachPauseCheck:
 
     def test_returns_false_when_paused_flag_unset(self, monkeypatch):
         monkeypatch.setenv("NOCODB_SETTINGS_TABLE_ID", "settings_tbl")
-        from src.agents.outreach import runner as outreach_runner
+        from src.agents._legacy_slowdays.outreach import runner as outreach_runner
 
         nocodb = MagicMock()
         nocodb.list_records.return_value = {"list": [{"outreach_paused": False}]}
@@ -267,7 +267,7 @@ class TestOutreachPauseCheck:
 
     def test_returns_false_on_nocodb_error(self, monkeypatch):
         monkeypatch.setenv("NOCODB_SETTINGS_TABLE_ID", "settings_tbl")
-        from src.agents.outreach import runner as outreach_runner
+        from src.agents._legacy_slowdays.outreach import runner as outreach_runner
 
         nocodb = MagicMock()
         nocodb.list_records.side_effect = RuntimeError("nocodb down")

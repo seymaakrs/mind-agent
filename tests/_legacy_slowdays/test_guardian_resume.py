@@ -8,16 +8,16 @@ import pytest
 
 os.environ.setdefault("OPENAI_API_KEY", "test")
 
-from src.agents.guardian.decisions import (  # noqa: E402
+from src.agents._legacy_slowdays.guardian.decisions import (  # noqa: E402
     ACTION_NONE,
     ACTION_PAUSE,
     ACTION_RESUME,
     DecisionLevel,
     decide,
 )
-from src.agents.guardian.metrics import GuardianMetrics  # noqa: E402
-from src.agents.guardian.policy import GuardianConfig  # noqa: E402
-from src.agents.guardian import runner  # noqa: E402
+from src.agents._legacy_slowdays.guardian.metrics import GuardianMetrics  # noqa: E402
+from src.agents._legacy_slowdays.guardian.policy import GuardianConfig  # noqa: E402
+from src.agents._legacy_slowdays.guardian import runner  # noqa: E402
 
 
 def _metrics(out=200, inb=10, auto=6, fail=0):

@@ -16,17 +16,17 @@ from unittest.mock import AsyncMock, MagicMock
 
 os.environ.setdefault("OPENAI_API_KEY", "test")
 
-from src.agents.auto_reply.policy import AutoReplyConfig  # noqa: E402
-from src.agents.auto_reply.responder import (  # noqa: E402
+from src.agents._legacy_slowdays.auto_reply.policy import AutoReplyConfig  # noqa: E402
+from src.agents._legacy_slowdays.auto_reply.responder import (  # noqa: E402
     AutoReplyDecision,
     _build_user_prompt,
     _format_playbook,
 )
-from src.agents.auto_reply.templates import (  # noqa: E402
+from src.agents._legacy_slowdays.auto_reply.templates import (  # noqa: E402
     ITIRAZ_PLAYBOOK,
     has_objection_playbook,
 )
-from src.agents.auto_reply import runner  # noqa: E402
+from src.agents._legacy_slowdays.auto_reply import runner  # noqa: E402
 
 
 class TestItirazPlaybook:

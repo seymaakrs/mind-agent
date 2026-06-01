@@ -8,10 +8,10 @@ DRY_RUN mode (``DRY_RUN=true``) skips Zernio API calls and logs only —
 keeps NocoDB writes off too, so it is safe in staging.
 
 Run:
-    python -m src.agents.outreach.runner
+    python -m src.agents._legacy_slowdays.outreach.runner
 
 Cloud Run Job mode (one-shot — exit after first iteration):
-    RUN_ONCE=true python -m src.agents.outreach.runner
+    RUN_ONCE=true python -m src.agents._legacy_slowdays.outreach.runner
 
 Stop the loop with SIGTERM (Cloud Run job termination signal). One iteration
 is wrapped in try/except so a transient NocoDB or Zernio hiccup pauses for
@@ -27,8 +27,8 @@ import sys
 from datetime import datetime, timezone
 from typing import Any
 
-from src.agents.outreach.policy import OutreachConfig, OutreachPolicy
-from src.agents.outreach.targeting import count_sent_today, pick_next_target
+from src.agents._legacy_slowdays.outreach.policy import OutreachConfig, OutreachPolicy
+from src.agents._legacy_slowdays.outreach.targeting import count_sent_today, pick_next_target
 from src.app.config import get_settings
 from src.infra.nocodb_client import get_nocodb_client
 from src.infra.zernio import get_zernio_client

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from src.agents.outreach.targeting import (
+from src.agents._legacy_slowdays.outreach.targeting import (
     _CANDIDATE_POOL_SIZE,
     pick_next_target,
     score_lead,

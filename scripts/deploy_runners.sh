@@ -94,10 +94,10 @@ create_job() {
   echo "  ✓ $job_name hazır"
 }
 
-create_job "guardian-tick" "src.agents.guardian.runner" "Bekçi — kampanya sağlık monitörü"
-create_job "outreach-tick" "src.agents.outreach.runner" "Avcı — soğuk outreach"
+create_job "guardian-tick" "src.agents._legacy_slowdays.guardian.runner" "Bekçi — kampanya sağlık monitörü"
+create_job "outreach-tick" "src.agents._legacy_slowdays.outreach.runner" "Avcı — soğuk outreach"
 create_job "followup-tick" "src.agents.followup.runner" "Takipçi — geç kalmış lead'lere takip"
-create_job "auto-reply-tick" "src.agents.auto_reply.runner" "DM Yanıtlayıcı — gelen mesajlara cevap"
+create_job "auto-reply-tick" "src.agents._legacy_slowdays.auto_reply.runner" "DM Yanıtlayıcı — gelen mesajlara cevap"
 
 echo ""
 echo "✓ 4 Cloud Run Job oluşturuldu/güncellendi."

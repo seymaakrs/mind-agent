@@ -19,14 +19,14 @@ import pytest
 
 os.environ.setdefault("OPENAI_API_KEY", "test")
 
-from src.agents.outreach.policy import OutreachConfig, OutreachPolicy  # noqa: E402
-from src.agents.outreach.targeting import (  # noqa: E402
+from src.agents._legacy_slowdays.outreach.policy import OutreachConfig, OutreachPolicy  # noqa: E402
+from src.agents._legacy_slowdays.outreach.targeting import (  # noqa: E402
     _CANDIDATE_POOL_SIZE,
     _build_where,
     count_sent_today,
     pick_next_target,
 )
-from src.agents.outreach import runner  # noqa: E402
+from src.agents._legacy_slowdays.outreach import runner  # noqa: E402
 
 
 class TestOutreachConfig:
