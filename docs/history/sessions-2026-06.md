@@ -19,7 +19,7 @@ gerçek Facebook reklam leadleri için. (Şu an reklam yoksa mail gelmez.)
 Kalan otomatik mail kaynakları (bilinçli aktif): Meta Lead Ads, Haftalik Rapor,
 Gunluk Rapor, Upsell, Referans, İtiraz, Bekci Alert.
 
-### Adım 2 — NocoDB şema güncelle (migration) ✅ KOD HAZIR / ⏳ APPLY BEKLİYOR (2026-06-01)
+### Adım 2 — NocoDB şema güncelle (migration) ✅ DONE (2026-06-02 APPLY edildi)
 
 `scripts/migrate_qualifier_schema.py` yazıldı (idempotent, default DRY-RUN, `--apply` ile gerçek).
 Eklenenler: Leadler → qualified(Checkbox), source(SingleSelect 8 option:
@@ -27,8 +27,13 @@ gmaps/ig/linkedin/meta_lead_ads/mindid_form/itiraz/wa_inbound/manual),
 qualification_reason(LongText), qualified_by(SingleLineText), qualified_at(DateTime);
 asama enum'una 'Arsiv' option.
 Test: `tests/test_migrate_qualifier_schema.py` 15/15 yeşil.
-**BLOKAJ:** CLAUDE.md'deki NocoDB token (MNhF4r...) artık 403 Forbidden dönüyor
-(rotate edilmiş). Geçerli token + base_url gelince dry-run sonra --apply koşulacak.
+APPLY edildi (2026-06-02, Cloud Shell): qualified/source/qualification_reason/
+qualified_by/qualified_at eklendi; asama 'Arsiv' zaten vardı. Veri kaybı yok.
+ERİŞİM NOTU: base_url artık https://db.mindidai.com.tr (Caddy reverse proxy).
+Caddy panel UI'yı (/ ve /dashboard) 403 ile kapatıyor AMA /api/v2/meta/* açık.
+Token panelden alınamadığı için scripts/nocodb_make_token.sh ile email+şifre →
+/api/v2/auth/user/signin → /api/v1/tokens üzerinden üretildi. Migration Cloud
+Shell'den koşuldu (Claude bulut oturumu host_not_allowed ile dışarı çıkamıyor).
 ### Adım 3 — NocoDB temizlik (tek seferlik hard-delete) ⏳
 ### Adım 4 — mind-agent legacy kod taşı (_legacy_slowdays/) ✅ DONE (2026-06-01)
 
