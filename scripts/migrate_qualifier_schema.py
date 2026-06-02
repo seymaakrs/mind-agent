@@ -253,6 +253,20 @@ def main() -> int:
         print(f"FAIL: missing env vars: {', '.join(missing)}", file=sys.stderr)
         return 2
 
+    # Token sagligi: kullanici yanlislikla placeholder ('<...>') ya da Turkce
+    # karakterli metin export ederse httpx ascii-encode hatasi atiyor. Net mesaj ver.
+    token = token.strip()
+    if "<" in token or ">" in token or not token.isascii():
+        print(
+            "FAIL: NOCODB_API_TOKEN gecersiz gorunuyor.\n"
+            f"  Su an degeri: {token!r}\n"
+            "  Galiba ornek metni ('<...>') oldugu gibi yapistirdin.\n"
+            "  Gercek token'i tek satirda export et, ornek:\n"
+            "    export NOCODB_API_TOKEN='3jLvvMATtfu_...'  (kendi token'in)",
+            file=sys.stderr,
+        )
+        return 2
+
     mode = "DRY-RUN (hicbir sey degismez)" if dry_run else "APPLY (GERCEK)"
     print(f"Connecting to {base_url} ...")
     print(f"Mode: {mode}")
