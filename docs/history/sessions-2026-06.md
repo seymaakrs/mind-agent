@@ -34,7 +34,14 @@ Caddy panel UI'yı (/ ve /dashboard) 403 ile kapatıyor AMA /api/v2/meta/* açı
 Token panelden alınamadığı için scripts/nocodb_make_token.sh ile email+şifre →
 /api/v2/auth/user/signin → /api/v1/tokens üzerinden üretildi. Migration Cloud
 Shell'den koşuldu (Claude bulut oturumu host_not_allowed ile dışarı çıkamıyor).
-### Adım 3 — NocoDB temizlik (tek seferlik hard-delete) ⏳
+### Adım 3 — NocoDB temizlik (tek seferlik hard-delete) ✅ KOD HAZIR / ⏳ DRY-RUN BEKLİYOR
+
+scripts/cleanup_fake_leads.py + tests/test_cleanup_fake_leads.py (13/13 yeşil).
+Kriter: source_workflow_id='mind_agent_zernio_webhook' VEYA ad_soyad='Unknown'
+VEYA notlar/external_id'de 'test'. İlişkili Etkilesimler (link alanı otomatik
+tespit) de silinir. Default DRY-RUN (sayar+kolon+örnek gösterir), --apply ile
+gerçek siler. Cloud Shell'den koşulacak (Beyza onayı ile). BUGÜNDEN SONRA
+hard-delete YASAK — sadece asama='Arsiv'.
 ### Adım 4 — mind-agent legacy kod taşı (_legacy_slowdays/) ✅ DONE (2026-06-01)
 
 Taşınanlar (git mv, import yolları güncellendi):
