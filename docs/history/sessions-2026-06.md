@@ -58,3 +58,15 @@ katmani (get_reporting_tools) + sales_api/goals/triage/management/manager_action
 kullaniyor. Tasinsaydi Mudur cokerdi. Beyza onayiyla yerinde birakildi.
 test_sales_manager_wiring: backcompat testi guncellendi (artik 'sales_analyst
 registry'de YOK' assert'i).
+
+
+### NocoDB erişim teşhisi (2026-06-02)
+- Bu Claude bulut oturumunun ağ politikası KAPALI: github/example dahil tüm dış
+  host'lar 403 'host_not_allowed' veriyor. Yani migration buradan koşulamaz;
+  ya oturum network policy'sine db.mindidai.com.tr eklenir ya da Şeyma kendi
+  Cloud Shell'inden koşar.
+- Kullanıcı tarayıcıda https://db.mindidai.com.tr Forbidden alıyor (ayrı sorun,
+  muhtemelen Caddy reverse proxy Host/IP allowlist).
+- `scripts/diagnose_nocodb.sh` yazıldı: Cloud Shell'den domain+IP'yi yoklayıp
+  Forbidden'ın kaynağını (proxy mi, token mı, IP allowlist mi) tespit eder.
+  Read-only. Çıktıya göre sonraki adım belirlenecek.
