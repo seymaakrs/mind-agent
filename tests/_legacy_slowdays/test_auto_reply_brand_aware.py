@@ -8,12 +8,12 @@ import pytest
 
 os.environ.setdefault("OPENAI_API_KEY", "test")
 
-from src.agents.auto_reply.policy import AutoReplyConfig  # noqa: E402
-from src.agents.auto_reply.responder import (  # noqa: E402
+from src.agents._legacy_slowdays.auto_reply.policy import AutoReplyConfig  # noqa: E402
+from src.agents._legacy_slowdays.auto_reply.responder import (  # noqa: E402
     AutoReplyDecision,
     decide_reply,
 )
-from src.agents.auto_reply import runner  # noqa: E402
+from src.agents._legacy_slowdays.auto_reply import runner  # noqa: E402
 
 
 class TestAutoReplyBrandConfig:
@@ -52,7 +52,7 @@ class TestDecideReplyBrandPrompt:
             )
             return res
 
-        from src.agents.auto_reply import responder
+        from src.agents._legacy_slowdays.auto_reply import responder
         monkeypatch.setattr(responder.Runner, "run", fake_run)
         out = await decide_reply("merhaba", brand_prompt=None)
         assert out.intent == "olumlu"
@@ -70,7 +70,7 @@ class TestDecideReplyBrandPrompt:
             )
             return res
 
-        from src.agents.auto_reply import responder
+        from src.agents._legacy_slowdays.auto_reply import responder
         monkeypatch.setattr(responder.Runner, "run", fake_run)
         await decide_reply(
             "merhaba",

@@ -11,7 +11,7 @@ intentionally NOT used so the natural rate-limit is preserved (jitter +
 batch breaks emulate human pacing). Image is the same mind-agent container,
 just a different command:
 
-    python -m src.agents.outreach.runner
+    python -m src.agents._legacy_slowdays.outreach.runner
 """
 from __future__ import annotations
 

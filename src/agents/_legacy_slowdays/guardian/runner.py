@@ -1,9 +1,9 @@
 """Guardian (Bekci) main loop — Cloud Run job entry-point.
 
-    python -m src.agents.guardian.runner
+    python -m src.agents._legacy_slowdays.guardian.runner
 
 Cloud Run Job mode (one-shot — tek tick sonra exit):
-    RUN_ONCE=true python -m src.agents.guardian.runner
+    RUN_ONCE=true python -m src.agents._legacy_slowdays.guardian.runner
 
 Her tick:
 1. Etkilesimler'den 24h metric'lerini hesapla
@@ -35,9 +35,9 @@ from typing import Any
 
 import httpx
 
-from src.agents.guardian.decisions import Decision, DecisionLevel, decide
-from src.agents.guardian.metrics import compute_metrics
-from src.agents.guardian.policy import GuardianConfig
+from src.agents._legacy_slowdays.guardian.decisions import Decision, DecisionLevel, decide
+from src.agents._legacy_slowdays.guardian.metrics import compute_metrics
+from src.agents._legacy_slowdays.guardian.policy import GuardianConfig
 from src.app.config import get_settings
 from src.infra.nocodb_client import get_nocodb_client
 

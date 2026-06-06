@@ -73,13 +73,13 @@ def _msg_received(
 
 
 class TestSignature:
-    def test_soft_mode_skips_when_no_secret(self, monkeypatch):
+    def test_rejects_when_secret_not_configured(self, monkeypatch):
         monkeypatch.setenv("ZERNIO_WEBHOOK_SECRET", "")
         from src.app.config import get_settings
         get_settings.cache_clear()
         ok, reason = zw.verify_signature(b"{}", signature_header=None)
-        assert ok is True
-        assert "skipped" in reason
+        assert ok is False
+        assert "not configured" in reason
 
     def test_strict_mode_valid_signature(self, monkeypatch):
         monkeypatch.setenv("ZERNIO_WEBHOOK_SECRET", "topsecret")
@@ -133,25 +133,24 @@ class TestExternalId:
 
 
 class TestMapToLeadFields:
-    def test_whatsapp_incoming_becomes_sicak_lead(self):
+    def test_whatsapp_inbound_is_yeni_not_sicak(self):
         fields = zw.map_to_lead_fields(_msg_received())
         assert fields["kaynak"] == "WhatsApp"
-        assert fields["asama"] == "Sicak"
+        assert fields["asama"] == "Yeni"
+        assert fields["qualified"] is False
         assert fields["telefon"] == "+905551112233"
         assert fields["ad_soyad"] == "Ide Beach Home"
-        assert fields["sektor"] == "Otelcilik"
+        assert "sektor" not in fields
+        assert "sirket_adi" not in fields
         assert "Merhaba" in fields["notlar"]
-        assert fields["lead_skoru"] == 70  # 20 (Otelcilik) + 20 (WA) + 30 (Sicak)
+        assert fields["lead_skoru"] == 15
         assert fields["source_workflow_id"] == "mind_agent_zernio_webhook"
 
     def test_instagram_maps_to_ig_dm(self):
         fields = zw.map_to_lead_fields(_msg_received(platform="instagram"))
         assert fields["kaynak"] == "IG DM"
-        assert "sektor" not in fields  # only WA defaults to Otelcilik
-
-    def test_outgoing_becomes_yeni(self):
-        fields = zw.map_to_lead_fields(_msg_received(direction="outgoing"))
-        assert fields["asama"] == "Yeni"
+        assert "sektor" not in fields
+        assert fields["lead_skoru"] == 10
 
     def test_phone_falls_back_from_sender_id(self):
         fields = zw.map_to_lead_fields(_msg_received(phone=None, sender_id="905551112233"))
@@ -219,49 +218,32 @@ class TestHandle:
         assert result["skipped"] is True
         fake_nocodb.upsert_record.assert_not_called()
 
-    def test_target_event_writes_lead_and_message(self, fake_nocodb, configured_tables):
+    def test_default_only_logs_interaction_no_lead_write(self, fake_nocodb, configured_tables, monkeypatch):
+        monkeypatch.delenv("ZERNIO_WEBHOOK_CREATE_LEAD", raising=False)
+        result = zw.handle(_msg_received())
+        assert result["success"] is True
+        assert result["lead_created"] is False
+        assert "lead_id" not in result
+        # Only Etkilesimler upsert, no Leadler write
+        upsert_calls = fake_nocodb.upsert_record.call_args_list
+        assert len(upsert_calls) == 1
+        assert upsert_calls[0].args[0] == "msgs_tbl"
+        assert upsert_calls[0].args[1] == "external_message_id"
+
+    def test_lead_write_opt_in_via_env(self, fake_nocodb, configured_tables, monkeypatch):
+        monkeypatch.setenv("ZERNIO_WEBHOOK_CREATE_LEAD", "true")
         result = zw.handle(_msg_received())
         assert result["success"] is True
         assert result["lead_id"] == 99
-        assert result["created"] is True
-        # Lead upsert keyed by external_id
         upsert_calls = fake_nocodb.upsert_record.call_args_list
         assert upsert_calls[0].args[0] == "leads_tbl"
-        assert upsert_calls[0].args[1] == "external_id"
-        # Message upsert keyed by external_message_id
         assert upsert_calls[1].args[0] == "msgs_tbl"
-        assert upsert_calls[1].args[1] == "external_message_id"
 
-    def test_two_messages_same_user_idempotent(self, fake_nocodb, configured_tables):
-        # second call returns created=False
-        fake_nocodb.upsert_record.side_effect = [
-            {"created": True, "record": {"Id": 99, "ad_soyad": "Ide", "external_id": "x"}},
-            {"created": True, "record": {"Id": 200}},
-            {"created": False, "record": {"Id": 99, "ad_soyad": "Ide", "external_id": "x"}},
-            {"created": False, "record": {"Id": 200}},
-        ]
-        zw.handle(_msg_received(text="m1"))
-        result2 = zw.handle(_msg_received(text="m2"))
-        assert result2["created"] is False
-        assert result2["lead_id"] == 99
-
-    def test_message_log_error_does_not_fail_lead(self, fake_nocodb, configured_tables):
-        fake_nocodb.upsert_record.side_effect = [
-            {"created": True, "record": {"Id": 99, "ad_soyad": "Ide", "external_id": "x"}},
-            RuntimeError("Etkilesimler down"),
-        ]
+    def test_message_log_error_does_not_fail_handle(self, fake_nocodb, configured_tables):
+        fake_nocodb.upsert_record.side_effect = RuntimeError("Etkilesimler down")
         result = zw.handle(_msg_received())
         assert result["success"] is True
-        assert result["lead_id"] == 99
         assert "message_log_error" in result
-
-    def test_missing_leads_table_returns_error(self, fake_nocodb, monkeypatch):
-        monkeypatch.delenv("NOCODB_LEADS_TABLE_ID", raising=False)
-        from src.app.config import get_settings
-        get_settings.cache_clear()
-        result = zw.handle(_msg_received())
-        assert result["success"] is False
-        assert result["error_code"] == "INVALID_INPUT"
 
 
 # ---------------------------------------------------------------------------
@@ -278,15 +260,12 @@ def client(monkeypatch, fake_nocodb, configured_tables):
 
 
 class TestRoute:
-    def test_happy_path_no_signature_required_in_dev(self, client, monkeypatch):
+    def test_rejects_when_secret_not_configured(self, client, monkeypatch):
         monkeypatch.delenv("ZERNIO_WEBHOOK_SECRET", raising=False)
         from src.app.config import get_settings
         get_settings.cache_clear()
         resp = client.post("/zernio/webhook", json=_msg_received())
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["success"] is True
-        assert body["lead_id"] == 99
+        assert resp.status_code == 401
 
     def test_strict_mode_rejects_unsigned(self, client, monkeypatch):
         monkeypatch.setenv("ZERNIO_WEBHOOK_SECRET", "topsecret")
@@ -309,20 +288,28 @@ class TestRoute:
         assert resp.status_code == 200
 
     def test_invalid_json_returns_400(self, client, monkeypatch):
-        monkeypatch.delenv("ZERNIO_WEBHOOK_SECRET", raising=False)
+        monkeypatch.setenv("ZERNIO_WEBHOOK_SECRET", "topsecret")
         from src.app.config import get_settings
         get_settings.cache_clear()
+        body = b"not json"
+        sig = "sha256=" + hmac.new(b"topsecret", body, hashlib.sha256).hexdigest()
         resp = client.post(
             "/zernio/webhook",
-            data=b"not json",
-            headers={"Content-Type": "application/json"},
+            data=body,
+            headers={"Content-Type": "application/json", "X-Zernio-Signature": sig},
         )
         assert resp.status_code == 400
 
     def test_non_target_event_returns_skipped(self, client, monkeypatch):
-        monkeypatch.delenv("ZERNIO_WEBHOOK_SECRET", raising=False)
+        monkeypatch.setenv("ZERNIO_WEBHOOK_SECRET", "topsecret")
         from src.app.config import get_settings
         get_settings.cache_clear()
-        resp = client.post("/zernio/webhook", json={"event": "post.published"})
+        body = json.dumps({"event": "post.published"}).encode()
+        sig = "sha256=" + hmac.new(b"topsecret", body, hashlib.sha256).hexdigest()
+        resp = client.post(
+            "/zernio/webhook",
+            data=body,
+            headers={"Content-Type": "application/json", "X-Zernio-Signature": sig},
+        )
         assert resp.status_code == 200
         assert resp.json()["skipped"] is True

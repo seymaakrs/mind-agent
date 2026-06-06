@@ -55,7 +55,7 @@ class TestRunnerFlagCheck:
     def test_is_paused_true_when_flag_set(self, monkeypatch):
         client = MagicMock()
         client.list_records.return_value = {"list": [{"auto_reply_paused": True}]}
-        from src.agents.auto_reply import runner
+        from src.agents._legacy_slowdays.auto_reply import runner
         monkeypatch.setattr(runner, "get_nocodb_client", lambda: client)
         monkeypatch.setenv("NOCODB_SETTINGS_TABLE_ID", "settings_tbl")
         assert runner._is_paused() is True
@@ -63,20 +63,20 @@ class TestRunnerFlagCheck:
     def test_is_paused_false_when_flag_unset(self, monkeypatch):
         client = MagicMock()
         client.list_records.return_value = {"list": [{"auto_reply_paused": False}]}
-        from src.agents.auto_reply import runner
+        from src.agents._legacy_slowdays.auto_reply import runner
         monkeypatch.setattr(runner, "get_nocodb_client", lambda: client)
         monkeypatch.setenv("NOCODB_SETTINGS_TABLE_ID", "settings_tbl")
         assert runner._is_paused() is False
 
     def test_is_paused_no_env_returns_false(self, monkeypatch):
-        from src.agents.auto_reply import runner
+        from src.agents._legacy_slowdays.auto_reply import runner
         monkeypatch.delenv("NOCODB_SETTINGS_TABLE_ID", raising=False)
         assert runner._is_paused() is False
 
     def test_is_paused_nocodb_error_returns_false(self, monkeypatch):
         client = MagicMock()
         client.list_records.side_effect = RuntimeError("boom")
-        from src.agents.auto_reply import runner
+        from src.agents._legacy_slowdays.auto_reply import runner
         monkeypatch.setattr(runner, "get_nocodb_client", lambda: client)
         monkeypatch.setenv("NOCODB_SETTINGS_TABLE_ID", "settings_tbl")
         # Defensive: assume active on error

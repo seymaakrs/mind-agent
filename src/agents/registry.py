@@ -10,7 +10,6 @@ from src.agents.marketing_agent import create_marketing_agent
 from src.agents.analysis_agent import create_analysis_agent
 from src.agents.orchestrator_agent import create_orchestrator_agent
 from src.agents.sales.reklam_uzmani_agent import create_reklam_uzmani_agent
-from src.agents.sales.sales_analyst_agent import create_sales_analyst_agent  # deprecated
 from src.agents.sales.sales_manager_agent import create_sales_manager_agent
 from src.agents.brand_synthesis_agent import create_brand_synthesis_agent
 
@@ -58,11 +57,6 @@ def create_reklam_uzmani() -> Agent[dict[str, Any]]:
 create_meta = create_reklam_uzmani
 
 
-def create_sales_analyst() -> Agent[dict[str, Any]]:
-    """DEPRECATED — use create_sales_manager. Eski read-only Sales Analyst."""
-    return create_sales_analyst_agent()
-
-
 def create_sales_manager() -> Agent[dict[str, Any]]:
     """Sales Manager (Satis Muduru) — yonetici, koordine eden, aksiyon onerici."""
     return create_sales_manager_agent()
@@ -86,7 +80,6 @@ def get_agent_registry() -> dict[str, AgentFactory]:
         "analysis": create_analysis,
         "reklam_uzmani": create_reklam_uzmani,
         "meta": create_reklam_uzmani,  # deprecated alias
-        "sales_analyst": create_sales_analyst,  # deprecated, alias
         "sales_manager": create_sales_manager,
         "brand_synthesis": create_brand_synthesis,
     }
@@ -100,7 +93,6 @@ __all__ = [
     "create_analysis",
     "create_reklam_uzmani",
     "create_meta",  # deprecated alias
-    "create_sales_analyst",  # deprecated
     "create_sales_manager",
     "create_brand_synthesis",
     "get_agent_registry",

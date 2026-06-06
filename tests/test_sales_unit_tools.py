@@ -266,5 +266,6 @@ class TestUnitFactories:
     def test_director_total_tool_count(self):
         from src.agents.sales.sales_manager_agent import create_sales_manager_agent
         agent = create_sales_manager_agent()
-        # 10 read + 5 + 6 + 2 + 7 = 30
-        assert len(agent.tools) == 30
+        # 10 read + 5 Avcilik + 6 CX + 2 Kalite + 7 cross + 3 goals
+        # + 2 triage + 5 knowledge + 1 peer + 1 brand = 42
+        assert len(agent.tools) == 42

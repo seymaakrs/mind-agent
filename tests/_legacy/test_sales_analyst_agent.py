@@ -7,8 +7,8 @@ Confirms:
 """
 from __future__ import annotations
 
-from src.agents.sales.sales_analyst_agent import create_sales_analyst_agent
-from src.agents.instructions.sales import SALES_ANALYST_INSTRUCTIONS
+from src.agents.sales._legacy.sales_analyst_agent import create_sales_analyst_agent
+from src.agents.instructions.sales._legacy.analyst import SALES_ANALYST_INSTRUCTIONS
 
 
 EXPECTED_TOOL_NAMES = {

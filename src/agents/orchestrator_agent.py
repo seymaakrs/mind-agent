@@ -118,7 +118,7 @@ def create_orchestrator_agent(
             marketing_tool,
             analysis_tool,
             reklam_uzmani_tool_instance,
-            sales_manager_tool,           # Satis Muduru (eski sales_analyst)
+            sales_manager_tool,           # Satis Muduru
             brand_synthesis_tool,         # Faz B1: website -> brand_identity
             fetch_business,
             get_guardian_status,          # Sef Bekci durumunu okuyabilsin

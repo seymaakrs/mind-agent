@@ -1,9 +1,9 @@
 """Auto-reply Agent main loop — Cloud Run job entry-point.
 
-    python -m src.agents.auto_reply.runner
+    python -m src.agents._legacy_slowdays.auto_reply.runner
 
 Cloud Run Job mode (one-shot — bir batch islemden sonra exit):
-    RUN_ONCE=true python -m src.agents.auto_reply.runner
+    RUN_ONCE=true python -m src.agents._legacy_slowdays.auto_reply.runner
 
 Polling-based (60sn). Each tick:
 1. Query Etkilesimler for unprocessed inbound rows (oldest first, max age 60dk).
@@ -26,9 +26,9 @@ import sys
 from datetime import datetime, timezone
 from typing import Any
 
-from src.agents.auto_reply.policy import AutoReplyConfig
-from src.agents.auto_reply.responder import AutoReplyDecision, decide_reply
-from src.agents.auto_reply.targeting import fetch_recent_history, find_pending_inbounds
+from src.agents._legacy_slowdays.auto_reply.policy import AutoReplyConfig
+from src.agents._legacy_slowdays.auto_reply.responder import AutoReplyDecision, decide_reply
+from src.agents._legacy_slowdays.auto_reply.targeting import fetch_recent_history, find_pending_inbounds
 from src.app.config import get_settings
 from src.infra.nocodb_client import get_nocodb_client, today_filter_clause
 from src.infra.zernio import get_zernio_client
