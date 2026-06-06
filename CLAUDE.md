@@ -1,6 +1,11 @@
 # Claude Session Notes
 
-> Geçmiş session detayları → `docs/history/sessions-2026-05.md`
+> Geçmiş session detayları → `docs/history/sessions-2026-05.md`, `docs/history/sessions-2026-06.md`
+>
+> 📌 **2026-06-06:** Temizlik oturumu bitti, **PR #39 main'e merge edildi.** Mail
+> bombardımanı durduruldu, webhook FAZ 0, NocoDB qualifier şeması uygulandı,
+> 28 sahte lead temizlendi (538→510), legacy kod + sales_analyst ayıklandı.
+> Sıradaki: Qualifier Agent + Google Maps prospecting + 250k TL Satış Müdürü.
 
 ## 🎯 Stratejik Öncelik
 
@@ -27,9 +32,9 @@ Soru: *"Bu Sales/Marketing'in para kazandırma gücünü artırır mı?"* Hayır
 |---|---|---|
 | **0** Kanama durdur (webhook Sıcak yazmasın, HMAC zorunlu) | ✅ DONE (PR #39, branch `claude/relaxed-clarke-tUchS`) |
 | **1** Arşivleme + sade CLAUDE.md | ✅ DONE (bu commit) |
-| **2** NocoDB şema güncelle (`qualified`, `source`, `Arsiv`) | ⏳ Sıradaki |
-| **3** n8n mail filtreleri tek kuralda topla (Hot Lead Alert filter, duplicate'leri arşivle) | ⏳ |
-| **4** Eski sahte sıcak leadleri `asama=Arsiv` flag'le (silme yok) | ⏳ |
+| **2** NocoDB şema güncelle (`qualified`, `source`, `Arsiv`) | ✅ DONE (applied 2026-06-02) |
+| **3** n8n duplicate mail kaynakları (Lead Toplama + eski Takip Agent) kapat | ✅ DONE (deactivate) |
+| **4** Sahte/test leadler temizlendi (tek seferlik, 538→510); bundan sonra `asama=Arsiv` | ✅ DONE (2026-06-02) |
 | **5** Qualifier Agent (LLM + ICP fit) | ⏳ |
 | **6** Google Maps Prospecting Agent | ⏳ |
 | **7** Instagram Prospecting Agent | ⏳ |
@@ -46,14 +51,12 @@ Soru: *"Bu Sales/Marketing'in para kazandırma gücünü artırır mı?"* Hayır
 ```
 src/
 ├── agents/         orchestrator, image, video, marketing, analysis
-│   ├── sales/      meta, sales_analyst, sales_manager, reklam_uzmani
-│   ├── outreach/   Slowdays outreach (eski, deploy değil)
-│   ├── auto_reply/ Cevap robotu (eski, deploy değil)
-│   ├── guardian/   Bekçi robot (eski, deploy değil)
+│   ├── sales/      reklam_uzmani (meta alias), sales_manager  [sales_analyst KALDIRILDI]
+│   ├── _legacy_slowdays/   outreach + auto_reply + guardian (eski Slowdays, deploy değil)
 │   └── instructions/
 ├── infra/          firebase, google_ai, nocodb_client, zernio/, brand_identity
 ├── tools/          orchestrator, image, video, marketing, web, analysis
-│   ├── sales/      nocodb (upsert_lead, query_leads, notify_seyma)
+│   ├── sales/      nocodb (upsert_lead, query_leads, notify_seyma), reporting_tools
 │   └── brand/      brand_identity load/save
 ├── models/         prompts
 └── app/            api (FastAPI + /zernio/webhook), config
@@ -71,17 +74,19 @@ src/
 - GCP Project: `instagram-post-bot-471518`
 
 ### NocoDB
-- URL: `http://34.26.138.196`
+- URL: `https://db.mindidai.com.tr` (Caddy reverse proxy) — eski direkt IP: `http://34.26.138.196`
+- ⚠️ Caddy panel UI'yı (`/`, `/dashboard`) 403 kapatıyor; `/api/v2/*` açık. Token
+  panelden alınamıyorsa `scripts/nocodb_make_token.sh` (email+şifre → API token).
 - base_id: `ps9dj2fqrh823av`
 - Leadler: `m5lcgc5ifeqh38h`
 - Etkileşimler: `mx3kbw2vhwimxjf`
 - system_settings: `mzpphfqirl8njoe`
 
 ### n8n (`https://mindidai.app.n8n.cloud`)
-- Hot Lead Alert: filter güncelleme bekliyor (Faz 3)
-- Lead Toplama Agent: arşivlenecek (duplicate)
-- Takip Agent eski: arşivlenecek
-- İtiraz/Upsell/Referans/Meta Lead Ads: aynen kalır
+- Lead Toplama Agent (`l31p16NRZeyk4eEm`): ✅ DEACTIVATE edildi (duplicate mail kaynağı)
+- Takip Agent eski (`nWNMQYHJzsMvMUGP`): ✅ DEACTIVATE edildi
+- "Send Hot Lead Alert" ayrı workflow değil — Lead Toplama içindeki Gmail node'u
+- İtiraz/Upsell/Referans/Meta Lead Ads/Bekci Alert/Raporlar: aynen kalır (aktif)
 
 ### Zernio
 - WA account: `69ecc2273a63baf2053dfc21`
