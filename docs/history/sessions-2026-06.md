@@ -34,14 +34,29 @@ Caddy panel UI'yı (/ ve /dashboard) 403 ile kapatıyor AMA /api/v2/meta/* açı
 Token panelden alınamadığı için scripts/nocodb_make_token.sh ile email+şifre →
 /api/v2/auth/user/signin → /api/v1/tokens üzerinden üretildi. Migration Cloud
 Shell'den koşuldu (Claude bulut oturumu host_not_allowed ile dışarı çıkamıyor).
-### Adım 3 — NocoDB temizlik (tek seferlik hard-delete) ✅ KOD HAZIR / ⏳ DRY-RUN BEKLİYOR
+### Adım 3 — NocoDB temizlik (tek seferlik hard-delete) ✅ DONE (2026-06-06 APPLY edildi)
 
 scripts/cleanup_fake_leads.py + tests/test_cleanup_fake_leads.py (13/13 yeşil).
-Kriter: source_workflow_id='mind_agent_zernio_webhook' VEYA ad_soyad='Unknown'
-VEYA notlar/external_id'de 'test'. İlişkili Etkilesimler (link alanı otomatik
-tespit) de silinir. Default DRY-RUN (sayar+kolon+örnek gösterir), --apply ile
-gerçek siler. Cloud Shell'den koşulacak (Beyza onayı ile). BUGÜNDEN SONRA
-hard-delete YASAK — sadece asama='Arsiv'.
+DRY-RUN Claude bulut oturumundan koşuldu (ağ politikası açıldı, db.mindidai.com.tr erişilebilir).
+
+ÖNEMLİ BULGU — script kriterleri canlı veriyle uyuşmuyordu:
+- source_workflow_id=='mind_agent_zernio_webhook' -> DB'de YOK. Gerçek değer NocoDB
+  workflow ID'si l31p16NRZeyk4eEm (= Lead Toplama Agent, Adım 1'de deaktive edilen). 26 satır.
+- ad_soyad=='Unknown' -> 0 tam eşleşme. 30 satır BOŞ isimli; çoğu IG DM 'Sıcak' GERÇEK
+  lead -> silinmedi (gerçek müşteri riski).
+- 'test' notlar/external -> 0. Etkileşimler tablosu (mx3kbw2vhwimxjf) -> 0 satır (boş).
+
+Script körü körüne --apply edilse 0 silerdi. Şeyma onayıyla hedef manuel daraltıldı:
+- Grup A: source_workflow_id=l31p16NRZeyk4eEm -> 26 satır (Id 40-65). 20'si Şeyma'nın
+  numarasıyla (+905439335595) tekrar düşen webhook test atışı, 2 Onur Taş, 4 boş.
+- Çöp: tamamen None 2 satır (Id 30, 31).
+- TOPLAM 28 satır hard-delete (NocoDB v2 bulk DELETE, status 200).
+
+Sonuç: Leadler 538 -> 510 (tam 28 silindi). Kalan l31p16NRZeyk4eEm: 0.
+Etkileşimler boş, dokunulmadı. Gerçek IG hot lead'lere DOKUNULMADI.
+BUGÜNDEN SONRA hard-delete YASAK — sadece asama='Arsiv'.
+
+
 ### Adım 4 — mind-agent legacy kod taşı (_legacy_slowdays/) ✅ DONE (2026-06-01)
 
 Taşınanlar (git mv, import yolları güncellendi):
