@@ -52,7 +52,6 @@ Soru: *"Bu Sales/Marketing'in para kazandırma gücünü artırır mı?"* Hayır
 src/
 ├── agents/         orchestrator, image, video, marketing, analysis
 │   ├── sales/      reklam_uzmani (meta alias), sales_manager  [sales_analyst KALDIRILDI]
-│   ├── _legacy_slowdays/   outreach + auto_reply + guardian (eski Slowdays, deploy değil)
 │   └── instructions/
 ├── infra/          firebase, google_ai, nocodb_client, zernio/, brand_identity
 ├── tools/          orchestrator, image, video, marketing, web, analysis
