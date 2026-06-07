@@ -11,6 +11,7 @@ from src.agents.analysis_agent import create_analysis_agent
 from src.agents.orchestrator_agent import create_orchestrator_agent
 from src.agents.sales.reklam_uzmani_agent import create_reklam_uzmani_agent
 from src.agents.sales.sales_manager_agent import create_sales_manager_agent
+from src.agents.sales.qualifier_agent import create_qualifier_agent
 from src.agents.brand_synthesis_agent import create_brand_synthesis_agent
 
 # Agent factory tipi: parametresiz cagrida yeni agent dondurur.
@@ -62,6 +63,11 @@ def create_sales_manager() -> Agent[dict[str, Any]]:
     return create_sales_manager_agent()
 
 
+def create_qualifier() -> Agent[dict[str, Any]]:
+    """Qualifier Agent (Faz 5) — lead'leri ICP fit'e gore niteler, qualified flag'ler."""
+    return create_qualifier_agent()
+
+
 def create_brand_synthesis() -> Agent[dict[str, Any]]:
     """Brand Synthesis agenti olusturur (Faz B1 — marka kimligi sentezi)."""
     return create_brand_synthesis_agent()
@@ -81,6 +87,7 @@ def get_agent_registry() -> dict[str, AgentFactory]:
         "reklam_uzmani": create_reklam_uzmani,
         "meta": create_reklam_uzmani,  # deprecated alias
         "sales_manager": create_sales_manager,
+        "qualifier": create_qualifier,
         "brand_synthesis": create_brand_synthesis,
     }
 
@@ -94,6 +101,7 @@ __all__ = [
     "create_reklam_uzmani",
     "create_meta",  # deprecated alias
     "create_sales_manager",
+    "create_qualifier",
     "create_brand_synthesis",
     "get_agent_registry",
     "AgentFactory",

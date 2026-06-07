@@ -35,7 +35,7 @@ Soru: *"Bu Sales/Marketing'in para kazandırma gücünü artırır mı?"* Hayır
 | **2** NocoDB şema güncelle (`qualified`, `source`, `Arsiv`) | ✅ DONE (applied 2026-06-02) |
 | **3** n8n duplicate mail kaynakları (Lead Toplama + eski Takip Agent) kapat | ✅ DONE (deactivate) |
 | **4** Sahte/test leadler temizlendi (tek seferlik, 538→510); bundan sonra `asama=Arsiv` | ✅ DONE (2026-06-02) |
-| **5** Qualifier Agent (LLM + ICP fit) | ⏳ |
+| **5** Qualifier Agent (LLM + ICP fit) | ✅ DONE (branch `claude/confident-bardeen-cnKT8`) |
 | **6** Google Maps Prospecting Agent | ⏳ |
 | **7** Instagram Prospecting Agent | ⏳ |
 | **8** LinkedIn Prospecting Agent | ⏳ |
@@ -125,7 +125,9 @@ DRY_RUN=false
 
 **Analysis:** SWOT/SEO/Instagram raporları
 
-**Sales (NocoDB CRM):** `upsert_lead` (external_id idempotent), `update_lead`, `query_leads`, `log_lead_message`, `notify_seyma`
+**Sales (NocoDB CRM):** `upsert_lead` (external_id idempotent), `update_lead`, `query_leads`, `mark_lead_qualified` (Faz 5 — qualified/source/reason yazar), `log_lead_message`, `notify_seyma`
+
+**Qualifier (Faz 5):** `qualifier` agent (registry) — lead'leri ICP fit'e (`src/tools/sales/icp.py`) göre niteler, `qualified=true/false` flag'ler. Mail kapısı: qualified + source ∈ {gmaps,ig,linkedin,meta_lead_ads,mindid_form,itiraz} + asama ∈ {Sicak,Teklif,Takipte}.
 
 **Zernio:** `list_contacts`, `find_conversation`, `send_message`, `send_whatsapp_template`, `tag_contact`
 

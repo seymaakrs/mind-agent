@@ -285,6 +285,88 @@ async def get_lead(lead_id: int) -> dict[str, Any]:
         return classify_error(exc, "nocodb")
 
 
+# source SingleSelect option'lari (migrate_qualifier_schema.py ile hizali).
+VALID_SOURCES = {
+    "gmaps",
+    "ig",
+    "linkedin",
+    "meta_lead_ads",
+    "mindid_form",
+    "itiraz",
+    "wa_inbound",
+    "manual",
+}
+
+
+async def _mark_lead_qualified_impl(
+    lead_id: int,
+    qualified: bool,
+    qualification_reason: str,
+    source: str | None = None,
+    asama: str | None = None,
+    qualified_by: str = "qualifier_agent",
+) -> dict[str, Any]:
+    """Qualifier alanlarini Leadler satirina yazar (Faz 5).
+
+    Migration'in ekledigi kolonlar: qualified (Checkbox), qualification_reason
+    (LongText), qualified_by (SingleLineText), qualified_at (DateTime), source
+    (SingleSelect). qualified_at otomatik damgalanir. source verilirse
+    VALID_SOURCES'a karsi dogrulanir.
+    """
+    table_id = _resolve_leads_table()
+    if not table_id:
+        return _missing_table_error("leads")
+
+    if not (qualification_reason or "").strip():
+        return {
+            "success": False,
+            "error": "qualification_reason is required (bos olamaz).",
+            "error_code": "INVALID_INPUT",
+            "retryable": False,
+            "user_message_tr": "Niteleme gerekcesi bos birakilamaz.",
+        }
+
+    if source is not None and source not in VALID_SOURCES:
+        return {
+            "success": False,
+            "error": f"Invalid source '{source}'. Valid: {sorted(VALID_SOURCES)}",
+            "error_code": "INVALID_INPUT",
+            "retryable": False,
+            "user_message_tr": "Gecersiz lead kaynagi (source).",
+        }
+
+    fields: dict[str, Any] = {
+        "qualified": qualified,
+        "qualification_reason": qualification_reason.strip(),
+        "qualified_by": qualified_by,
+        "qualified_at": datetime.utcnow().isoformat(),
+    }
+    if source is not None:
+        fields["source"] = source
+    if asama is not None:
+        fields["asama"] = asama
+
+    try:
+        record = get_nocodb_client().update_record(table_id, lead_id, fields)
+        return {"success": True, "qualified": qualified, "record": record}
+    except Exception as exc:
+        return classify_error(exc, "nocodb")
+
+
+mark_lead_qualified = function_tool(
+    name_override="mark_lead_qualified",
+    description_override=(
+        "Qualifier kararini Leadler satirina yazar (Faz 5 — ICP fit). "
+        "REQUIRED: lead_id, qualified (bool), qualification_reason (neden uygun/uygun degil). "
+        "OPTIONAL: source ('gmaps'|'ig'|'linkedin'|'meta_lead_ads'|'mindid_form'|'itiraz'|"
+        "'wa_inbound'|'manual'), asama. qualified_by + qualified_at otomatik. "
+        "MAIL KAPISI: Seyma'ya mail yalnizca qualified=true VE source ∈ {gmaps,ig,linkedin,"
+        "meta_lead_ads,mindid_form,itiraz} VE asama ∈ {Sicak,Teklif,Takipte} ucu birden saglaninca."
+    ),
+    strict_mode=False,
+)(_mark_lead_qualified_impl)
+
+
 @function_tool(
     name_override="query_leads",
     description_override=(
@@ -448,6 +530,7 @@ def get_nocodb_tools() -> list:
         update_lead,
         get_lead,
         query_leads,
+        mark_lead_qualified,
         log_lead_message,
         notify_seyma,
     ]
@@ -459,6 +542,7 @@ __all__ = [
     "update_lead",
     "get_lead",
     "query_leads",
+    "mark_lead_qualified",
     "log_lead_message",
     "notify_seyma",
     "get_nocodb_tools",
