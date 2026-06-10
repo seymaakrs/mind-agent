@@ -47,11 +47,14 @@ app = FastAPI(
     lifespan=_lifespan,
 )
 
-# CORS middleware
+# CORS middleware — origin listesi env'den (CORS_ALLOW_ORIGINS, virgülle ayrık).
+# Wildcard ile credentials kombinasyonu CORS spec'inde geçersiz; wildcard'da
+# credentials kapatılır.
+_cors_origins = settings.cors_origins_list
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_credentials=_cors_origins != ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )

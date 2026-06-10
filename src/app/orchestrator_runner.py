@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from typing import Any
 
 from agents import Runner, set_default_openai_key
@@ -12,8 +13,32 @@ from src.app.logging_hooks import CliLoggingHooks
 from src.infra.task_logger import TaskLogger
 from src.infra.thread_manager import ThreadManager
 
+log = logging.getLogger(__name__)
+
 _settings = get_settings()
 set_default_openai_key(_settings.openai_api_key)
+
+
+def _check_token_budget(result: Any, business_id: str | None) -> None:
+    """Görev bitiminde token bütçesini kontrol eder (MAX_TOKENS_PER_TASK).
+
+    Bütçe aşımı görevi kesmez (iş zaten bitti); WARNING loglar ki Cloud Run
+    loglarından maliyet patlaması erken fark edilsin. 0 = kontrol kapalı.
+    """
+    budget = _settings.max_tokens_per_task
+    if not budget:
+        return
+    try:
+        total = result.context_wrapper.usage.total_tokens
+    except AttributeError:
+        return
+    if total > budget:
+        log.warning(
+            "Token bütçesi aşıldı: %s token kullanıldı, bütçe %s "
+            "(business=%s). MAX_TOKENS_PER_TASK / max_turns ayarlarını "
+            "gözden geçir.",
+            total, budget, business_id,
+        )
 
 
 def _build_effective_input(user_input: str, ctx: dict[str, Any]) -> str:
@@ -71,8 +96,10 @@ def run_orchestrator(user_input: str, context: dict[str, Any] | None = None) -> 
             input=effective_input,
             context=ctx,
             hooks=hooks,
+            max_turns=_settings.orchestrator_max_turns,
         )
         task_logger.complete()
+        _check_token_budget(result, business_id)
         return result.final_output
     except Exception as exc:
         task_logger.complete(error=str(exc))
@@ -132,8 +159,10 @@ async def run_orchestrator_async(
             input=runner_input,
             context=ctx,
             hooks=hooks,
+            max_turns=_settings.orchestrator_max_turns,
         )
         task_logger.complete()
+        _check_token_budget(result, business_id)
 
         # Multi-turn: persist full conversation history after a successful run.
         # Skipped if no thread_id or no business_id (single-turn mode).

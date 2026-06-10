@@ -17,6 +17,7 @@ aynen okunmaya devam eder. Agent'lar brand_identity yoksa eski yola dusebilir.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from agents import function_tool
@@ -32,6 +33,21 @@ log = logging.getLogger(__name__)
 
 # Subcollection naming — versiyon tutarli olsun diye 'v1' document id
 _BRAND_DOC_ID = "v1"
+
+# Bellek-içi TTL cache — Image/Video/Marketing/Sales Manager aynı istekte
+# fetch_brand_identity'i ayrı ayrı çağırıyor; her biri Firestore'a gitmesin.
+# Cloud Run instance'ı başına geçerlidir (process-local). None cache'lenmez:
+# henüz oluşturulmamış kimlik yazıldığı an görünür kalmalı.
+_BRAND_CACHE_TTL_SECONDS = 300
+_brand_cache: dict[str, tuple[float, BrandIdentity]] = {}
+
+
+def clear_brand_identity_cache(business_id: str | None = None) -> None:
+    """Cache'i temizler. business_id verilirse sadece o kayıt düşer."""
+    if business_id is None:
+        _brand_cache.clear()
+    else:
+        _brand_cache.pop(business_id, None)
 
 
 def _brand_collection_path(business_id: str) -> str:
@@ -52,6 +68,12 @@ def load_brand_identity(business_id: str) -> BrandIdentity | None:
     """
     if not business_id:
         return None
+    cached = _brand_cache.get(business_id)
+    if cached is not None:
+        cached_at, bi = cached
+        if time.monotonic() - cached_at < _BRAND_CACHE_TTL_SECONDS:
+            return bi
+        _brand_cache.pop(business_id, None)
     try:
         doc_client = get_document_client(_brand_collection_path(business_id))
         data = doc_client.get_document(_BRAND_DOC_ID)
@@ -60,7 +82,9 @@ def load_brand_identity(business_id: str) -> BrandIdentity | None:
         # Firestore otomatik 'documentId' ekliyor — Pydantic 'extra=forbid'
         # ile bunu reddeder, temizle.
         data.pop("documentId", None)
-        return BrandIdentity.model_validate(data)
+        bi = BrandIdentity.model_validate(data)
+        _brand_cache[business_id] = (time.monotonic(), bi)
+        return bi
     except Exception as exc:
         log.warning(
             "load_brand_identity: business=%s read/parse failed: %s",
@@ -82,6 +106,7 @@ def save_brand_identity(brand_identity: BrandIdentity) -> dict[str, Any]:
         # model_dump mode='json' tarihleri ISO string yapar — Firestore OK
         data = brand_identity.model_dump(mode="json")
         doc_client.set_document(_BRAND_DOC_ID, data, merge=False)
+        clear_brand_identity_cache(brand_identity.business_id)
         return {
             "success": True,
             "business_id": brand_identity.business_id,
@@ -216,6 +241,7 @@ def get_brand_tools() -> list:
 
 
 __all__ = [
+    "clear_brand_identity_cache",
     "load_brand_identity",
     "save_brand_identity",
     "brand_identity_exists",
