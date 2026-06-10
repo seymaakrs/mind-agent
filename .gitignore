@@ -14,3 +14,4 @@ serviceAccount.json
 gcp-service-account.json
 *-service-account.json
 *credentials*.json
+.venv/

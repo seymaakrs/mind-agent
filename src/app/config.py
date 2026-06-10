@@ -76,8 +76,27 @@ class Settings(BaseModel):
         default="https://cloud.langfuse.com", alias="LANGFUSE_HOST"
     )
 
+    # CORS — virgülle ayrılmış origin listesi. Default "*" geri uyum için;
+    # production'da frontend domain'leri ile sınırla (örn.
+    # "https://app.mindidai.com.tr,https://mindid.web.app").
+    cors_allow_origins: str = Field(default="*", alias="CORS_ALLOW_ORIGINS")
+
+    # Maliyet limitörleri (safe-guard):
+    # - orchestrator_max_turns: üst orchestrator döngü sınırı (SDK default 10'a
+    #   güvenmek yerine açık değer; alt-ajanların kendi max_turns'leri ayrı).
+    # - max_tokens_per_task: tek görev token bütçesi; aşılırsa WARNING loglanır
+    #   (0 = kontrol kapalı).
+    orchestrator_max_turns: int = Field(default=20, alias="ORCHESTRATOR_MAX_TURNS")
+    max_tokens_per_task: int = Field(default=300_000, alias="MAX_TOKENS_PER_TASK")
+
     # Dry-run mode - Google API'lerine gercek cagri yapmadan prompt'lari loglar
     dry_run: bool = Field(default=False, alias="DRY_RUN")
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """CORS_ALLOW_ORIGINS'i listeye çevirir; boşsa wildcard'a düşer."""
+        origins = [o.strip() for o in self.cors_allow_origins.split(",") if o.strip()]
+        return origins or ["*"]
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -109,6 +128,13 @@ class Settings(BaseModel):
                     "ZERNIO_WA_ACCOUNT_ID", "69ecc2273a63baf2053dfc21"
                 ),
                 "zernio_webhook_secret": os.getenv("ZERNIO_WEBHOOK_SECRET"),
+                "cors_allow_origins": os.getenv("CORS_ALLOW_ORIGINS", "*"),
+                "orchestrator_max_turns": int(
+                    os.getenv("ORCHESTRATOR_MAX_TURNS", "20")
+                ),
+                "max_tokens_per_task": int(
+                    os.getenv("MAX_TOKENS_PER_TASK", "300000")
+                ),
                 "langfuse_public_key": os.getenv("LANGFUSE_PUBLIC_KEY"),
                 "langfuse_secret_key": os.getenv("LANGFUSE_SECRET_KEY"),
                 "langfuse_host": os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com"),
