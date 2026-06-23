@@ -212,6 +212,17 @@ class BrandContentStrategy(BaseModel):
 
 class BrandBusinessContext(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+    # Kullanici "Is Baglami" bolumunu mind-id portal'inden ACIKCA aktif
+    # edene kadar varsayilan kapali. False iken sales knowledge tools'lari
+    # bu bolumu okumaz; LLM "henuz aktif edilmedi" cevabi alir.
+    enabled: bool = Field(
+        default=False,
+        description=(
+            "Is baglami (urun/USP/rakip/SEO) ajanlar tarafindan okunsun mu? "
+            "Kullanici mind-id'de bolumu manuel olarak aktif edene kadar False."
+        ),
+    )
     products: list[str] = Field(
         default_factory=list,
         description="Urun/hizmet listesi",
